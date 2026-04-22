@@ -2,25 +2,24 @@
 
 This repository contains a discrete-event clinic appointment simulation with:
 
-- first-come-first-serve booking
+- first-come-first-served booking
 - two patient classes
 - delay-dependent balking
 - delay-dependent no-show
 - end-of-day cancellations
-- rolling appointment calendar
+- a rolling appointment calendar
 - burn-in, measurement, and cooldown periods
 
-## Files
+## Repository structure
 
-- `FCFS_Model_Simulation.ipynb`: original working notebook
-- Additional Python files will be added as the notebook is modularized
+- `FCFS Model Simulation.ipynb`: working notebook version
+- `model.py`: model objects, parameters, metrics, and result containers
+- `engine.py`: simulation engine
+- `config_loader.py`: loads YAML configuration into Python objects
+- `baseline.yaml`: editable baseline parameter file
+- `run_simulation.py`: standalone script to run the simulation
 
-## Purpose
+## How to run
 
-This project was developed to simulate clinic appointment scheduling behavior under a slot-by-slot booking system and evaluate metrics such as:
-
-- average booking delay by class
-- attended utilization by class
-- overall attended utilization
-- percent of customers serviced
-- total value generated
+1. Install dependencies:
+pip install numpy pyyaml
