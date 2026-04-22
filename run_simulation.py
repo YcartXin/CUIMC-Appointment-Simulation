@@ -1,9 +1,10 @@
+from pathlib import Path
 from config_loader import load_config
 from engine import ClinicAppointmentSimulation
 
-
 def main() -> None:
-    config = load_config("baseline.yaml")
+    repo_dir = Path(__file__).resolve().parent
+    config = load_config(repo_dir / "baseline.yaml")
     sim = ClinicAppointmentSimulation(config)
     results = sim.run()
 
