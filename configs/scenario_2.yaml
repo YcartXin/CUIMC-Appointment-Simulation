@@ -1,4 +1,4 @@
-slots_per_day: 8
+slots_per_day: 30
 horizon_days: 10
 burn_in_days: 30
 measure_days: 60
@@ -7,31 +7,31 @@ seed: 42
 
 classes:
   1:
-    lambda_per_slot: 0.80
+    lambda_per_slot: 1
     cancel_prob: 0.08
     value: 1.0
     balk_prob:
       type: threshold
-      threshold: 2
-      low: 0.05
-      high: 0.30
+      threshold: 20
+      low: 0
+      high: 1
     no_show_prob:
       type: threshold
-      threshold: 2
-      low: 0.03
-      high: 0.15
+      threshold: 10
+      low: 0.0
+      high: 1
 
   2:
-    lambda_per_slot: 0.55
+    lambda_per_slot: 1
     cancel_prob: 0.10
     value: 1.0
     balk_prob:
       type: threshold
-      threshold: 1
-      low: 0.08
-      high: 0.35
+      threshold: 25
+      low: 0.00
+      high: 1.00
     no_show_prob:
       type: threshold
-      threshold: 1
-      low: 0.05
-      high: 0.18
+      threshold: 20
+      low: 0.00
+      high: 1

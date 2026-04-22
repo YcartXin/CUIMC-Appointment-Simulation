@@ -16,6 +16,10 @@ def main() -> None:
     baseline_path = repo_dir / "configs" / "baseline.yaml"
     scenario_2_path = repo_dir / "configs" / "scenario_2.yaml"
 
+    print(baseline_path)
+    print(scenario_2_path)
+    print(baseline_path.exists(), scenario_2_path.exists())
+
     baseline_results = run_scenario(baseline_path)
     scenario_2_results = run_scenario(scenario_2_path)
 

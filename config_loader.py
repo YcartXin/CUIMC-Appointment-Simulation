@@ -9,10 +9,6 @@ from model import ThresholdRule, PatientClassParams, SimulationConfig
 
 
 def _build_probability_rule(rule_config: Dict[str, Any]) -> ThresholdRule:
-    """
-    Build a probability rule object from a config dictionary.
-    Currently supports threshold rules only.
-    """
     rule_type = rule_config.get("type")
 
     if rule_type != "threshold":
@@ -26,13 +22,19 @@ def _build_probability_rule(rule_config: Dict[str, Any]) -> ThresholdRule:
 
 
 def load_config(path: str | Path) -> SimulationConfig:
-    """
-    Load a YAML config file and convert it into a SimulationConfig object.
-    """
     path = Path(path)
 
     with path.open("r", encoding="utf-8") as f:
         raw = yaml.safe_load(f)
+
+    if raw is None:
+        raise ValueError(f"YAML file is empty or could not be parsed: {path}")
+
+    if not isinstance(raw, dict):
+        raise ValueError(f"YAML file did not parse into a dictionary: {path}")
+
+    if "classes" not in raw:
+        raise ValueError(f"Missing 'classes' section in YAML file: {path}")
 
     raw_classes = raw["classes"]
     classes: Dict[int, PatientClassParams] = {}
