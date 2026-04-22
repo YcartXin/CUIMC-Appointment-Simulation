@@ -1,0 +1,134 @@
+---
+title: "Simulation Documentation"
+format: html
+---
+
+## Overview
+
+This project implements a discrete-event simulation of a clinic appointment booking system. The model represents slot-by-slot booking and service dynamics under a first-come-first-served booking rule with two patient classes.
+
+The simulation includes:
+
+- class-specific Poisson arrivals
+- delay-dependent balking
+- delay-dependent no-show
+- end-of-day cancellations
+- a rolling booking calendar
+- burn-in, measurement, and cooldown periods
+
+## Time and State
+
+Time is modeled slot by slot. Each day contains a fixed number of slots, and the simulation advances one active slot at a time.
+
+The main system state is a rolling calendar:
+
+- rows represent residual days until appointment
+- columns represent slots within a day
+
+Each calendar cell is either:
+
+- `0` for an open slot
+- `(i, tau)` for a booked slot, where `i` is the patient class and `tau` is the original booking delay
+
+The model distinguishes between:
+
+- `tau`: the original delay when the appointment was booked
+- `r`: the current remaining days until the appointment
+
+This distinction matters because no-show behavior depends on the original booking delay, while the summary state depends on the current remaining delay.
+
+## Event Logic
+
+For each active slot, the simulation follows this sequence:
+
+1. Generate class-specific arrivals using Poisson distributions.
+2. Expand the arrival counts into individual patients and randomize their within-slot order.
+3. For each arriving patient, find the earliest open slot strictly after the active slot.
+4. Compute the offered booking delay and apply the balking rule.
+5. If the patient accepts, place the booking into the calendar.
+6. Serve the active slot and apply the no-show rule if the slot is occupied.
+7. At the end of the day, apply cancellations to future appointments only.
+8. Roll the calendar forward by one day.
+
+## Burn-In and Measurement
+
+The simulation uses three phases:
+
+- **Burn-in**: allows the system to move away from the artificial empty-calendar starting state
+- **Measurement**: the period during which reported outputs are collected
+- **Cooldown**: allows patients who entered during the measurement window to finish their appointment process
+
+Patients arriving during the measurement window are tracked for class-level outcomes. Slot-level utilization and total value are also recorded during measured days.
+
+## Outputs
+
+## Metric Definitions
+
+The simulation reports both class-level metrics and aggregate system metrics. These measure different aspects of performance: booking delay, capacity use, and service success.
+
+### Class-level metrics
+
+- **Mean booking delay**  
+  The average original booking delay, in days, among patients in a given class who successfully booked an appointment. A higher value means patients in that class are being scheduled further into the future on average.
+
+- **Attended utilization by class**  
+  The share of total measured clinic slots that resulted in a completed visit from a given patient class. This measures how much of the clinic’s slot capacity was actually used by completed appointments from that class.
+
+- **Percent serviced**  
+  The share of arrivals in a given patient class who were ultimately served. A lower value may reflect no-offer outcomes, balking, cancellations, or no-shows.
+
+### Aggregate system metrics
+
+- **Scheduled utilization**  
+  The share of total measured slots that had an appointment scheduled in them at service time, regardless of whether the patient actually showed up. This reflects how full the clinic schedule was.
+
+- **Attended utilization**  
+  The share of total measured slots that resulted in a completed visit. This reflects realized capacity use and will be less than or equal to scheduled utilization when no-shows occur.
+
+- **Overall percent serviced**  
+  The share of all arrivals across both classes who were ultimately served. This gives an overall measure of how effectively the system converts incoming demand into completed visits.
+
+### Interpretation
+
+These metrics can be grouped into three categories:
+
+- **Delay metric**: mean booking delay
+- **Capacity-use metrics**: scheduled utilization, attended utilization, attended utilization by class
+- **Patient-outcome metrics**: percent serviced, overall percent serviced
+
+A useful distinction is between scheduled and attended utilization. Scheduled utilization counts slots that were filled on the calendar, while attended utilization counts only slots that resulted in actual completed service.
+
+## Repository Structure
+
+- `model.py`: parameter objects, booking objects, metrics, and result containers
+- `engine.py`: simulation engine and event logic
+- `config_loader.py`: reads YAML scenario files into Python objects
+- `run_simulation.py`: runs one simulation scenario
+- `compare_scenarios.py`: compares two simulation scenarios
+- `configs/baseline.yaml`: baseline simulation setup
+- `configs/scenario_2.yaml`: alternative setup for scenario comparison
+- `docs/simulation_documentation.qmd`: documentation source file
+- `docs/simulation_documentation.html`: rendered documentation output
+
+## How to Use
+
+### Running one simulation
+
+To run a single simulation, edit:
+
+`configs/baseline.yaml`
+
+This file controls:
+
+- number of slots per day
+- booking horizon
+- burn-in, measurement, and cooldown lengths
+- class-specific arrival rates
+- balking and no-show thresholds
+- cancellation probabilities
+- service values
+
+Then run:
+
+```bash
+python run_simulation.py

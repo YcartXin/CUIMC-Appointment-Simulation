@@ -13,8 +13,8 @@ def run_scenario(config_path: Path):
 def main() -> None:
     repo_dir = Path(__file__).resolve().parent
 
-    baseline_path = repo_dir / "baseline.yaml"
-    scenario_2_path = repo_dir / "scenario_2.yaml"
+    baseline_path = repo_dir / "configs" / "baseline.yaml"
+    scenario_2_path = repo_dir / "configs" / "scenario_2.yaml"
 
     baseline_results = run_scenario(baseline_path)
     scenario_2_results = run_scenario(scenario_2_path)

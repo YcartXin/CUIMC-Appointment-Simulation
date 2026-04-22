@@ -4,7 +4,7 @@ from engine import ClinicAppointmentSimulation
 
 def main() -> None:
     repo_dir = Path(__file__).resolve().parent
-    config = load_config(repo_dir / "baseline.yaml")
+    config = load_config(repo_dir / "configs" / "baseline.yaml")
     sim = ClinicAppointmentSimulation(config)
     results = sim.run()
 
