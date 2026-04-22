@@ -1,0 +1,115 @@
+---
+title: "Simulation Documentation"
+format: html
+---
+
+## Overview
+
+This project implements a discrete-event simulation of a clinic appointment booking system. The model is designed to represent slot-by-slot booking and service dynamics under a first-come-first-served scheduling rule with two patient classes.
+
+The simulation includes:
+- class-specific Poisson arrivals
+- delay-dependent balking
+- delay-dependent no-show
+- end-of-day cancellations
+- a rolling booking calendar
+- burn-in, measurement, and cooldown periods
+
+## Time and State
+
+Time is modeled slot by slot. Each day contains a fixed number of slots, and the simulation advances one active slot at a time.
+
+The main system state is a rolling calendar:
+- rows represent residual days until appointment
+- columns represent slots within a day
+
+Each calendar cell is either:
+- `0` for an open slot
+- `(i, tau)` for a booked slot, where `i` is the patient class and `tau` is the original booking delay
+
+The model distinguishes between:
+- `tau`: the original delay when the appointment was booked
+- `r`: the current remaining days until the appointment
+
+This distinction matters because no-show behavior depends on the original booking delay, while the summary state depends on the current remaining delay.
+
+## Event Logic
+
+For each active slot, the simulation follows this sequence:
+
+1. Generate class-specific arrivals using Poisson distributions.
+2. Expand arrival counts into individual patients and randomize their within-slot order.
+3. For each arriving patient, find the earliest open slot strictly after the active slot.
+4. Compute the offered booking delay and apply the balking rule.
+5. If the patient accepts, place the booking into the calendar.
+6. Serve the active slot and apply the no-show rule if the slot is occupied.
+7. At the end of the day, apply cancellations to future appointments only.
+8. Roll the calendar forward by one day.
+
+## Burn-In and Measurement
+
+The simulation uses three phases:
+
+- **Burn-in**: allows the system to move away from the artificial empty-calendar starting state
+- **Measurement**: the period during which reported outputs are collected
+- **Cooldown**: allows patients who entered during the measurement window to finish their appointment process
+
+Patients arriving during the measurement window are tracked for class-level outcomes. Slot-level utilization and total value are also recorded during measured days.
+
+## Outputs
+
+The simulation reports:
+
+### Class-level metrics
+- arrivals
+- booked
+- balked
+- no offer
+- canceled
+- no-show
+- served
+- mean booking delay
+- attended utilization by class
+- percent serviced
+
+### Slot-level metrics
+- booked slots
+- served slots
+- no-show slots
+- empty slots
+
+### Aggregate metrics
+- scheduled utilization
+- attended utilization
+- overall percent serviced
+- total served
+- total value
+
+The model also provides:
+- a summary state by class and residual day offset
+- a final full-state view of the rolling calendar
+
+## Repository Structure
+
+- `model.py`: parameter objects, booking objects, metrics, and result containers
+- `engine.py`: simulation engine and event logic
+- `config_loader.py`: reads YAML scenario files into Python objects
+- `baseline.yaml`: main simulation parameter file
+- `run_simulation.py`: runs one scenario
+- `compare_scenarios.py`: compares two scenarios
+
+## How to Use
+
+To change the setup, edit `baseline.yaml`. This file controls:
+- number of slots per day
+- booking horizon
+- burn-in, measurement, and cooldown lengths
+- class-specific arrival rates
+- balking and no-show thresholds
+- cancellation probabilities
+- service values
+
+To run one simulation:
+
+```bash
+python run_simulation.py
