@@ -1,10 +1,13 @@
 from pathlib import Path
+
 from config_loader import load_config
 from engine import ClinicAppointmentSimulation
+
 
 def main() -> None:
     repo_dir = Path(__file__).resolve().parent
     config = load_config(repo_dir / "configs" / "baseline.yaml")
+
     sim = ClinicAppointmentSimulation(config)
     results = sim.run()
 
@@ -14,9 +17,9 @@ def main() -> None:
         print(f"  Arrivals:              {m.arrivals}")
         print(f"  Booked:                {m.booked}")
         print(f"  Balked:                {m.balked}")
-        print(f"  NoOffer:               {m.no_offer}")
+        print(f"  No offer:              {m.no_offer}")
         print(f"  Canceled:              {m.canceled}")
-        print(f"  NoShow:                {m.no_show}")
+        print(f"  No-show:               {m.no_show}")
         print(f"  Served:                {m.served}")
         print(f"  Mean booking delay:    {m.mean_booking_delay:.3f}")
         print(f"  Attended utilization:  {m.attended_utilization(results.total_slots):.3f}")
@@ -24,10 +27,10 @@ def main() -> None:
 
     print("\n=== Slot metrics ===")
     sm = results.slot_metrics
-    print(f"BookedSlots:             {sm.booked_slots}")
-    print(f"ServedSlots:             {sm.served_slots}")
-    print(f"NoShowSlots:             {sm.no_show_slots}")
-    print(f"EmptySlots:              {sm.empty_slots}")
+    print(f"Booked slots:            {sm.booked_slots}")
+    print(f"Served slots:            {sm.served_slots}")
+    print(f"No-show slots:           {sm.no_show_slots}")
+    print(f"Empty slots:             {sm.empty_slots}")
 
     print("\n=== Aggregate outputs ===")
     print(f"Scheduled utilization:   {results.overall_scheduled_utilization:.3f}")
@@ -36,10 +39,11 @@ def main() -> None:
     print(f"Total served:            {results.total_served}")
     print(f"Total value:             {results.total_value:.3f}")
 
-    print("\n=== Start-of-day summary state for Day 0 ===")
-    print(results.daily_summary_states[0])
+    if results.daily_summary_states:
+        print("\n=== Start-of-day summary state for first measured day ===")
+        print(results.daily_summary_states[0])
 
-    print("\n=== Final rolling full state Y_t(r,m) ===")
+    print("\n=== Final day-level calendar view ===")
     for r, row in enumerate(results.final_full_state):
         print(f"r={r}: {row}")
 

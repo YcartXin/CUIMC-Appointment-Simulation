@@ -11,36 +11,40 @@ from model import (
     SlotMetrics,
 )
 
+
 # =========================
 # Simulation engine
 # =========================
 
 class ClinicAppointmentSimulation:
     """
-    Slot-by-slot clinic appointment simulation with:
+    Day-level clinic appointment simulation with:
     - 2+ patient classes
-    - FCFS booking to earliest open slot strictly after active slot
+    - daily arrivals generated once per day
+    - one random permutation of the day's arrivals
+    - FCFS booking to the earliest day with available capacity, including same-day
     - delay-dependent balking
     - delay-dependent no-show
-    - constant cancellation, applied only at end of day, and never same-day
-    - rolling calendar full state
+    - constant cancellation applied once per day to future appointments only
+    - no same-day cancellations
+    - no rebooking of no-show slots
+    - day-level calendar state with booking audit records
     - derived summary state at the start of each measured day
 
     Internal calendar representation:
-        self.calendar[r][m] is either None (open slot) or Booking(i, tau, tracked)
+        self.calendar[r] is a list of Booking objects scheduled for day D + r
 
-    Public full-state view:
-        0 or (i, tau)
+    Capacity rule:
+        len(self.calendar[r]) <= slots_per_day
     """
 
     def __init__(self, config: SimulationConfig) -> None:
         self.config = config
         self.rng = np.random.default_rng(config.seed)
 
-        # Rolling slot-level calendar Y_t(r, m), stored internally as None or Booking
-        self.calendar: List[List[Optional[Booking]]] = [
-            [None for _ in range(config.slots_per_day)]
-            for _ in range(config.horizon_days)
+        # Day-level calendar: one booking list per residual day
+        self.calendar: List[List[Booking]] = [
+            [] for _ in range(config.horizon_days)
         ]
 
         self.class_metrics: Dict[int, ClassMetrics] = {
@@ -49,7 +53,7 @@ class ClinicAppointmentSimulation:
         self.slot_metrics = SlotMetrics()
         self.total_value: float = 0.0
 
-        # One summary state per measured day, recorded at the start of each measured day
+        # One summary state per measured day, recorded after start-of-day cancellations
         self.daily_summary_states: List[Dict[int, List[int]]] = []
 
     # -------------------------
@@ -58,19 +62,25 @@ class ClinicAppointmentSimulation:
 
     def full_state_view(self) -> List[List[Union[int, Tuple[int, int]]]]:
         """
-        Return Y_t(r, m) with cells shown exactly as:
-            0
-            (i, tau)
+        Return a padded day-level view for compatibility with existing outputs.
+
+        Each row is a list of length slots_per_day:
+        - booked patients are shown as (i, tau)
+        - remaining capacity is shown as 0
+
+        Note: within-day ordering in this view is not a true slot position anymore.
+        It is only a diagnostic representation.
         """
         view: List[List[Union[int, Tuple[int, int]]]] = []
-        for day_row in self.calendar:
-            row_view: List[Union[int, Tuple[int, int]]] = []
-            for cell in day_row:
-                if cell is None:
-                    row_view.append(0)
-                else:
-                    row_view.append((cell.patient_class, cell.booking_delay))
+
+        for day_bookings in self.calendar:
+            row_view: List[Union[int, Tuple[int, int]]] = [
+                (b.patient_class, b.booking_delay) for b in day_bookings
+            ]
+            remaining = self.config.slots_per_day - len(day_bookings)
+            row_view.extend([0] * remaining)
             view.append(row_view)
+
         return view
 
     def summary_state(self) -> Dict[int, List[int]]:
@@ -84,10 +94,8 @@ class ClinicAppointmentSimulation:
         }
 
         for r in range(self.config.horizon_days):
-            for m in range(self.config.slots_per_day):
-                cell = self.calendar[r][m]
-                if cell is not None:
-                    summary[cell.patient_class][r] += 1
+            for booking in self.calendar[r]:
+                summary[booking.patient_class][r] += 1
 
         return summary
 
@@ -95,121 +103,127 @@ class ClinicAppointmentSimulation:
     # Booking logic
     # -------------------------
 
-    def find_earliest_open_slot(self, active_slot: int) -> Optional[Tuple[int, int]]:
+    def find_earliest_open_day(self) -> Optional[int]:
         """
-        Find the earliest open slot strictly after the current active slot.
+        Find the earliest day with available capacity.
 
-        Eligible slots:
-        - same day, only m > active_slot
-        - future days, any slot
+        Same-day booking is allowed, so the search starts at r = 0.
         """
-        # Same day: later slots only
-        for m in range(active_slot + 1, self.config.slots_per_day):
-            if self.calendar[0][m] is None:
-                return (0, m)
-
-        # Future days
-        for r in range(1, self.config.horizon_days):
-            for m in range(self.config.slots_per_day):
-                if self.calendar[r][m] is None:
-                    return (r, m)
-
+        for r in range(self.config.horizon_days):
+            if len(self.calendar[r]) < self.config.slots_per_day:
+                return r
         return None
 
-    def process_one_arrival(
+    def generate_daily_arrival_order(self) -> List[int]:
+        """
+        Generate class-specific daily Poisson arrivals, convert them into
+        individual patients, and randomize the day's order once.
+        """
+        arrivals: List[int] = []
+
+        for class_id, params in self.config.classes.items():
+            n = int(self.rng.poisson(params.lambda_per_day))
+            arrivals.extend([class_id] * n)
+
+        if arrivals:
+            arrivals = self.rng.permutation(arrivals).tolist()
+
+        return arrivals
+
+    def process_daily_arrivals(
         self,
-        class_id: int,
-        active_slot: int,
-        track_patient: bool,
+        ordered_arrivals: List[int],
+        track_patients: bool,
     ) -> None:
         """
-        Process one arriving patient from class i.
-        Only measurement-window arrivals are tracked in class metrics.
+        Process the full day's arrivals in one random order.
+
+        If no slot is available for one patient, then that patient and all
+        remaining arrivals for the day are counted as no_offer and the
+        booking step stops for the day.
         """
-        params = self.config.classes[class_id]
-        metrics = self.class_metrics[class_id]
+        if track_patients:
+            for class_id in ordered_arrivals:
+                self.class_metrics[class_id].arrivals += 1
 
-        if track_patient:
-            metrics.arrivals += 1
+        for idx, class_id in enumerate(ordered_arrivals):
+            params = self.config.classes[class_id]
+            metrics = self.class_metrics[class_id]
 
-        offered = self.find_earliest_open_slot(active_slot)
+            offered_day = self.find_earliest_open_day()
 
-        if offered is None:
-            if track_patient:
-                metrics.no_offer += 1
-            return
+            if offered_day is None:
+                if track_patients:
+                    for remaining_class_id in ordered_arrivals[idx:]:
+                        self.class_metrics[remaining_class_id].no_offer += 1
+                return
 
-        r, m = offered
-        tau = r  # offered booking delay in days
+            tau = offered_day  # offered booking delay in days; tau = 0 is allowed
 
-        # Balking decision
-        if self.rng.random() < params.balk_prob(tau):
-            if track_patient:
-                metrics.balked += 1
-            return
+            # Balking decision
+            if self.rng.random() < params.balk_prob(tau):
+                if track_patients:
+                    metrics.balked += 1
+                continue
 
-        # Accept and book
-        self.calendar[r][m] = Booking(
-            patient_class=class_id,
-            booking_delay=tau,
-            tracked=track_patient,
-        )
+            # Accept and book
+            self.calendar[offered_day].append(
+                Booking(
+                    patient_class=class_id,
+                    booking_delay=tau,
+                    tracked=track_patients,
+                )
+            )
 
-        if track_patient:
-            metrics.booked += 1
-            metrics.total_booking_delay += tau
+            if track_patients:
+                metrics.booked += 1
+                metrics.total_booking_delay += tau
 
     # -------------------------
-    # Service logic
+    # Daily service logic
     # -------------------------
 
-    # -------------------------
-    # Service logic
-    # -------------------------
-
-    def serve_active_slot(self, active_slot: int, count_slot_metrics: bool) -> None:
+    def serve_today(self, count_slot_metrics: bool) -> None:
         """
-        Serve the active slot (r = 0, m = active_slot).
+        Resolve all appointments scheduled for today (r = 0).
 
+        No-show slots are not rebooked.
         Slot metrics and value are counted only during measured days.
         Class service/no-show metrics are counted only for tracked patients.
         """
-        cell = self.calendar[0][active_slot]
-
-        if cell is None:
-            if count_slot_metrics:
-                self.slot_metrics.empty_slots += 1
-            return
+        todays_bookings = self.calendar[0]
+        booked_today = len(todays_bookings)
 
         if count_slot_metrics:
-            self.slot_metrics.booked_slots += 1
+            self.slot_metrics.booked_slots += booked_today
+            self.slot_metrics.empty_slots += self.config.slots_per_day - booked_today
 
-        class_id = cell.patient_class
-        tau = cell.booking_delay
-        params = self.config.classes[class_id]
-        metrics = self.class_metrics[class_id]
+        for booking in todays_bookings:
+            class_id = booking.patient_class
+            tau = booking.booking_delay
+            params = self.config.classes[class_id]
+            metrics = self.class_metrics[class_id]
 
-        # No-show decision depends on original tau, not current residual delay
-        if self.rng.random() < params.no_show_prob(tau):
-            if cell.tracked:
-                metrics.no_show += 1
-            if count_slot_metrics:
-                self.slot_metrics.no_show_slots += 1
-        else:
-            if cell.tracked:
-                metrics.served += 1
-            if count_slot_metrics:
-                self.slot_metrics.served_slots += 1
-                self.total_value += params.value
+            if self.rng.random() < params.no_show_prob(tau):
+                if booking.tracked:
+                    metrics.no_show += 1
+                if count_slot_metrics:
+                    self.slot_metrics.no_show_slots += 1
+            else:
+                if booking.tracked:
+                    metrics.served += 1
+                if count_slot_metrics:
+                    self.slot_metrics.served_slots += 1
+                    self.total_value += params.value
 
-        # Active slot is consumed after service/no-show
-        self.calendar[0][active_slot] = None
+        # Today's capacity is consumed after service/no-show and is not rebooked
+        self.calendar[0] = []
 
     # -------------------------
-    # End-of-day logic
+    # Start-of-day cancellations
     # -------------------------
 
-    def apply_end_of_day_cancellations(self) -> None:
+    def apply_start_of_day_cancellations(self) -> None:
         """
         Apply cancellations only to future appointments with r >= 1.
         Same-day cancellations are not allowed.
@@ -218,18 +232,19 @@ class ClinicAppointmentSimulation:
         class-level cancellation metrics.
         """
         for r in range(1, self.config.horizon_days):
-            for m in range(self.config.slots_per_day):
-                cell = self.calendar[r][m]
-                if cell is None:
-                    continue
+            surviving_bookings: List[Booking] = []
 
-                class_id = cell.patient_class
+            for booking in self.calendar[r]:
+                class_id = booking.patient_class
                 params = self.config.classes[class_id]
 
                 if self.rng.random() < params.cancel_prob:
-                    if cell.tracked:
+                    if booking.tracked:
                         self.class_metrics[class_id].canceled += 1
-                    self.calendar[r][m] = None
+                else:
+                    surviving_bookings.append(booking)
+
+            self.calendar[r] = surviving_bookings
 
     def roll_calendar_forward_one_day(self) -> None:
         """
@@ -239,27 +254,7 @@ class ClinicAppointmentSimulation:
         - append a new empty day at the horizon end
         """
         self.calendar.pop(0)
-        self.calendar.append([None for _ in range(self.config.slots_per_day)])
-
-    # -------------------------
-    # Slot arrivals
-    # -------------------------
-
-    def generate_ordered_individual_arrivals(self) -> List[int]:
-        """
-        Generate class-specific Poisson arrivals for the current slot,
-        convert to individual patients, and randomize within-slot order.
-        """
-        arrivals: List[int] = []
-
-        for class_id, params in self.config.classes.items():
-            n = int(self.rng.poisson(params.lambda_per_slot))
-            arrivals.extend([class_id] * n)
-
-        if arrivals:
-            arrivals = self.rng.permutation(arrivals).tolist()
-
-        return arrivals
+        self.calendar.append([])
 
     # -------------------------
     # Main run
@@ -267,13 +262,19 @@ class ClinicAppointmentSimulation:
 
     def run(self) -> SimulationResults:
         """
-        Run the slot-by-slot simulation with:
+        Run the day-level simulation with:
         - burn-in days
         - measurement days
         - cooldown days
 
-        Class metrics track only arrivals from the measurement window.
-        Slot metrics and total value count only service occurring on measured days.
+        Day order:
+        1. start-of-day cancellations on future appointments
+        2. record start-of-day summary state
+        3. generate all daily arrivals
+        4. randomly permute arrivals
+        5. process offers/balking in FCFS order
+        6. resolve no-shows/service for today's scheduled patients
+        7. roll the calendar forward
         """
         total_days = (
             self.config.burn_in_days
@@ -287,7 +288,10 @@ class ClinicAppointmentSimulation:
         for day in range(total_days):
             in_measurement_window = first_measure_day <= day < last_measure_day_exclusive
 
-            # Record summary state only for measured days
+            # 1. Start-of-day cancellations for future appointments only
+            self.apply_start_of_day_cancellations()
+
+            # 2. Record start-of-day summary state after cancellations
             if in_measurement_window:
                 start_of_day_summary = self.summary_state()
                 self.daily_summary_states.append({
@@ -295,26 +299,17 @@ class ClinicAppointmentSimulation:
                     for class_id, counts in start_of_day_summary.items()
                 })
 
-            # Process all S active slots in day D
-            for s in range(self.config.slots_per_day):
-                ordered_arrivals = self.generate_ordered_individual_arrivals()
+            # 3-5. Generate, permute, and process the day's arrivals
+            ordered_arrivals = self.generate_daily_arrival_order()
+            self.process_daily_arrivals(
+                ordered_arrivals=ordered_arrivals,
+                track_patients=in_measurement_window,
+            )
 
-                for class_id in ordered_arrivals:
-                    self.process_one_arrival(
-                        class_id=class_id,
-                        active_slot=s,
-                        track_patient=in_measurement_window,
-                    )
+            # 6. Resolve today's scheduled appointments
+            self.serve_today(count_slot_metrics=in_measurement_window)
 
-                self.serve_active_slot(
-                    active_slot=s,
-                    count_slot_metrics=in_measurement_window,
-                )
-
-            # End-of-day cancellations for r >= 1 only
-            self.apply_end_of_day_cancellations()
-
-            # Move to next day
+            # 7. Move to next day
             self.roll_calendar_forward_one_day()
 
         return SimulationResults(

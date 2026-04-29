@@ -5,130 +5,147 @@ format: html
 
 ## Overview
 
-This project implements a discrete-event simulation of a clinic appointment booking system. The model represents slot-by-slot booking and service dynamics under a first-come-first-served booking rule with two patient classes.
+This project implements a discrete-event simulation of a clinic appointment booking system. The model is a day-level appointment model with two patient classes and first-come-first-served booking.
 
 The simulation includes:
 
-- class-specific Poisson arrivals
+- class-specific daily Poisson arrivals
+- daily random permutation of arrivals
+- same-day booking allowed
 - delay-dependent balking
 - delay-dependent no-show
-- end-of-day cancellations
-- a rolling booking calendar
+- start-of-day cancellations for future appointments only
+- no same-day cancellations
+- no rebooking of no-show slots
+- a rolling day-level booking calendar
 - burn-in, measurement, and cooldown periods
 
 ## Time and State
 
-Time is modeled slot by slot. Each day contains a fixed number of slots, and the simulation advances one active slot at a time.
+Time is modeled one day at a time.
 
-The main system state is a rolling calendar:
+Let:
 
-- rows represent residual days until appointment
-- columns represent slots within a day
+- `D` = current day
+- `S` = number of appointment slots available per day
+- `H` = booking horizon in days
+- `r ∈ {0, ..., H-1}` = residual day offset, where `r = 0` means today
 
-Each calendar cell is either:
-
-- `0` for an open slot
-- `(i, tau)` for a booked slot, where `i` is the patient class and `tau` is the original booking delay
+The main state is a rolling day-level calendar. For each residual day `r`, the model stores the patients currently scheduled for day `D + r`.
 
 The model distinguishes between:
 
-- `tau`: the original delay when the appointment was booked
-- `r`: the current remaining days until the appointment
+- `tau`: the original booking delay accepted by a patient
+- `r`: the current remaining days until that patient’s appointment
 
-This distinction matters because no-show behavior depends on the original booking delay, while the summary state depends on the current remaining delay.
+This distinction matters because balking and no-show behavior depend on the original accepted delay `tau`, while the calendar state is organized by current residual day `r`.
 
-## Event Logic
+## Daily Simulation Order
 
-For each active slot, the simulation follows this sequence:
+For each day, the simulation follows this order:
 
-1. Generate class-specific arrivals using Poisson distributions.
-2. Expand the arrival counts into individual patients and randomize their within-slot order.
-3. For each arriving patient, find the earliest open slot strictly after the active slot.
-4. Compute the offered booking delay and apply the balking rule.
-5. If the patient accepts, place the booking into the calendar.
-6. Serve the active slot and apply the no-show rule if the slot is occupied.
-7. At the end of the day, apply cancellations to future appointments only.
-8. Roll the calendar forward by one day.
+1. **Apply cancellations**  
+   Future appointments only (`r >= 1`) may cancel with class-specific probability. Same-day cancellations are not allowed.
+
+2. **Record the start-of-day state**  
+   The model records the summary state after cancellations and before new arrivals are processed.
+
+3. **Generate daily arrivals**  
+   For each class `i`, daily arrivals are generated as a Poisson random variable with mean `lambda_per_day`.
+
+4. **Randomly permute arrivals**  
+   All arriving patients for that day are pooled and randomly permuted to determine FCFS order.
+
+5. **Offer appointments in FCFS order**  
+   Each patient is offered the earliest available day in the booking horizon, including same-day availability (`r = 0`) if capacity remains.
+
+6. **Apply balking**  
+   If a patient is offered delay `tau`, they accept with probability `1 - b_i(tau)`.
+
+7. **Capacity exhaustion / no offer**  
+   If the booking horizon is full, the current patient and all remaining arrivals for that day are counted as `no_offer`.
+
+8. **Resolve today’s appointments**  
+   Patients scheduled for today either attend or no-show. No-show slots are not rebooked.
+
+9. **Compute metrics and advance the calendar**  
+   The model records outputs for the day, removes the current day, shifts future days forward, and appends a new empty future day.
 
 ## Burn-In and Measurement
 
-The simulation uses three phases:
+The simulation separates time into three phases:
 
-- **Burn-in**: allows the system to move away from the artificial empty-calendar starting state
-- **Measurement**: the period during which reported outputs are collected
-- **Cooldown**: allows patients who entered during the measurement window to finish their appointment process
+- **Burn-in**: allows the system to move away from the artificial empty starting state
+- **Measurement**: the period during which outputs are recorded
+- **Cooldown**: allows patients entering during measurement to complete their appointment process
 
-Patients arriving during the measurement window are tracked for class-level outcomes. Slot-level utilization and total value are also recorded during measured days.
-
-## Outputs
+This design makes the reported outputs less sensitive to the empty-calendar initial condition.
 
 ## Metric Definitions
 
-The simulation reports both class-level metrics and aggregate system metrics. These measure different aspects of performance: booking delay, capacity use, and service success.
+The simulation reports both class-level metrics and aggregate system metrics.
 
 ### Class-level metrics
 
 - **Mean booking delay**  
-  The average original booking delay, in days, among patients in a given class who successfully booked an appointment. A higher value means patients in that class are being scheduled further into the future on average.
+  The average original booking delay, in days, among patients in a given class who successfully booked an appointment.
 
 - **Attended utilization by class**  
-  The share of total measured clinic slots that resulted in a completed visit from a given patient class. This measures how much of the clinic’s slot capacity was actually used by completed appointments from that class.
+  The share of total measured clinic slots that resulted in a completed visit from a given patient class.
 
 - **Percent serviced**  
-  The share of arrivals in a given patient class who were ultimately served. A lower value may reflect no-offer outcomes, balking, cancellations, or no-shows.
+  The share of arrivals in a given patient class who were ultimately served.
 
 ### Aggregate system metrics
 
 - **Scheduled utilization**  
-  The share of total measured slots that had an appointment scheduled in them at service time, regardless of whether the patient actually showed up. This reflects how full the clinic schedule was.
+  The share of total measured slots that had an appointment scheduled in them at service time, regardless of whether the patient showed up.
 
 - **Attended utilization**  
-  The share of total measured slots that resulted in a completed visit. This reflects realized capacity use and will be less than or equal to scheduled utilization when no-shows occur.
+  The share of total measured slots that resulted in a completed visit.
 
 - **Overall percent serviced**  
-  The share of all arrivals across both classes who were ultimately served. This gives an overall measure of how effectively the system converts incoming demand into completed visits.
+  The share of all arrivals across both classes who were ultimately served.
 
-### Interpretation
+### Full output list
 
-These metrics can be grouped into three categories:
+#### Class-level
+- arrivals
+- booked
+- balked
+- no offer
+- canceled
+- no-show
+- served
+- mean booking delay
+- attended utilization by class
+- percent serviced
 
-- **Delay metric**: mean booking delay
-- **Capacity-use metrics**: scheduled utilization, attended utilization, attended utilization by class
-- **Patient-outcome metrics**: percent serviced, overall percent serviced
+#### Slot-level
+- booked slots
+- served slots
+- no-show slots
+- empty slots
 
-A useful distinction is between scheduled and attended utilization. Scheduled utilization counts slots that were filled on the calendar, while attended utilization counts only slots that resulted in actual completed service.
+#### Aggregate
+- scheduled utilization
+- attended utilization
+- overall percent serviced
+- total served
+- total value
 
 ## Repository Structure
 
-- `model.py`: parameter objects, booking objects, metrics, and result containers
-- `engine.py`: simulation engine and event logic
-- `config_loader.py`: reads YAML scenario files into Python objects
-- `run_simulation.py`: runs one simulation scenario
-- `compare_scenarios.py`: compares two simulation scenarios
-- `configs/baseline.yaml`: baseline simulation setup
-- `configs/scenario_2.yaml`: alternative setup for scenario comparison
-- `docs/simulation_documentation.qmd`: documentation source file
-- `docs/simulation_documentation.html`: rendered documentation output
+- `model.py`: parameter objects, booking objects, metrics, and results
+- `engine.py`: simulation engine
+- `config_loader.py`: YAML loader
+- `run_simulation.py`: runs one scenario
+- `compare_scenarios.py`: compares two scenarios
+- `configs/`: scenario parameter files
 
-## How to Use
+## Running the Simulation
 
-### Running one simulation
-
-To run a single simulation, edit:
-
-`configs/baseline.yaml`
-
-This file controls:
-
-- number of slots per day
-- booking horizon
-- burn-in, measurement, and cooldown lengths
-- class-specific arrival rates
-- balking and no-show thresholds
-- cancellation probabilities
-- service values
-
-Then run:
+Install dependencies:
 
 ```bash
-python run_simulation.py
+pip install -r requirements.txt

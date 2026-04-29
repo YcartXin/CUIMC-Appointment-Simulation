@@ -64,133 +64,151 @@ ul.task-list li input[type="checkbox"] {
 
 <section id="overview" class="level2">
 <h2 class="anchored" data-anchor-id="overview">Overview</h2>
-<p>This project implements a discrete-event simulation of a clinic appointment booking system. The model represents slot-by-slot booking and service dynamics under a first-come-first-served booking rule with two patient classes.</p>
+<p>This project implements a discrete-event simulation of a clinic appointment booking system. The model is a <strong>day-level</strong> appointment model with two patient classes and first-come-first-served booking.</p>
 <p>The simulation includes:</p>
 <ul>
-<li>class-specific Poisson arrivals</li>
+<li>class-specific daily Poisson arrivals</li>
+<li>daily random permutation of arrivals</li>
+<li>same-day booking allowed</li>
 <li>delay-dependent balking</li>
 <li>delay-dependent no-show</li>
-<li>end-of-day cancellations</li>
-<li>a rolling booking calendar</li>
+<li>start-of-day cancellations for future appointments only</li>
+<li>no same-day cancellations</li>
+<li>no rebooking of no-show slots</li>
+<li>a rolling day-level booking calendar</li>
 <li>burn-in, measurement, and cooldown periods</li>
 </ul>
 </section>
 <section id="time-and-state" class="level2">
 <h2 class="anchored" data-anchor-id="time-and-state">Time and State</h2>
-<p>Time is modeled slot by slot. Each day contains a fixed number of slots, and the simulation advances one active slot at a time.</p>
-<p>The main system state is a rolling calendar:</p>
+<p>Time is modeled one <strong>day</strong> at a time.</p>
+<p>Let:</p>
 <ul>
-<li>rows represent residual days until appointment</li>
-<li>columns represent slots within a day</li>
+<li><code>D</code> = current day</li>
+<li><code>S</code> = number of appointment slots available per day</li>
+<li><code>H</code> = booking horizon in days</li>
+<li><code>r ∈ {0, ..., H-1}</code> = residual day offset, where <code>r = 0</code> means today</li>
 </ul>
-<p>Each calendar cell is either:</p>
-<ul>
-<li><code>0</code> for an open slot</li>
-<li><code>(i, tau)</code> for a booked slot, where <code>i</code> is the patient class and <code>tau</code> is the original booking delay</li>
-</ul>
+<p>The main state is a rolling day-level calendar. For each residual day <code>r</code>, the model stores the patients currently scheduled for day <code>D + r</code>.</p>
 <p>The model distinguishes between:</p>
 <ul>
-<li><code>tau</code>: the original delay when the appointment was booked</li>
-<li><code>r</code>: the current remaining days until the appointment</li>
+<li><code>tau</code>: the original booking delay accepted by a patient</li>
+<li><code>r</code>: the current remaining days until that patient’s appointment</li>
 </ul>
-<p>This distinction matters because no-show behavior depends on the original booking delay, while the summary state depends on the current remaining delay.</p>
+<p>This distinction matters because balking and no-show behavior depend on the original accepted delay <code>tau</code>, while the calendar state is organized by current residual day <code>r</code>.</p>
 </section>
-<section id="event-logic" class="level2">
-<h2 class="anchored" data-anchor-id="event-logic">Event Logic</h2>
-<p>For each active slot, the simulation follows this sequence:</p>
+<section id="daily-simulation-order" class="level2">
+<h2 class="anchored" data-anchor-id="daily-simulation-order">Daily Simulation Order</h2>
+<p>For each day, the simulation follows this order:</p>
 <ol type="1">
-<li>Generate class-specific arrivals using Poisson distributions.</li>
-<li>Expand the arrival counts into individual patients and randomize their within-slot order.</li>
-<li>For each arriving patient, find the earliest open slot strictly after the active slot.</li>
-<li>Compute the offered booking delay and apply the balking rule.</li>
-<li>If the patient accepts, place the booking into the calendar.</li>
-<li>Serve the active slot and apply the no-show rule if the slot is occupied.</li>
-<li>At the end of the day, apply cancellations to future appointments only.</li>
-<li>Roll the calendar forward by one day.</li>
+<li><p><strong>Apply cancellations</strong><br>
+Future appointments only (<code>r &gt;= 1</code>) may cancel with class-specific probability. Same-day cancellations are not allowed.</p></li>
+<li><p><strong>Record the start-of-day state</strong><br>
+The model records the summary state after cancellations and before new arrivals are processed.</p></li>
+<li><p><strong>Generate daily arrivals</strong><br>
+For each class <code>i</code>, daily arrivals are generated as a Poisson random variable with mean <code>lambda_per_day</code>.</p></li>
+<li><p><strong>Randomly permute arrivals</strong><br>
+All arriving patients for that day are pooled and randomly permuted to determine FCFS order.</p></li>
+<li><p><strong>Offer appointments in FCFS order</strong><br>
+Each patient is offered the earliest available day in the booking horizon, including same-day availability (<code>r = 0</code>) if capacity remains.</p></li>
+<li><p><strong>Apply balking</strong><br>
+If a patient is offered delay <code>tau</code>, they accept with probability <code>1 - b_i(tau)</code>.</p></li>
+<li><p><strong>Capacity exhaustion / no offer</strong><br>
+If the booking horizon is full, the current patient and all remaining arrivals for that day are counted as <code>no_offer</code>.</p></li>
+<li><p><strong>Resolve today’s appointments</strong><br>
+Patients scheduled for today either attend or no-show. No-show slots are not rebooked.</p></li>
+<li><p><strong>Compute metrics and advance the calendar</strong><br>
+The model records outputs for the day, removes the current day, shifts future days forward, and appends a new empty future day.</p></li>
 </ol>
 </section>
 <section id="burn-in-and-measurement" class="level2">
 <h2 class="anchored" data-anchor-id="burn-in-and-measurement">Burn-In and Measurement</h2>
-<p>The simulation uses three phases:</p>
+<p>The simulation separates time into three phases:</p>
 <ul>
-<li><strong>Burn-in</strong>: allows the system to move away from the artificial empty-calendar starting state</li>
-<li><strong>Measurement</strong>: the period during which reported outputs are collected</li>
-<li><strong>Cooldown</strong>: allows patients who entered during the measurement window to finish their appointment process</li>
+<li><strong>Burn-in</strong>: allows the system to move away from the artificial empty starting state</li>
+<li><strong>Measurement</strong>: the period during which outputs are recorded</li>
+<li><strong>Cooldown</strong>: allows patients entering during measurement to complete their appointment process</li>
 </ul>
-<p>Patients arriving during the measurement window are tracked for class-level outcomes. Slot-level utilization and total value are also recorded during measured days.</p>
-</section>
-<section id="outputs" class="level2">
-<h2 class="anchored" data-anchor-id="outputs">Outputs</h2>
+<p>This design makes the reported outputs less sensitive to the empty-calendar initial condition.</p>
 </section>
 <section id="metric-definitions" class="level2">
 <h2 class="anchored" data-anchor-id="metric-definitions">Metric Definitions</h2>
-<p>The simulation reports both class-level metrics and aggregate system metrics. These measure different aspects of performance: booking delay, capacity use, and service success.</p>
+<p>The simulation reports both class-level metrics and aggregate system metrics.</p>
 <section id="class-level-metrics" class="level3">
 <h3 class="anchored" data-anchor-id="class-level-metrics">Class-level metrics</h3>
 <ul>
 <li><p><strong>Mean booking delay</strong><br>
-The average original booking delay, in days, among patients in a given class who successfully booked an appointment. A higher value means patients in that class are being scheduled further into the future on average.</p></li>
+The average original booking delay, in days, among patients in a given class who successfully booked an appointment.</p></li>
 <li><p><strong>Attended utilization by class</strong><br>
-The share of total measured clinic slots that resulted in a completed visit from a given patient class. This measures how much of the clinic’s slot capacity was actually used by completed appointments from that class.</p></li>
+The share of total measured clinic slots that resulted in a completed visit from a given patient class.</p></li>
 <li><p><strong>Percent serviced</strong><br>
-The share of arrivals in a given patient class who were ultimately served. A lower value may reflect no-offer outcomes, balking, cancellations, or no-shows.</p></li>
+The share of arrivals in a given patient class who were ultimately served.</p></li>
 </ul>
 </section>
 <section id="aggregate-system-metrics" class="level3">
 <h3 class="anchored" data-anchor-id="aggregate-system-metrics">Aggregate system metrics</h3>
 <ul>
 <li><p><strong>Scheduled utilization</strong><br>
-The share of total measured slots that had an appointment scheduled in them at service time, regardless of whether the patient actually showed up. This reflects how full the clinic schedule was.</p></li>
+The share of total measured slots that had an appointment scheduled in them at service time, regardless of whether the patient showed up.</p></li>
 <li><p><strong>Attended utilization</strong><br>
-The share of total measured slots that resulted in a completed visit. This reflects realized capacity use and will be less than or equal to scheduled utilization when no-shows occur.</p></li>
+The share of total measured slots that resulted in a completed visit.</p></li>
 <li><p><strong>Overall percent serviced</strong><br>
-The share of all arrivals across both classes who were ultimately served. This gives an overall measure of how effectively the system converts incoming demand into completed visits.</p></li>
+The share of all arrivals across both classes who were ultimately served.</p></li>
 </ul>
 </section>
-<section id="interpretation" class="level3">
-<h3 class="anchored" data-anchor-id="interpretation">Interpretation</h3>
-<p>These metrics can be grouped into three categories:</p>
+<section id="full-output-list" class="level3">
+<h3 class="anchored" data-anchor-id="full-output-list">Full output list</h3>
+<section id="class-level" class="level4">
+<h4 class="anchored" data-anchor-id="class-level">Class-level</h4>
 <ul>
-<li><strong>Delay metric</strong>: mean booking delay</li>
-<li><strong>Capacity-use metrics</strong>: scheduled utilization, attended utilization, attended utilization by class</li>
-<li><strong>Patient-outcome metrics</strong>: percent serviced, overall percent serviced</li>
+<li>arrivals</li>
+<li>booked</li>
+<li>balked</li>
+<li>no offer</li>
+<li>canceled</li>
+<li>no-show</li>
+<li>served</li>
+<li>mean booking delay</li>
+<li>attended utilization by class</li>
+<li>percent serviced</li>
 </ul>
-<p>A useful distinction is between scheduled and attended utilization. Scheduled utilization counts slots that were filled on the calendar, while attended utilization counts only slots that resulted in actual completed service.</p>
+</section>
+<section id="slot-level" class="level4">
+<h4 class="anchored" data-anchor-id="slot-level">Slot-level</h4>
+<ul>
+<li>booked slots</li>
+<li>served slots</li>
+<li>no-show slots</li>
+<li>empty slots</li>
+</ul>
+</section>
+<section id="aggregate" class="level4">
+<h4 class="anchored" data-anchor-id="aggregate">Aggregate</h4>
+<ul>
+<li>scheduled utilization</li>
+<li>attended utilization</li>
+<li>overall percent serviced</li>
+<li>total served</li>
+<li>total value</li>
+</ul>
+</section>
 </section>
 </section>
 <section id="repository-structure" class="level2">
 <h2 class="anchored" data-anchor-id="repository-structure">Repository Structure</h2>
 <ul>
-<li><code>model.py</code>: parameter objects, booking objects, metrics, and result containers</li>
-<li><code>engine.py</code>: simulation engine and event logic</li>
-<li><code>config_loader.py</code>: reads YAML scenario files into Python objects</li>
-<li><code>run_simulation.py</code>: runs one simulation scenario</li>
-<li><code>compare_scenarios.py</code>: compares two simulation scenarios</li>
-<li><code>configs/baseline.yaml</code>: baseline simulation setup</li>
-<li><code>configs/scenario_2.yaml</code>: alternative setup for scenario comparison</li>
-<li><code>docs/simulation_documentation.qmd</code>: documentation source file</li>
-<li><code>docs/simulation_documentation.html</code>: rendered documentation output</li>
+<li><code>model.py</code>: parameter objects, booking objects, metrics, and results</li>
+<li><code>engine.py</code>: simulation engine</li>
+<li><code>config_loader.py</code>: YAML loader</li>
+<li><code>run_simulation.py</code>: runs one scenario</li>
+<li><code>compare_scenarios.py</code>: compares two scenarios</li>
+<li><code>configs/</code>: scenario parameter files</li>
 </ul>
 </section>
-<section id="how-to-use" class="level2">
-<h2 class="anchored" data-anchor-id="how-to-use">How to Use</h2>
-<section id="running-one-simulation" class="level3">
-<h3 class="anchored" data-anchor-id="running-one-simulation">Running one simulation</h3>
-<p>To run a single simulation, edit:</p>
-<p><code>configs/baseline.yaml</code></p>
-<p>This file controls:</p>
-<ul>
-<li>number of slots per day</li>
-<li>booking horizon</li>
-<li>burn-in, measurement, and cooldown lengths</li>
-<li>class-specific arrival rates</li>
-<li>balking and no-show thresholds</li>
-<li>cancellation probabilities</li>
-<li>service values</li>
-</ul>
-<p>Then run:</p>
-<p>```bash python run_simulation.py</p>
-</section>
+<section id="running-the-simulation" class="level2">
+<h2 class="anchored" data-anchor-id="running-the-simulation">Running the Simulation</h2>
+<p>Install dependencies:</p>
+<p>```bash pip install -r requirements.txt</p>
 </section>
 
 </main>

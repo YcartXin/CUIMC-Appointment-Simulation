@@ -43,7 +43,7 @@ class PatientClassParams:
     Parameters for one patient class i.
     """
     class_id: int
-    lambda_per_slot: float
+    lambda_per_day: float
     balk_prob: ProbabilityFn
     cancel_prob: float
     no_show_prob: ProbabilityFn
@@ -52,7 +52,7 @@ class PatientClassParams:
     def __post_init__(self) -> None:
         if self.class_id <= 0:
             raise ValueError("class_id must be positive.")
-        if self.lambda_per_slot < 0:
+        if self.lambda_per_day < 0:
             raise ValueError("Arrival rate must be nonnegative.")
         if not (0.0 <= self.cancel_prob <= 1.0):
             raise ValueError("Cancellation probability must lie in [0, 1].")
