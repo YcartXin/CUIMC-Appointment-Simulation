@@ -1,6 +1,6 @@
 # CUIMC-Appointment-Simulation
 
-This repository contains a discrete-event simulation of a clinic appointment booking system. The model is now a **day-level** appointment model with first-come-first-served booking, two patient classes, and a rolling booking horizon.
+This repository contains a discrete-event simulation of a clinic appointment booking system. The model is now a day-level appointment model with first-come-first-served booking, two patient classes, and a rolling booking horizon.
 
 The simulation includes:
 
