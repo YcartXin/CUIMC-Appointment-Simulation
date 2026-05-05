@@ -160,6 +160,10 @@ class ClinicAppointmentSimulation:
 
             tau = offered_day  # offered booking delay in days; tau = 0 is allowed
 
+            # Record the offered delay including balk.
+            if track_patients:
+                metrics.total_offered_booking_delay += tau
+
             # Balking decision
             if self.rng.random() < params.balk_prob(tau):
                 if track_patients:

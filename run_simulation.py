@@ -22,7 +22,8 @@ def main() -> None:
         print(f"  Canceled:              {m.canceled}")
         print(f"  No-show:               {m.no_show}")
         print(f"  Served:                {m.served}")
-        print(f"  Mean booking delay:    {m.mean_booking_delay:.3f}")
+        print(f"  Mean accepted delay:   {m.mean_accepted_booking_delay:.3f}")
+        print(f"  Mean offered delay:    {m.mean_offered_booking_delay:.3f}")
         print(f"  Percent serviced:      {m.percent_serviced:.3f}")
 
     print("\n=== Slot metrics ===")

@@ -116,11 +116,35 @@ class ClassMetrics:
     canceled: int = 0
     no_show: int = 0
     served: int = 0
+
+    # Sum of delays only for patients who accepted/booked an offered slot
     total_booking_delay: float = 0.0
+
+    # Sum of delays for all patients who received an offer including balked
+    total_offered_booking_delay: float = 0.0
+
+    @property
+    def offered(self) -> int:
+        return self.booked + self.balked
+
+    @property
+    def mean_accepted_booking_delay(self) -> float:
+        return self.total_booking_delay / self.booked if self.booked > 0 else 0.0
+
+    @property
+    def mean_offered_booking_delay(self) -> float:
+        return (
+            self.total_offered_booking_delay / self.offered
+            if self.offered > 0
+            else 0.0
+        )
 
     @property
     def mean_booking_delay(self) -> float:
-        return self.total_booking_delay / self.booked if self.booked > 0 else 0.0
+        """
+        Backward-compatible alias for accepted booking delay.
+        """
+        return self.mean_accepted_booking_delay
 
     @property
     def percent_serviced(self) -> float:
