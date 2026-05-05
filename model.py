@@ -126,8 +126,7 @@ class ClassMetrics:
     def percent_serviced(self) -> float:
         return self.served / self.arrivals if self.arrivals > 0 else 0.0
 
-    def attended_utilization(self, total_slots: int) -> float:
-        return self.served / total_slots if total_slots > 0 else 0.0
+
 
 
 @dataclass
@@ -135,7 +134,9 @@ class SlotMetrics:
     booked_slots: int = 0
     served_slots: int = 0
     no_show_slots: int = 0
-    empty_slots: int = 0
+
+    daily_utilization_sum: float = 0.0
+    measured_days: int = 0
 
 
 @dataclass
@@ -160,9 +161,9 @@ class SimulationResults:
         return self.total_served / total_arrivals if total_arrivals > 0 else 0.0
 
     @property
-    def overall_attended_utilization(self) -> float:
-        return self.total_served / self.total_slots if self.total_slots > 0 else 0.0
-
-    @property
-    def overall_scheduled_utilization(self) -> float:
-        return self.slot_metrics.booked_slots / self.total_slots if self.total_slots > 0 else 0.0
+    def average_utilization(self) -> float:
+        return (
+            self.slot_metrics.daily_utilization_sum / self.slot_metrics.measured_days
+            if self.slot_metrics.measured_days > 0
+            else 0.0
+        )
