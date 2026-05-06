@@ -1,37 +1,37 @@
 slots_per_day: 32
-horizon_days: 10
+horizon_days: 14
 burn_in_days: 30
-measure_days: 60
+measure_days: 365
 cooldown_days: 10
 seed: 11
 
 classes:
   1:
-    lambda_per_day: 60
+    lambda_per_day: 50
     cancel_prob: 0.1
     value: 1.0
     balk_prob:
       type: threshold
-      threshold: 10
+      threshold: 9
       low: 0.00
-      high: 1
+      high: 0.5
     no_show_prob:
       type: threshold
-      threshold: 14
+      threshold: 6
       low: 0.00
-      high: 1
+      high: 0.3
 
   2:
-    lambda_per_day: 30
-    cancel_prob: 0.10
+    lambda_per_day: 50
+    cancel_prob: 0.1
     value: 1.0
     balk_prob:
       type: threshold
-      threshold: 10
+      threshold: 9
       low: 0.00
-      high: 1
+      high: 0.5
     no_show_prob:
       type: threshold
-      threshold: 14
+      threshold: 6
       low: 0.00
-      high: 1
+      high: 0.3

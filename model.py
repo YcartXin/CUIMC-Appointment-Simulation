@@ -116,18 +116,41 @@ class ClassMetrics:
     canceled: int = 0
     no_show: int = 0
     served: int = 0
+
+    # Sum of delays only for patients who accepted/booked an offered slot
     total_booking_delay: float = 0.0
+
+    # Sum of delays for all patients who received an offer including balked
+    total_offered_booking_delay: float = 0.0
+
+    @property
+    def offered(self) -> int:
+        return self.booked + self.balked
+
+    @property
+    def mean_accepted_booking_delay(self) -> float:
+        return self.total_booking_delay / self.booked if self.booked > 0 else 0.0
+
+    @property
+    def mean_offered_booking_delay(self) -> float:
+        return (
+            self.total_offered_booking_delay / self.offered
+            if self.offered > 0
+            else 0.0
+        )
 
     @property
     def mean_booking_delay(self) -> float:
-        return self.total_booking_delay / self.booked if self.booked > 0 else 0.0
+        """
+        Backward-compatible alias for accepted booking delay.
+        """
+        return self.mean_accepted_booking_delay
 
     @property
     def percent_serviced(self) -> float:
         return self.served / self.arrivals if self.arrivals > 0 else 0.0
 
-    def attended_utilization(self, total_slots: int) -> float:
-        return self.served / total_slots if total_slots > 0 else 0.0
+
 
 
 @dataclass
@@ -135,7 +158,9 @@ class SlotMetrics:
     booked_slots: int = 0
     served_slots: int = 0
     no_show_slots: int = 0
-    empty_slots: int = 0
+
+    daily_utilization_sum: float = 0.0
+    measured_days: int = 0
 
 
 @dataclass
@@ -160,9 +185,9 @@ class SimulationResults:
         return self.total_served / total_arrivals if total_arrivals > 0 else 0.0
 
     @property
-    def overall_attended_utilization(self) -> float:
-        return self.total_served / self.total_slots if self.total_slots > 0 else 0.0
-
-    @property
-    def overall_scheduled_utilization(self) -> float:
-        return self.slot_metrics.booked_slots / self.total_slots if self.total_slots > 0 else 0.0
+    def average_utilization(self) -> float:
+        return (
+            self.slot_metrics.daily_utilization_sum / self.slot_metrics.measured_days
+            if self.slot_metrics.measured_days > 0
+            else 0.0
+        )

@@ -160,6 +160,10 @@ class ClinicAppointmentSimulation:
 
             tau = offered_day  # offered booking delay in days; tau = 0 is allowed
 
+            # Record the offered delay including balk.
+            if track_patients:
+                metrics.total_offered_booking_delay += tau
+
             # Balking decision
             if self.rng.random() < params.balk_prob(tau):
                 if track_patients:
@@ -184,19 +188,14 @@ class ClinicAppointmentSimulation:
     # -------------------------
 
     def serve_today(self, count_slot_metrics: bool) -> None:
-        """
-        Resolve all appointments scheduled for today (r = 0).
+        """Resolve all appointments scheduled for today (r = 0)."""
 
-        No-show slots are not rebooked.
-        Slot metrics and value are counted only during measured days.
-        Class service/no-show metrics are counted only for tracked patients.
-        """
         todays_bookings = self.calendar[0]
         booked_today = len(todays_bookings)
+        served_today = 0
 
         if count_slot_metrics:
             self.slot_metrics.booked_slots += booked_today
-            self.slot_metrics.empty_slots += self.config.slots_per_day - booked_today
 
         for booking in todays_bookings:
             class_id = booking.patient_class
@@ -210,13 +209,20 @@ class ClinicAppointmentSimulation:
                 if count_slot_metrics:
                     self.slot_metrics.no_show_slots += 1
             else:
+                served_today += 1
+
                 if booking.tracked:
                     metrics.served += 1
                 if count_slot_metrics:
                     self.slot_metrics.served_slots += 1
-                    self.total_value += params.value
 
-        # Today's capacity is consumed after service/no-show and is not rebooked
+                self.total_value += params.value
+
+        if count_slot_metrics:
+            daily_utilization = served_today / self.config.slots_per_day
+            self.slot_metrics.daily_utilization_sum += daily_utilization
+            self.slot_metrics.measured_days += 1
+
         self.calendar[0] = []
 
     # -------------------------
@@ -273,8 +279,9 @@ class ClinicAppointmentSimulation:
         3. generate all daily arrivals
         4. randomly permute arrivals
         5. process offers/balking in FCFS order
-        6. resolve no-shows/service for today's scheduled patients
-        7. roll the calendar forward
+        6. capture final calendar snapshot on the last simulated day
+        7. resolve no-shows/service for today's scheduled patients
+        8. roll the calendar forward
         """
         total_days = (
             self.config.burn_in_days
@@ -284,6 +291,8 @@ class ClinicAppointmentSimulation:
 
         first_measure_day = self.config.burn_in_days
         last_measure_day_exclusive = self.config.burn_in_days + self.config.measure_days
+
+        final_full_state_snapshot = None
 
         for day in range(total_days):
             in_measurement_window = first_measure_day <= day < last_measure_day_exclusive
@@ -306,10 +315,14 @@ class ClinicAppointmentSimulation:
                 track_patients=in_measurement_window,
             )
 
-            # 6. Resolve today's scheduled appointments
+            # 6. Capture the final calendar view before service and before rolling forward
+            if day == total_days - 1:
+                final_full_state_snapshot = self.full_state_view()
+
+            # 7. Resolve today's scheduled appointments
             self.serve_today(count_slot_metrics=in_measurement_window)
 
-            # 7. Move to next day
+            # 8. Move to next day
             self.roll_calendar_forward_one_day()
 
         return SimulationResults(
@@ -318,5 +331,5 @@ class ClinicAppointmentSimulation:
             total_slots=self.config.measure_days * self.config.slots_per_day,
             total_value=self.total_value,
             daily_summary_states=self.daily_summary_states,
-            final_full_state=self.full_state_view(),
+            final_full_state=final_full_state_snapshot,
         )
