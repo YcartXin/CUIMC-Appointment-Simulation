@@ -5,7 +5,7 @@ from typing import Any, Dict
 
 import yaml
 
-from model import ThresholdRule, PatientClassParams, SimulationConfig
+from .model import ThresholdRule, PatientClassParams, SimulationConfig
 
 
 def _build_probability_rule(rule_config: Dict[str, Any]) -> ThresholdRule:
