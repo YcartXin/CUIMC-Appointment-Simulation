@@ -1,2 +1,5 @@
 numpy
 pyyaml
+pandas
+matplotlib
+jupyter
