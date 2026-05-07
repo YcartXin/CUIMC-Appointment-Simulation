@@ -52,6 +52,13 @@ That causes:
 
 So utilization alone is not enough. A clinic can look busy while still providing poor access.
 
+The new FCFS stress test makes this very clear. At the baseline arrival rate, utilization is about `0.839`, but only about `0.269` of arrivals are served. At `1.7x` the baseline arrival rate, utilization is still about `0.841`, but the served share falls to about `0.157`.
+
+The main failure mode also changes with load:
+
+- at baseline load, patients mostly leave through balking or after-booking losses
+- at high overload, `no_offer` becomes a major failure mode because the FCFS horizon fills
+
 ### 3. Cancellation asymmetry creates the largest class advantage
 
 The biggest class-benefit effect came from cancellation probability.
@@ -113,6 +120,25 @@ Class differences would matter more if classes had different:
 - balking thresholds
 - balking steps
 - values or priorities
+
+### 8. Regression screen confirms the main drivers
+
+I added a randomized regression screen:
+
+- 240 random FCFS parameter settings
+- 2 simulation seeds per setting
+- standardized linear regressions on the simulated metrics
+
+Main regression findings:
+
+| Target | Biggest drivers |
+|---|---|
+| `average_utilization` | no-show threshold, no-show step, cancellation probability |
+| `overall_percent_serviced` | total arrival rate, no-show threshold, no-show step |
+| `mean_offered_booking_delay` | total arrival rate, cancellation probability, balking threshold |
+| `Delta_access` | cancellation gap, balking threshold gap, balking step gap |
+
+This reinforces the heatmap conclusion: absolute demand and no-show behavior drive aggregate performance, while class-specific gaps drive who benefits.
 
 ## Impact Ranking
 
