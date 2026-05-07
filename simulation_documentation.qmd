@@ -98,11 +98,14 @@ The simulation reports both class-level metrics and aggregate system metrics.
 
 ### Aggregate system metrics
 
-- **Scheduled utilization**  
-  The share of total measured slots that had an appointment scheduled in them at service time, regardless of whether the patient showed up.
+- **Average utilization**  
+  The average daily share of measured slots that resulted in completed visits, excluding no-shows.
 
-- **Attended utilization**  
-  The share of total measured slots that resulted in a completed visit.
+- **Mean accepted booking delay**  
+  The average delay among patients who accepted and booked an offered slot.
+
+- **Mean offered booking delay**  
+  The average offered delay among patients who received a slot offer, including patients who balked.
 
 - **Overall percent serviced**  
   The share of all arrivals across both classes who were ultimately served.
@@ -117,22 +120,19 @@ The simulation reports both class-level metrics and aggregate system metrics.
 - canceled
 - no-show
 - served
-- mean booking delay
-- attended utilization by class
+- offered
+- mean accepted booking delay
+- mean offered booking delay
 - percent serviced
 
 #### Slot-level
 - booked slots
 - served slots
 - no-show slots
-- empty slots
 
 #### Aggregate
-- scheduled utilization
-- attended utilization
+- average utilization
 - overall percent serviced
-- total served
-- total value
 
 ## Repository Structure
 

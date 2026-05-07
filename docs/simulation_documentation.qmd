@@ -54,7 +54,7 @@ The simulation uses three phases:
 - **Measurement**: the period during which reported outputs are collected
 - **Cooldown**: allows patients who entered during the measurement window to finish their appointment process
 
-Patients arriving during the measurement window are tracked for class-level outcomes. Slot-level utilization and total value are also recorded during measured days.
+Patients arriving during the measurement window are tracked for class-level outcomes. Slot-level visits and aggregate average utilization are recorded during measured days.
 
 ## Outputs
 
@@ -68,22 +68,19 @@ The simulation reports:
 - canceled
 - no-show
 - served
-- mean booking delay
-- attended utilization by class
+- offered
+- mean accepted booking delay
+- mean offered booking delay
 - percent serviced
 
 ### Slot-level metrics
 - booked slots
 - served slots
 - no-show slots
-- empty slots
 
 ### Aggregate metrics
-- scheduled utilization
-- attended utilization
+- average utilization
 - overall percent serviced
-- total served
-- total value
 
 The model also provides:
 - a summary state by class and residual day offset
