@@ -1,0 +1,151 @@
+---
+title: "Simulation Documentation"
+format: html
+---
+
+## Overview
+
+This project implements a discrete-event simulation of a clinic appointment booking system. The model is a day-level appointment model with two patient classes and first-come-first-served booking.
+
+The simulation includes:
+
+- class-specific daily Poisson arrivals
+- daily random permutation of arrivals
+- same-day booking allowed
+- delay-dependent balking
+- delay-dependent no-show
+- start-of-day cancellations for future appointments only
+- no same-day cancellations
+- no rebooking of no-show slots
+- a rolling day-level booking calendar
+- burn-in, measurement, and cooldown periods
+
+## Time and State
+
+Time is modeled one day at a time.
+
+Let:
+
+- `D` = current day
+- `S` = number of appointment slots available per day
+- `H` = booking horizon in days
+- `r ∈ {0, ..., H-1}` = residual day offset, where `r = 0` means today
+
+The main state is a rolling day-level calendar. For each residual day `r`, the model stores the patients currently scheduled for day `D + r`.
+
+The model distinguishes between:
+
+- `tau`: the original booking delay accepted by a patient
+- `r`: the current remaining days until that patient’s appointment
+
+This distinction matters because balking and no-show behavior depend on the original accepted delay `tau`, while the calendar state is organized by current residual day `r`.
+
+## Daily Simulation Order
+
+For each day, the simulation follows this order:
+
+1. **Apply cancellations**  
+   Future appointments only (`r >= 1`) may cancel with class-specific probability. Same-day cancellations are not allowed.
+
+2. **Record the start-of-day state**  
+   The model records the summary state after cancellations and before new arrivals are processed.
+
+3. **Generate daily arrivals**  
+   For each class `i`, daily arrivals are generated as a Poisson random variable with mean `lambda_per_day`.
+
+4. **Randomly permute arrivals**  
+   All arriving patients for that day are pooled and randomly permuted to determine FCFS order.
+
+5. **Offer appointments in FCFS order**  
+   Each patient is offered the earliest available day in the booking horizon, including same-day availability (`r = 0`) if capacity remains.
+
+6. **Apply balking**  
+   If a patient is offered delay `tau`, they accept with probability `1 - b_i(tau)`.
+
+7. **Capacity exhaustion / no offer**  
+   If the booking horizon is full, the current patient and all remaining arrivals for that day are counted as `no_offer`.
+
+8. **Resolve today’s appointments**  
+   Patients scheduled for today either attend or no-show. No-show slots are not rebooked.
+
+9. **Compute metrics and advance the calendar**  
+   The model records outputs for the day, removes the current day, shifts future days forward, and appends a new empty future day.
+
+## Burn-In and Measurement
+
+The simulation separates time into three phases:
+
+- **Burn-in**: allows the system to move away from the artificial empty starting state
+- **Measurement**: the period during which outputs are recorded
+- **Cooldown**: allows patients entering during measurement to complete their appointment process
+
+This design makes the reported outputs less sensitive to the empty-calendar initial condition.
+
+## Metric Definitions
+
+The simulation reports both class-level metrics and aggregate system metrics.
+
+### Class-level metrics
+
+- **Mean booking delay**  
+  The average original booking delay, in days, among patients in a given class who successfully booked an appointment.
+
+- **Attended utilization by class**  
+  The share of total measured clinic slots that resulted in a completed visit from a given patient class.
+
+- **Percent serviced**  
+  The share of arrivals in a given patient class who were ultimately served.
+
+### Aggregate system metrics
+
+- **Average utilization**  
+  The average daily share of measured slots that resulted in completed visits, excluding no-shows.
+
+- **Mean accepted booking delay**  
+  The average delay among patients who accepted and booked an offered slot.
+
+- **Mean offered booking delay**  
+  The average offered delay among patients who received a slot offer, including patients who balked.
+
+- **Overall percent serviced**  
+  The share of all arrivals across both classes who were ultimately served.
+
+### Full output list
+
+#### Class-level
+- arrivals
+- booked
+- balked
+- no offer
+- canceled
+- no-show
+- served
+- offered
+- mean accepted booking delay
+- mean offered booking delay
+- percent serviced
+
+#### Slot-level
+- booked slots
+- served slots
+- no-show slots
+
+#### Aggregate
+- average utilization
+- overall percent serviced
+
+## Repository Structure
+
+- `model.py`: parameter objects, booking objects, metrics, and results
+- `engine.py`: simulation engine
+- `config_loader.py`: YAML loader
+- `run_simulation.py`: runs one scenario
+- `compare_scenarios.py`: compares two scenarios
+- `configs/`: scenario parameter files
+
+## Running the Simulation
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt

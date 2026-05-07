@@ -165,12 +165,25 @@ The summary state is recorded after start-of-day cancellations and before new da
 The summary state does not directly record:
 
 - arrivals
-- balking
-- no-offer counts
-- no-shows
-- served patients
-- utilization
-- total value
+- booked
+- balked
+- no offer
+- canceled
+- no-show
+- served
+- offered
+- mean accepted booking delay
+- mean offered booking delay
+- percent serviced
+
+### Slot-level metrics
+- booked slots
+- served slots
+- no-show slots
+
+### Aggregate metrics
+- average utilization
+- overall percent serviced
 
 Those outcomes are recorded separately in the simulation metrics.
 
@@ -455,10 +468,3 @@ Run the baseline scenario:
 
 ```bash
 python run_simulation.py
-```
-
-Run the scenario comparison script:
-
-```bash
-python compare_scenarios.py
-```

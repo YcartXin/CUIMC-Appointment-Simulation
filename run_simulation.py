@@ -16,6 +16,7 @@ def main() -> None:
     for class_id, m in results.class_metrics.items():
         print(f"\nClass {class_id}")
         print(f"  Arrivals:              {m.arrivals}")
+        print(f"  Offered:               {m.offered}")
         print(f"  Booked:                {m.booked}")
         print(f"  Balked:                {m.balked}")
         print(f"  No offer:              {m.no_offer}")
@@ -33,10 +34,8 @@ def main() -> None:
     print(f"No-show slots:           {sm.no_show_slots}")
 
     print("\n=== Aggregate outputs ===")
-    print(f"Average utilization:   {results.average_utilization:.3f}")
-    print(f"Overall percent served:{results.overall_percent_serviced:.3f}")
-    print(f"Total served:          {results.total_served}")
-    print(f"Total value:           {results.total_value:.3f}")
+    print(f"Average utilization:     {results.average_utilization:.3f}")
+    print(f"Overall percent serviced: {results.overall_percent_serviced:.3f}")
 
     if results.daily_summary_states:
         print("\n=== Start-of-day summary state for first measured day ===")

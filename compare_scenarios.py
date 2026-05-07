@@ -10,6 +10,18 @@ def run_scenario(config_path: Path):
     return sim.run()
 
 
+def aggregate_mean_accepted_booking_delay(results) -> float:
+    booked = sum(m.booked for m in results.class_metrics.values())
+    delay = sum(m.total_booking_delay for m in results.class_metrics.values())
+    return delay / booked if booked > 0 else 0.0
+
+
+def aggregate_mean_offered_booking_delay(results) -> float:
+    offered = sum(m.offered for m in results.class_metrics.values())
+    delay = sum(m.total_offered_booking_delay for m in results.class_metrics.values())
+    return delay / offered if offered > 0 else 0.0
+
+
 def main() -> None:
     repo_dir = Path(__file__).resolve().parent
 
@@ -20,24 +32,20 @@ def main() -> None:
     scenario_2_results = run_scenario(scenario_2_path)
 
     print("=== Overall Comparison ===")
-    print(f"Baseline scheduled utilization:    {baseline_results.overall_scheduled_utilization:.3f}")
-    print(f"Scenario 2 scheduled utilization:  {scenario_2_results.overall_scheduled_utilization:.3f}")
+    print(f"Baseline average utilization:        {baseline_results.average_utilization:.3f}")
+    print(f"Scenario 2 average utilization:      {scenario_2_results.average_utilization:.3f}")
     print()
 
-    print(f"Baseline attended utilization:     {baseline_results.overall_attended_utilization:.3f}")
-    print(f"Scenario 2 attended utilization:   {scenario_2_results.overall_attended_utilization:.3f}")
+    print(f"Baseline overall percent serviced:   {baseline_results.overall_percent_serviced:.3f}")
+    print(f"Scenario 2 overall percent serviced: {scenario_2_results.overall_percent_serviced:.3f}")
     print()
 
-    print(f"Baseline overall percent served:   {baseline_results.overall_percent_serviced:.3f}")
-    print(f"Scenario 2 overall percent served: {scenario_2_results.overall_percent_serviced:.3f}")
+    print(f"Baseline mean accepted delay:       {aggregate_mean_accepted_booking_delay(baseline_results):.3f}")
+    print(f"Scenario 2 mean accepted delay:     {aggregate_mean_accepted_booking_delay(scenario_2_results):.3f}")
     print()
 
-    print(f"Baseline total served:             {baseline_results.total_served}")
-    print(f"Scenario 2 total served:           {scenario_2_results.total_served}")
-    print()
-
-    print(f"Baseline total value:              {baseline_results.total_value:.3f}")
-    print(f"Scenario 2 total value:            {scenario_2_results.total_value:.3f}")
+    print(f"Baseline mean offered delay:        {aggregate_mean_offered_booking_delay(baseline_results):.3f}")
+    print(f"Scenario 2 mean offered delay:      {aggregate_mean_offered_booking_delay(scenario_2_results):.3f}")
 
     print("\n=== Class-Level Comparison ===")
     for class_id in baseline_results.class_metrics:
@@ -66,11 +74,11 @@ def main() -> None:
         print(f"  Baseline served:                 {b.served}")
         print(f"  Scenario 2 served:               {s.served}")
 
-        print(f"  Baseline mean delay:             {b.mean_booking_delay:.3f}")
-        print(f"  Scenario 2 mean delay:           {s.mean_booking_delay:.3f}")
+        print(f"  Baseline mean accepted delay:    {b.mean_accepted_booking_delay:.3f}")
+        print(f"  Scenario 2 mean accepted delay:  {s.mean_accepted_booking_delay:.3f}")
 
-        print(f"  Baseline attended utilization:   {b.attended_utilization(baseline_results.total_slots):.3f}")
-        print(f"  Scenario 2 attended utilization: {s.attended_utilization(scenario_2_results.total_slots):.3f}")
+        print(f"  Baseline mean offered delay:     {b.mean_offered_booking_delay:.3f}")
+        print(f"  Scenario 2 mean offered delay:   {s.mean_offered_booking_delay:.3f}")
 
         print(f"  Baseline percent serviced:       {b.percent_serviced:.3f}")
         print(f"  Scenario 2 percent serviced:     {s.percent_serviced:.3f}")
