@@ -10,21 +10,24 @@ import numpy as np
 import pandas as pd
 
 
-# ------------------------------------------------------------
-# Make repo imports work even when this file is run directly
-# ------------------------------------------------------------
+# ============================================================
+# Path setup
+# ============================================================
+
+# This file should live in:
+# CUIMC-Appointment-Simulation/experiments/sweep_class1_balking.py
 
 REPO_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_DIR))
 
-from config_loader import load_config
-from engine import ClinicAppointmentSimulation
-from model import SimulationConfig, ThresholdRule
+from engine_files.config_loader import load_config
+from engine_files.engine import ClinicAppointmentSimulation
+from engine_files.model import SimulationConfig, ThresholdRule
 
 
-# ------------------------------------------------------------
+# ============================================================
 # Experiment settings
-# ------------------------------------------------------------
+# ============================================================
 
 CONFIG_PATH = REPO_DIR / "configs" / "baseline.yaml"
 
@@ -33,15 +36,15 @@ RAW_DIR = OUTPUT_DIR / "raw"
 SUMMARY_DIR = OUTPUT_DIR / "summary"
 FIGURE_DIR = OUTPUT_DIR / "figures"
 
-CLASS1_HIGH_BALK_VALUES = np.round(np.linspace(0.0, 0.9, 10), 2)
+CLASS1_HIGH_BALK_VALUES = np.round(np.arange(0.0, 1.0, 0.1), 2)
 
-# Use 50 for faster testing; use 100 for final figures.
+# 100 replications per parameter value.
 SEEDS = range(1, 101)
 
 
-# ------------------------------------------------------------
+# ============================================================
 # Config modification
-# ------------------------------------------------------------
+# ============================================================
 
 def make_class1_balking_config(
     base_config: SimulationConfig,
@@ -52,14 +55,14 @@ def make_class1_balking_config(
     Return a new config where only Class 1's high balking probability
     and the random seed are changed.
 
-    Everything else remains identical to the baseline config.
+    All other parameters, including Class 2's parameters, remain unchanged.
     """
 
     class1_params = base_config.classes[1]
 
     if not isinstance(class1_params.balk_prob, ThresholdRule):
         raise TypeError(
-            "This experiment expects Class 1 balk_prob to be a ThresholdRule."
+            "This sweep expects Class 1 balk_prob to be a ThresholdRule."
         )
 
     old_rule = class1_params.balk_prob
@@ -83,9 +86,9 @@ def make_class1_balking_config(
     )
 
 
-# ------------------------------------------------------------
-# Simulation sweep
-# ------------------------------------------------------------
+# ============================================================
+# Run sweep
+# ============================================================
 
 def run_sweep(
     class1_high_balk_values: Iterable[float],
@@ -108,6 +111,8 @@ def run_sweep(
     aggregate_rows = []
 
     for class1_high_balk in class1_high_balk_values:
+        print(f"Running Class 1 high balking = {class1_high_balk:.2f}")
+
         for seed in seeds:
             config = make_class1_balking_config(
                 base_config=base_config,
@@ -125,7 +130,6 @@ def run_sweep(
                     "average_utilization": results.average_utilization,
                     "overall_percent_serviced": results.overall_percent_serviced,
                     "total_served": results.total_served,
-                    "total_value": results.total_value,
                 }
             )
 
@@ -159,9 +163,9 @@ def run_sweep(
     return class_results, aggregate_results
 
 
-# ------------------------------------------------------------
+# ============================================================
 # Aggregation helpers
-# ------------------------------------------------------------
+# ============================================================
 
 def summarize_metric(
     df: pd.DataFrame,
@@ -228,7 +232,6 @@ def create_aggregate_summary(aggregate_results: pd.DataFrame) -> pd.DataFrame:
         "average_utilization",
         "overall_percent_serviced",
         "total_served",
-        "total_value",
     ]
 
     summaries = [
@@ -243,9 +246,9 @@ def create_aggregate_summary(aggregate_results: pd.DataFrame) -> pd.DataFrame:
     return pd.concat(summaries, ignore_index=True)
 
 
-# ------------------------------------------------------------
+# ============================================================
 # Plotting helpers
-# ------------------------------------------------------------
+# ============================================================
 
 def plot_class_metric(
     class_summary: pd.DataFrame,
@@ -326,12 +329,16 @@ def create_figures(
     aggregate_summary: pd.DataFrame,
 ) -> None:
     """
-    Create the four requested figures.
+    Create the four requested figures:
+
+    1. Mean accepted booking delay by class
+    2. Mean offered booking delay by class
+    3. Aggregate average utilization
+    4. Percent serviced by class
     """
 
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 1. Mean booking delay for accepted/booked patients only
     plot_class_metric(
         class_summary=class_summary,
         metric="mean_accepted_booking_delay",
@@ -340,7 +347,6 @@ def create_figures(
         output_path=FIGURE_DIR / "mean_accepted_delay_by_class.png",
     )
 
-    # 2. Mean offered booking delay including patients who balked
     plot_class_metric(
         class_summary=class_summary,
         metric="mean_offered_booking_delay",
@@ -349,7 +355,6 @@ def create_figures(
         output_path=FIGURE_DIR / "mean_offered_delay_by_class.png",
     )
 
-    # 3. Average utilization, aggregate only
     plot_aggregate_metric(
         aggregate_summary=aggregate_summary,
         metric="average_utilization",
@@ -358,7 +363,6 @@ def create_figures(
         output_path=FIGURE_DIR / "average_utilization_aggregate.png",
     )
 
-    # 4. Percentage serviced by class
     plot_class_metric(
         class_summary=class_summary,
         metric="percent_serviced",
@@ -368,16 +372,14 @@ def create_figures(
     )
 
 
-# ------------------------------------------------------------
-# Main script
-# ------------------------------------------------------------
+# ============================================================
+# Main
+# ============================================================
 
 def main() -> None:
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     SUMMARY_DIR.mkdir(parents=True, exist_ok=True)
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
-
-    print("Running Class 1 balking sweep...")
 
     class_results, aggregate_results = run_sweep(
         class1_high_balk_values=CLASS1_HIGH_BALK_VALUES,
@@ -389,6 +391,7 @@ def main() -> None:
 
     class_results.to_csv(RAW_DIR / "class_results.csv", index=False)
     aggregate_results.to_csv(RAW_DIR / "aggregate_results.csv", index=False)
+
     class_summary.to_csv(SUMMARY_DIR / "class_summary.csv", index=False)
     aggregate_summary.to_csv(SUMMARY_DIR / "aggregate_summary.csv", index=False)
 
@@ -397,10 +400,10 @@ def main() -> None:
         aggregate_summary=aggregate_summary,
     )
 
-    print("Done.")
-    print(f"Raw outputs saved to:      {RAW_DIR}")
-    print(f"Summary outputs saved to:  {SUMMARY_DIR}")
-    print(f"Figures saved to:          {FIGURE_DIR}")
+    print("\nDone.")
+    print(f"Raw outputs saved to:     {RAW_DIR}")
+    print(f"Summary outputs saved to: {SUMMARY_DIR}")
+    print(f"Figures saved to:         {FIGURE_DIR}")
 
 
 if __name__ == "__main__":
