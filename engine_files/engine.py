@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Tuple, Union
 import numpy as np
 
-from model import (
+from engine_files.model import (
     Booking,
     ClassMetrics,
     SimulationConfig,

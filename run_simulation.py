@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from config_loader import load_config
-from engine import ClinicAppointmentSimulation
+from engine_files.config_loader import load_config
+from engine_files.engine import ClinicAppointmentSimulation
 
 
 

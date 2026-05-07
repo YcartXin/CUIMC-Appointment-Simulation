@@ -1,0 +1,257 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{hyperref}
+
+\graphicspath{{metric_analysis_files/}}
+
+\title{Metric Definitions and Sensitivity Analysis}
+\author{CUIMC Appointment Simulation}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Purpose}
+
+This document defines the final metrics used by the simulation and summarizes what the sensitivity plots show. The plots were generated from the current repository configuration, averaging each plotted point across three fixed random seeds.
+
+The current baseline has symmetric patient classes: both classes have the same arrival rate, cancellation probability, balking rule, no-show rule, and value. Because of that, class labels are exchangeable in the baseline. When a class-1-vs-class-2 heatmap is symmetric, the absolute level of the parameter matters more than which class has the higher value.
+
+\section{Notation}
+
+Let:
+
+\begin{itemize}
+    \item $i$ be patient class, currently $i \in \{1,2\}$.
+    \item $D$ be the number of measured days.
+    \item $S$ be \texttt{slots\_per\_day}.
+    \item $\tau$ be the offered booking delay in days.
+    \item $A_i$ be measured arrivals for class $i$.
+    \item $B_i$ be booked patients for class $i$.
+    \item $K_i$ be balked patients for class $i$.
+    \item $N_i$ be no-offer patients for class $i$.
+    \item $C_i$ be canceled booked patients for class $i$.
+    \item $H_i$ be no-show booked patients for class $i$.
+    \item $V_i$ be served patients for class $i$.
+    \item $O_i = B_i + K_i$ be offered patients for class $i$.
+\end{itemize}
+
+Patients with \texttt{no\_offer} are not included in offered-delay metrics because they did not receive a slot offer.
+
+\section{Exact Metric Definitions}
+
+\subsection{Mean Accepted Booking Delay}
+
+Class-level:
+
+\[
+\texttt{mean\_accepted\_booking\_delay}_i
+= \frac{\sum \tau \text{ for class-}i\text{ patients who accepted/booked a slot}}{B_i}.
+\]
+
+Aggregate:
+
+\[
+\texttt{mean\_accepted\_booking\_delay}
+= \frac{\sum_i \texttt{total\_booking\_delay}_i}{\sum_i B_i}.
+\]
+
+This is the old \texttt{mean\_booking\_delay}, kept in the model only as a backward-compatible alias.
+
+\subsection{Mean Offered Booking Delay}
+
+Class-level:
+
+\[
+\texttt{mean\_offered\_booking\_delay}_i
+= \frac{\sum \tau \text{ for class-}i\text{ patients who received an offer}}{O_i}.
+\]
+
+Aggregate:
+
+\[
+\texttt{mean\_offered\_booking\_delay}
+= \frac{\sum_i \texttt{total\_offered\_booking\_delay}_i}{\sum_i O_i}.
+\]
+
+This includes patients who accepted and patients who balked. It excludes \texttt{no\_offer}.
+
+\subsection{Percent Serviced}
+
+Class-level:
+
+\[
+\texttt{percent\_serviced}_i = \frac{V_i}{A_i}.
+\]
+
+Aggregate:
+
+\[
+\texttt{overall\_percent\_serviced}
+= \frac{\sum_i V_i}{\sum_i A_i}.
+\]
+
+This is the main access metric: it measures what share of arrivals ultimately became completed visits.
+
+\subsection{Average Utilization}
+
+For measured day $d$:
+
+\[
+\texttt{daily\_utilization}_d
+= \frac{\texttt{served\_slots}_d}{S}.
+\]
+
+Across the measurement window:
+
+\[
+\texttt{average\_utilization}
+= \frac{1}{D}\sum_{d=1}^{D}\texttt{daily\_utilization}_d.
+\]
+
+This counts served patients only. No-shows do not count as utilization. Utilization is aggregate only, not class-specific.
+
+\subsection{Slot Diagnostics}
+
+The following are useful diagnostic counts:
+
+\begin{align*}
+\texttt{booked\_slots}  &= \text{slots that had a booked appointment at service time, including no-shows},\\
+\texttt{served\_slots}  &= \text{booked slots that became completed visits},\\
+\texttt{no\_show\_slots} &= \text{booked slots lost to no-shows}.
+\end{align*}
+
+\texttt{booked\_slots} is diagnostic, not a final utilization metric. \texttt{empty\_slots} and \texttt{empty\_slot\_rate} are not used for final reporting.
+
+\section{Scenario Comparison}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{scenario_metric_comparison.png}
+    \caption{Scenario comparison across aggregate rates and booking-delay metrics.}
+\end{figure}
+
+The baseline and scenario 2 differ on several dimensions at once, including arrival rates, horizon length, measurement length, balking threshold, balking step, and no-show threshold. Since the metrics are rates or averages, they are comparable despite different simulation lengths, but the scenario comparison should not be interpreted as a clean one-parameter causal test.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+Scenario & Average utilization & Overall percent serviced & Mean accepted delay & Mean offered delay \\
+\midrule
+Baseline & 0.839 & 0.269 & 8.32 & 9.27 \\
+Scenario 2 & 1.000 & 0.395 & 4.30 & 5.07 \\
+\bottomrule
+\end{tabular}
+\caption{Scenario-level metric comparison.}
+\end{table}
+
+Scenario 2 has better access and shorter delays. The main reason is not a class-label difference; it changes absolute system conditions. It has lower total demand, more aggressive balking after shorter delays, and a no-show threshold that avoids no-shows within the available booking horizon.
+
+\section{Balking Step Sensitivity}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{balking_step_heatmaps.png}
+    \caption{Balking step sensitivity by class.}
+\end{figure}
+
+The heatmaps vary the balking step size for class 1 and class 2 while holding other baseline settings fixed. With baseline \texttt{low = 0}, the step size is the post-threshold balking probability.
+
+Main insights:
+
+\begin{itemize}
+    \item The plots are roughly symmetric across the two class axes.
+    \item Aggregate metrics respond mostly to the absolute combined balking level, not to whether class 1 or class 2 has the larger step.
+    \item Higher balking step sizes reduce offered delay because patients reject long-delay offers more often.
+    \item Higher balking does not automatically improve access. A balked patient is still a lost arrival, so percent serviced can remain low even if delays improve.
+\end{itemize}
+
+Balking changes the tradeoff between access and delay. It can reduce congestion among patients who accept appointments, but it does so partly by losing demand.
+
+\section{No-Show Step Sensitivity}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{no_show_step_heatmaps.png}
+    \caption{No-show step sensitivity by class.}
+\end{figure}
+
+The no-show step has the clearest effect on utilization. When the no-show step is low for both classes, average utilization is near 1. When it is high for both classes, utilization falls sharply.
+
+Main insights:
+
+\begin{itemize}
+    \item Absolute no-show probability matters much more than the difference between classes.
+    \item The upper-left and lower-right corners are similar because class labels are symmetric in the baseline.
+    \item Mean offered delay barely changes in this sweep because no-shows happen after booking; they waste booked capacity but do not change the delay that was offered at booking time.
+\end{itemize}
+
+No-show behavior is the most direct driver of utilization loss. If the goal is to improve utilization, no-show reduction is more important than fine-tuning class differences.
+
+\section{Arrival Rate and Class Mix}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{arrival_mix_heatmaps.png}
+    \caption{Total arrival-rate and class-mix sensitivity.}
+\end{figure}
+
+This sweep varies:
+
+\[
+\lambda_{\text{total}} = \text{multiplier} \times \lambda_{\text{total, baseline}},
+\]
+
+\[
+\lambda_1 = p \lambda_{\text{total}}, \qquad
+\lambda_2 = (1-p)\lambda_{\text{total}}.
+\]
+
+Main insights:
+
+\begin{itemize}
+    \item Total demand pressure matters strongly.
+    \item Class mix $p$ matters weakly in the current baseline because the classes are behaviorally identical.
+    \item As total arrival rate rises, percent serviced drops and offered delay rises.
+    \item Average utilization can stay high even when access is poor.
+\end{itemize}
+
+Utilization alone is not enough. A clinic can be highly utilized while serving a small share of arrivals if demand greatly exceeds capacity.
+
+\section{Class Arrival Rate Sweeps}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{class_arrival_rate_lines.png}
+    \caption{Class-specific arrival-rate sweeps.}
+\end{figure}
+
+These plots vary one class's arrival rate at a time while holding the other class fixed.
+
+Main insights:
+
+\begin{itemize}
+    \item The class 1 and class 2 curves are nearly the same because the baseline classes are symmetric.
+    \item Increasing a class's arrival rate lowers that class's percent serviced and increases its booking delays.
+    \item Average utilization changes less than access and delay once the system is already capacity constrained.
+\end{itemize}
+
+In this model configuration, the absolute arrival rate matters more than which class receives the extra arrivals. Class differences would matter more if the classes had different values, different no-show behavior, different balking behavior, or different arrival volumes.
+
+\section{Summary of What Matters}
+
+\begin{enumerate}
+    \item \textbf{No-show absolute level matters most for utilization.} No-shows directly turn booked capacity into lost visits. This is why average utilization responds strongly to no-show step size.
+    \item \textbf{Total arrival pressure matters most for access and delay.} As $\lambda_{\text{total}}$ increases, percent serviced falls and offered delay rises. Class mix matters little when classes are otherwise identical.
+    \item \textbf{Balking is a tradeoff, not a pure improvement.} Stronger balking can reduce accepted/offered delays, but it also means more arrivals leave without being served.
+    \item \textbf{Class differences matter only when classes are truly different.} In the baseline, classes are symmetric. The class-1-vs-class-2 plots mainly show absolute parameter effects. A real class-difference effect would appear as a strong difference between the upper-left and lower-right heatmap corners.
+    \item \textbf{Use at least two final metrics together.} Recommended reporting pair: \texttt{average\_utilization} for capacity use and \texttt{overall\_percent\_serviced} for access. Add \texttt{mean\_offered\_booking\_delay} when the question is patient-facing access, because it includes patients who balked after receiving long-delay offers.
+\end{enumerate}
+
+\end{document}
