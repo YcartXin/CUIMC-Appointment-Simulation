@@ -299,13 +299,13 @@ def pivot(df, x_name, y_name, metric):
     return df.pivot(index=y_name, columns=x_name, values=metric).sort_index().sort_index(axis=1)
 
 
-def heatmap_panel(ax, table, title, xlabel, ylabel, diverging=False):
+def heatmap_panel(ax, table, title, xlabel, ylabel, diverging=False, vmin=None, vmax=None):
     if diverging:
         max_abs = float(np.nanmax(np.abs(table.values)))
         norm = TwoSlopeNorm(vmin=-max_abs, vcenter=0.0, vmax=max_abs) if max_abs > 0 else None
         image = ax.imshow(table.values, origin="lower", aspect="auto", cmap="RdBu_r", norm=norm)
     else:
-        image = ax.imshow(table.values, origin="lower", aspect="auto", cmap="viridis")
+        image = ax.imshow(table.values, origin="lower", aspect="auto", cmap="viridis", vmin=vmin, vmax=vmax)
 
     ax.set_title(title)
     ax.set_xlabel(xlabel)
@@ -352,6 +352,75 @@ def draw_four_panel(df, x_name, y_name, xlabel, ylabel, filename, title, fixed_y
 
     fig.savefig(OUT_DIR / filename, dpi=190, bbox_inches="tight")
     plt.close(fig)
+
+
+def draw_single_metric_heatmap(
+    df,
+    x_name,
+    y_name,
+    metric,
+    xlabel,
+    ylabel,
+    filename,
+    title,
+    colorbar_label,
+    fixed_y=None,
+    fixed_x=None,
+    vmin=None,
+    vmax=None,
+):
+    table = pivot(df, x_name, y_name, metric)
+
+    fig, ax = plt.subplots(figsize=(8.5, 6.5), constrained_layout=True)
+    image = heatmap_panel(
+        ax,
+        table,
+        title,
+        xlabel,
+        ylabel,
+        diverging=False,
+        vmin=vmin,
+        vmax=vmax,
+    )
+    mark_heatmap_slice(ax, table, fixed_y=fixed_y, fixed_x=fixed_x)
+    colorbar = fig.colorbar(image, ax=ax, shrink=0.85)
+    colorbar.set_label(colorbar_label)
+    fig.savefig(OUT_DIR / filename, dpi=190, bbox_inches="tight")
+    plt.close(fig)
+
+
+def draw_balking_class_service_heatmaps(df, baseline_balk_step):
+    vmin = float(df[["class_1_percent_serviced", "class_2_percent_serviced"]].min().min())
+    vmax = float(df[["class_1_percent_serviced", "class_2_percent_serviced"]].max().max())
+
+    draw_single_metric_heatmap(
+        df,
+        "class_1_step",
+        "class_2_step",
+        "class_1_percent_serviced",
+        "class 1 balking step",
+        "class 2 balking step",
+        "balking_step_class1_service_heatmap.png",
+        "Class 1 percent serviced under balking step changes",
+        "class 1 percent serviced",
+        fixed_y=baseline_balk_step,
+        vmin=vmin,
+        vmax=vmax,
+    )
+    draw_single_metric_heatmap(
+        df,
+        "class_1_step",
+        "class_2_step",
+        "class_2_percent_serviced",
+        "class 1 balking step",
+        "class 2 balking step",
+        "balking_step_class2_service_heatmap.png",
+        "Class 2 percent serviced under balking step changes",
+        "class 2 percent serviced",
+        fixed_y=baseline_balk_step,
+        vmin=vmin,
+        vmax=vmax,
+    )
 
 
 def draw_balking_slice_lines(df, x_name, y_name, fixed_y, baseline_x, xlabel, fixed_label, filename, title):
@@ -789,6 +858,7 @@ def main():
         fixed_y=baseline_balk_step,
         subtitle=f"Dashed row: class 2 fixed at baseline step = {baseline_balk_step:.2f}",
     )
+    draw_balking_class_service_heatmaps(balk_step_df, baseline_balk_step)
     balk_step_slice_df = draw_balking_slice_lines(
         balk_step_df,
         "class_1_step",

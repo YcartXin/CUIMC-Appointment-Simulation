@@ -195,6 +195,14 @@ Some balking heatmaps include a dashed horizontal row. That row is the one-dimen
 
 \begin{figure}[H]
     \centering
+    \includegraphics[width=0.49\textwidth]{balking_step_class1_service_heatmap.png}
+    \hfill
+    \includegraphics[width=0.49\textwidth]{balking_step_class2_service_heatmap.png}
+    \caption{Class-specific service heatmaps for the balking step sweep. Left: class 1 percent serviced. Right: class 2 percent serviced. Both panels use the same class-1-step and class-2-step axes and the same color scale.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
     \includegraphics[width=\textwidth]{balking_class1_step_slice.png}
     \caption{One-dimensional slice of the balking step heatmap. Class 1 balking step varies; class 2 balking step is fixed at the baseline value $0.50$; all other parameters stay at baseline.}
 \end{figure}
@@ -205,7 +213,7 @@ The balking step is the probability jump after the balking threshold. With basel
 
 \textbf{Class-benefit dynamic.} The class with the lower balking step is benefited in access. If class 1 has low balking and class 2 has high balking, class 1 has a much higher percent serviced. If the pattern is reversed, class 2 is benefited. In the fine grid, the largest access advantage is about $0.174$ in absolute value. In the one-dimensional slice, fixing class 2 at $0.50$ makes this direction explicit: class 1 is benefited when its step is below $0.50$, and class 2 is benefited when class 1's step is above $0.50$.
 
-\textbf{Interpretation.} Balking asymmetry is a class-benefit parameter. Absolute balking level affects delay and access tradeoffs, but the difference between class-specific balking steps determines which class is served more often.
+\textbf{Interpretation.} Balking asymmetry is a class-benefit parameter. Absolute balking level affects delay and access tradeoffs, but the difference between class-specific balking steps determines which class is served more often. The class-specific service heatmaps show this directly: each class's serviced share is highest when that class is less likely to balk and the other class is more likely to balk.
 
 \subsection{Threshold Sensitivity}
 
