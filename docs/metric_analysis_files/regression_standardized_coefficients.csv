@@ -1,0 +1,49 @@
+target,target_label,feature,feature_label,coefficient,abs_coefficient
+average_utilization,Average utilization,lambda_total,total arrival rate,-0.10916769779687734,0.10916769779687734
+average_utilization,Average utilization,class_1_share,class 1 arrival share,0.06340081467584367,0.06340081467584367
+average_utilization,Average utilization,balk_step_mean,avg balking step,0.015732143467040584,0.015732143467040584
+average_utilization,Average utilization,balk_step_gap_c1_minus_c2,balking step gap,-0.05808182340048658,0.05808182340048658
+average_utilization,Average utilization,balk_threshold_mean,avg balking threshold,-0.08575223993905613,0.08575223993905613
+average_utilization,Average utilization,balk_threshold_gap_c1_minus_c2,balking threshold gap,0.030872839010088998,0.030872839010088998
+average_utilization,Average utilization,no_show_step_mean,avg no-show step,-0.42323643008911227,0.42323643008911227
+average_utilization,Average utilization,no_show_step_gap_c1_minus_c2,no-show step gap,-0.004025068838210391,0.004025068838210391
+average_utilization,Average utilization,no_show_threshold_mean,avg no-show threshold,0.5116849301601878,0.5116849301601878
+average_utilization,Average utilization,no_show_threshold_gap_c1_minus_c2,no-show threshold gap,-0.02194812674712143,0.02194812674712143
+average_utilization,Average utilization,cancel_prob_mean,avg cancellation prob.,0.3195708501887757,0.3195708501887757
+average_utilization,Average utilization,cancel_prob_gap_c1_minus_c2,cancellation prob. gap,0.06486783704203822,0.06486783704203822
+overall_percent_serviced,Overall percent serviced,lambda_total,total arrival rate,-0.7744236319540962,0.7744236319540962
+overall_percent_serviced,Overall percent serviced,class_1_share,class 1 arrival share,0.03287187419535591,0.03287187419535591
+overall_percent_serviced,Overall percent serviced,balk_step_mean,avg balking step,0.025376890437526122,0.025376890437526122
+overall_percent_serviced,Overall percent serviced,balk_step_gap_c1_minus_c2,balking step gap,-0.02322775855752408,0.02322775855752408
+overall_percent_serviced,Overall percent serviced,balk_threshold_mean,avg balking threshold,-0.0502336961589888,0.0502336961589888
+overall_percent_serviced,Overall percent serviced,balk_threshold_gap_c1_minus_c2,balking threshold gap,-0.02026669198483653,0.02026669198483653
+overall_percent_serviced,Overall percent serviced,no_show_step_mean,avg no-show step,-0.17529896459032127,0.17529896459032127
+overall_percent_serviced,Overall percent serviced,no_show_step_gap_c1_minus_c2,no-show step gap,0.014288364143807257,0.014288364143807257
+overall_percent_serviced,Overall percent serviced,no_show_threshold_mean,avg no-show threshold,0.2506557841582194,0.2506557841582194
+overall_percent_serviced,Overall percent serviced,no_show_threshold_gap_c1_minus_c2,no-show threshold gap,0.025999312829736828,0.025999312829736828
+overall_percent_serviced,Overall percent serviced,cancel_prob_mean,avg cancellation prob.,0.1172971592149768,0.1172971592149768
+overall_percent_serviced,Overall percent serviced,cancel_prob_gap_c1_minus_c2,cancellation prob. gap,0.04167854041801105,0.04167854041801105
+mean_offered_booking_delay,Mean offered delay,lambda_total,total arrival rate,0.5761556903590804,0.5761556903590804
+mean_offered_booking_delay,Mean offered delay,class_1_share,class 1 arrival share,-0.004063282821632082,0.004063282821632082
+mean_offered_booking_delay,Mean offered delay,balk_step_mean,avg balking step,-0.20635984674267863,0.20635984674267863
+mean_offered_booking_delay,Mean offered delay,balk_step_gap_c1_minus_c2,balking step gap,-0.003806003161567471,0.003806003161567471
+mean_offered_booking_delay,Mean offered delay,balk_threshold_mean,avg balking threshold,0.27763168799898574,0.27763168799898574
+mean_offered_booking_delay,Mean offered delay,balk_threshold_gap_c1_minus_c2,balking threshold gap,0.009672819360102967,0.009672819360102967
+mean_offered_booking_delay,Mean offered delay,no_show_step_mean,avg no-show step,-0.045241763619984825,0.045241763619984825
+mean_offered_booking_delay,Mean offered delay,no_show_step_gap_c1_minus_c2,no-show step gap,-0.0019503748216829718,0.0019503748216829718
+mean_offered_booking_delay,Mean offered delay,no_show_threshold_mean,avg no-show threshold,-0.07408227431564399,0.07408227431564399
+mean_offered_booking_delay,Mean offered delay,no_show_threshold_gap_c1_minus_c2,no-show threshold gap,-0.032522770870488035,0.032522770870488035
+mean_offered_booking_delay,Mean offered delay,cancel_prob_mean,avg cancellation prob.,-0.44109855345614846,0.44109855345614846
+mean_offered_booking_delay,Mean offered delay,cancel_prob_gap_c1_minus_c2,cancellation prob. gap,-0.04737498335751887,0.04737498335751887
+access_advantage_class_1,Class 1 access advantage,lambda_total,total arrival rate,0.04119048762509729,0.04119048762509729
+access_advantage_class_1,Class 1 access advantage,class_1_share,class 1 arrival share,-0.1199455377736166,0.1199455377736166
+access_advantage_class_1,Class 1 access advantage,balk_step_mean,avg balking step,0.043582526898642324,0.043582526898642324
+access_advantage_class_1,Class 1 access advantage,balk_step_gap_c1_minus_c2,balking step gap,-0.34861384318953537,0.34861384318953537
+access_advantage_class_1,Class 1 access advantage,balk_threshold_mean,avg balking threshold,0.021619214511073168,0.021619214511073168
+access_advantage_class_1,Class 1 access advantage,balk_threshold_gap_c1_minus_c2,balking threshold gap,0.4294923239819561,0.4294923239819561
+access_advantage_class_1,Class 1 access advantage,no_show_step_mean,avg no-show step,-0.009932036222689766,0.009932036222689766
+access_advantage_class_1,Class 1 access advantage,no_show_step_gap_c1_minus_c2,no-show step gap,-0.211284569655232,0.211284569655232
+access_advantage_class_1,Class 1 access advantage,no_show_threshold_mean,avg no-show threshold,-0.0736295967450497,0.0736295967450497
+access_advantage_class_1,Class 1 access advantage,no_show_threshold_gap_c1_minus_c2,no-show threshold gap,0.2680900987280872,0.2680900987280872
+access_advantage_class_1,Class 1 access advantage,cancel_prob_mean,avg cancellation prob.,0.052931257075903404,0.052931257075903404
+access_advantage_class_1,Class 1 access advantage,cancel_prob_gap_c1_minus_c2,cancellation prob. gap,-0.45234601440039846,0.45234601440039846

@@ -6,6 +6,7 @@
 \usepackage{graphicx}
 \usepackage{float}
 \usepackage{hyperref}
+\usepackage{array}
 
 \graphicspath{{metric_analysis_files/}}
 \sloppy
@@ -27,134 +28,120 @@ This document defines the final reporting metrics and analyzes how the simulatio
     \item Thresholds: every feasible integer threshold in the baseline booking horizon.
     \item Common threshold--jump sweeps: every feasible threshold crossed with 21 jump levels from 0.00 to 1.00.
     \item Arrival mix: 11 total-arrival multipliers and 17 class-mix values.
+    \item FCFS capacity stress: 15 total-arrival multipliers from 0.30 to 1.70, preserving the baseline 50/50 class mix.
+    \item Regression screening: 240 randomized FCFS parameter settings, averaged over 2 random seeds each.
 \end{itemize}
 
 The focus is not only aggregate performance. We also ask whether one class is consistently benefited relative to the other, and whether the effect is caused by an absolute parameter level or by the difference between class 1 and class 2.
 
-\section{Notation}
+\section{Metric and Variable Definitions}
 
-Let:
-
-\begin{itemize}
-    \item $i$ be patient class, currently $i \in \{1,2\}$.
-    \item $D$ be the number of measured days.
-    \item $S$ be \texttt{slots\_per\_day}.
-    \item $\tau$ be the offered booking delay in days.
-    \item $A_i$ be measured arrivals for class $i$.
-    \item $B_i$ be booked patients for class $i$.
-    \item $K_i$ be balked patients for class $i$.
-    \item $N_i$ be no-offer patients for class $i$.
-    \item $C_i$ be canceled booked patients for class $i$.
-    \item $H_i$ be no-show booked patients for class $i$.
-    \item $V_i$ be served patients for class $i$.
-    \item $O_i = B_i + K_i$ be offered patients for class $i$.
-\end{itemize}
+\begin{table}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llp{8.4cm}}
+\toprule
+Symbol & Code name & Definition \\
+\midrule
+$i$ & \texttt{class\_id} & Patient class, currently $i \in \{1,2\}$. \\
+$d$ & measured day & Day inside the measurement window. \\
+$D$ & \texttt{measure\_days} & Number of measured days. \\
+$S$ & \texttt{slots\_per\_day} & Daily clinic appointment capacity. \\
+$\tau$ & booking delay & Offered delay in days between arrival and appointment date. \\
+$A_i$ & \texttt{arrivals} & Measured arrivals from class $i$. \\
+$B_i$ & \texttt{booked} & Class-$i$ arrivals that accepted an offered slot. \\
+$K_i$ & \texttt{balked} & Class-$i$ arrivals that received an offer but rejected it. \\
+$N_i$ & \texttt{no\_offer} & Class-$i$ arrivals that did not receive any slot offer. \\
+$C_i$ & \texttt{canceled} & Class-$i$ booked patients who canceled before service. \\
+$H_i$ & \texttt{no\_show} & Class-$i$ booked patients who did not attend. \\
+$V_i$ & \texttt{served} & Class-$i$ patients who completed service. \\
+$O_i$ & \texttt{offered} & Class-$i$ patients who received an offer: $O_i = B_i + K_i$. \\
+\bottomrule
+\end{tabular}
+}
+\caption{Notation used in metric definitions.}
+\end{table}
 
 Patients with \texttt{no\_offer} are not included in offered-delay metrics because they did not receive a slot offer.
 
-\section{Exact Metric Definitions}
+\begin{table}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lp{4.0cm}p{4.8cm}p{7.3cm}}
+\toprule
+Metric & Code name & Formula & Interpretation \\
+\midrule
+Accepted delay, class $i$ &
+\texttt{mean\_accepted}\newline \texttt{\_booking\_delay\_i} &
+$\displaystyle \frac{\sum_{\text{accepted class }i}\tau}{B_i}$ &
+Average delay among class-$i$ patients who accepted/booked a slot. \\
+\addlinespace
+Accepted delay, aggregate &
+\texttt{mean\_accepted}\newline \texttt{\_booking\_delay} &
+$\displaystyle \frac{\sum_i \sum_{\text{accepted class }i}\tau}{\sum_i B_i}$ &
+Average delay among all accepted/booked patients. This is the old \texttt{mean\_booking\_delay} alias. \\
+\addlinespace
+Offered delay, class $i$ &
+\texttt{mean\_offered}\newline \texttt{\_booking\_delay\_i} &
+$\displaystyle \frac{\sum_{\text{offered class }i}\tau}{O_i}$ &
+Average delay shown to class-$i$ patients who received an offer, including patients who balked. Excludes \texttt{no\_offer}. \\
+\addlinespace
+Offered delay, aggregate &
+\texttt{mean\_offered}\newline \texttt{\_booking\_delay} &
+$\displaystyle \frac{\sum_i \sum_{\text{offered class }i}\tau}{\sum_i O_i}$ &
+Average offered delay across all patients who received an offer. \\
+\addlinespace
+Percent serviced, class $i$ &
+\texttt{percent\_serviced\_i} &
+$\displaystyle \frac{V_i}{A_i}$ &
+Main class-level access metric. \\
+\addlinespace
+Percent serviced, aggregate &
+\texttt{overall}\newline \texttt{\_percent\_serviced} &
+$\displaystyle \frac{\sum_i V_i}{\sum_i A_i}$ &
+Main aggregate access metric: share of arrivals that became completed visits. \\
+\addlinespace
+Average utilization &
+\texttt{average}\newline \texttt{\_utilization} &
+$\displaystyle \frac{1}{D}\sum_{d=1}^{D}\frac{\texttt{served\_slots}_d}{S}$ &
+Average daily share of capacity used by completed visits. This is aggregate only; no-shows do not count as utilized slots. \\
+\bottomrule
+\end{tabular}
+}
+\caption{Primary reporting metrics.}
+\end{table}
 
-\subsection{Mean Accepted Booking Delay}
-
-Class-level:
-
-\[
-\texttt{mean\_accepted\_booking\_delay}_i
-= \frac{\sum \tau \text{ for class-}i\text{ patients who accepted/booked a slot}}{B_i}.
-\]
-
-Aggregate:
-
-\[
-\texttt{mean\_accepted\_booking\_delay}
-= \frac{\sum_i \texttt{total\_booking\_delay}_i}{\sum_i B_i}.
-\]
-
-This is the old \texttt{mean\_booking\_delay}, kept in the model only as a backward-compatible alias.
-
-\subsection{Mean Offered Booking Delay}
-
-Class-level:
-
-\[
-\texttt{mean\_offered\_booking\_delay}_i
-= \frac{\sum \tau \text{ for class-}i\text{ patients who received an offer}}{O_i}.
-\]
-
-Aggregate:
-
-\[
-\texttt{mean\_offered\_booking\_delay}
-= \frac{\sum_i \texttt{total\_offered\_booking\_delay}_i}{\sum_i O_i}.
-\]
-
-This includes patients who accepted and patients who balked. It excludes \texttt{no\_offer}.
-
-\subsection{Percent Serviced}
-
-Class-level:
-
-\[
-\texttt{percent\_serviced}_i = \frac{V_i}{A_i}.
-\]
-
-Aggregate:
-
-\[
-\texttt{overall\_percent\_serviced}
-= \frac{\sum_i V_i}{\sum_i A_i}.
-\]
-
-This is the main access metric: it measures what share of arrivals ultimately became completed visits.
-
-\subsection{Average Utilization}
-
-For measured day $d$:
-
-\[
-\texttt{daily\_utilization}_d
-= \frac{\texttt{served\_slots}_d}{S}.
-\]
-
-Across the measurement window:
-
-\[
-\texttt{average\_utilization}
-= \frac{1}{D}\sum_{d=1}^{D}\texttt{daily\_utilization}_d.
-\]
-
-This counts served patients only. No-shows do not count as utilization. Utilization is aggregate only, not class-specific.
-
-\subsection{Class-Benefit Metrics}
-
-To understand whether one class is benefited, the plots use two signed differences:
-
-\[
-\Delta_{\text{access}}
-= \texttt{percent\_serviced}_1 - \texttt{percent\_serviced}_2.
-\]
-
-Positive $\Delta_{\text{access}}$ means class 1 is served at a higher rate. Negative $\Delta_{\text{access}}$ means class 2 is served at a higher rate.
-
-\[
-\Delta_{\text{delay}}
-= \texttt{mean\_offered\_booking\_delay}_2
-- \texttt{mean\_offered\_booking\_delay}_1.
-\]
-
-Positive $\Delta_{\text{delay}}$ means class 1 receives shorter offered delays. Negative $\Delta_{\text{delay}}$ means class 2 receives shorter offered delays.
-
-\subsection{Slot Diagnostics}
-
-The following are useful diagnostic counts:
-
-\begin{align*}
-\texttt{booked\_slots}  &= \text{slots that had a booked appointment at service time, including no-shows},\\
-\texttt{served\_slots}  &= \text{booked slots that became completed visits},\\
-\texttt{no\_show\_slots} &= \text{booked slots lost to no-shows}.
-\end{align*}
-
-\texttt{booked\_slots} is diagnostic, not a final utilization metric. \texttt{empty\_slots} and \texttt{empty\_slot\_rate} are not used for final reporting.
+\begin{table}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llp{8.5cm}}
+\toprule
+Metric or diagnostic & Formula / definition & Interpretation \\
+\midrule
+$\Delta_{\text{access}}$ &
+$\texttt{percent\_serviced}_1 - \texttt{percent\_serviced}_2$ &
+Positive means class 1 is served at a higher rate; negative means class 2 is served at a higher rate. \\
+\addlinespace
+$\Delta_{\text{delay}}$ &
+$\texttt{mean\_offered\_booking\_delay}_2 - \texttt{mean\_offered\_booking\_delay}_1$ &
+Positive means class 1 receives shorter offered delays; negative means class 2 receives shorter offered delays. \\
+\addlinespace
+\texttt{booked\_slots} &
+Slots that had a booked appointment at service time, including no-shows &
+Diagnostic count only, not final utilization. \\
+\addlinespace
+\texttt{served\_slots} &
+Booked slots that became completed visits &
+Numerator for utilization. \\
+\addlinespace
+\texttt{no\_show\_slots} &
+Booked slots lost to no-shows &
+Diagnostic count for lost capacity. \\
+\bottomrule
+\end{tabular}
+}
+\caption{Class-benefit metrics and slot diagnostics. \texttt{empty\_slots} and \texttt{empty\_slot\_rate} are not used for final reporting.}
+\end{table}
 
 \section{Scenario Comparison}
 
@@ -194,39 +181,55 @@ For the two advantage panels, red/blue color indicates direction around zero. Po
 
 The threshold--jump heatmaps are different: both classes receive the same threshold and the same jump level. Those plots isolate absolute system effects. Any class advantage in those panels should stay near zero unless simulation noise or volume imbalance is present.
 
-\section{Balking Step Sensitivity}
+Some balking heatmaps include a dashed horizontal row. That row is the one-dimensional slice shown immediately below the heatmap: class 1 varies along the x-axis while class 2 is fixed at its baseline value.
+
+\section{Balking}
+
+\subsection{Step Sensitivity}
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{balking_step_benefit_heatmaps.png}
-    \caption{Fine-grid balking step sensitivity by class.}
+    \caption{Fine-grid balking step sensitivity by class. The dashed row fixes class 2 at the baseline balking step, $0.50$.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{balking_class1_step_slice.png}
+    \caption{One-dimensional slice of the balking step heatmap. Class 1 balking step varies; class 2 balking step is fixed at the baseline value $0.50$; all other parameters stay at baseline.}
 \end{figure}
 
 The balking step is the probability jump after the balking threshold. With baseline \texttt{low = 0}, the step is the high-delay balking probability.
 
 \textbf{Aggregate impact.} Aggregate utilization and overall percent serviced change modestly across the balking-step grid. Balking mostly changes who accepts long-delay offers, not the physical capacity of the clinic.
 
-\textbf{Class-benefit dynamic.} The class with the lower balking step is benefited in access. If class 1 has low balking and class 2 has high balking, class 1 has a much higher percent serviced. If the pattern is reversed, class 2 is benefited. In the fine grid, the largest access advantage is about $0.174$ in absolute value.
+\textbf{Class-benefit dynamic.} The class with the lower balking step is benefited in access. If class 1 has low balking and class 2 has high balking, class 1 has a much higher percent serviced. If the pattern is reversed, class 2 is benefited. In the fine grid, the largest access advantage is about $0.174$ in absolute value. In the one-dimensional slice, fixing class 2 at $0.50$ makes this direction explicit: class 1 is benefited when its step is below $0.50$, and class 2 is benefited when class 1's step is above $0.50$.
 
 \textbf{Interpretation.} Balking asymmetry is a class-benefit parameter. Absolute balking level affects delay and access tradeoffs, but the difference between class-specific balking steps determines which class is served more often.
 
-\section{Balking Threshold Sensitivity}
+\subsection{Threshold Sensitivity}
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{balking_threshold_benefit_heatmaps.png}
-    \caption{Balking threshold sensitivity by class.}
+    \caption{Balking threshold sensitivity by class. The dashed row fixes class 2 at the baseline balking threshold, $9$ days.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{balking_class1_threshold_slice.png}
+    \caption{One-dimensional slice of the balking threshold heatmap. Class 1 balking threshold varies; class 2 balking threshold is fixed at the baseline value $9$ days; all other parameters stay at baseline.}
 \end{figure}
 
 The balking threshold is the delay at which the high balking probability begins. A higher threshold means patients tolerate longer offered delays before entering the high-balking region.
 
 \textbf{Aggregate impact.} The absolute threshold level changes delay. High thresholds allow more long-delay offers to be accepted, increasing accepted/offered delay.
 
-\textbf{Class-benefit dynamic.} The class with the higher balking threshold is benefited in access because its patients tolerate longer waits. When class 1 has a high threshold and class 2 has a low threshold, class 1 is benefited; when reversed, class 2 is benefited. The largest access advantage is about $0.178$ in absolute value.
+\textbf{Class-benefit dynamic.} The class with the higher balking threshold is benefited in access because its patients tolerate longer waits. When class 1 has a high threshold and class 2 has a low threshold, class 1 is benefited; when reversed, class 2 is benefited. The largest access advantage is about $0.178$ in absolute value. In the one-dimensional slice, class 2 is fixed at threshold $9$: class 1 is disadvantaged below that value and increasingly benefited above it.
 
 \textbf{Interpretation.} Balking threshold differences behave similarly to balking step differences: relative tolerance across classes determines which class is advantaged.
 
-\section{Balking Threshold and Jump Level}
+\subsection{Threshold and Jump Level}
 
 \begin{figure}[H]
     \centering
@@ -242,7 +245,9 @@ This sweep varies the absolute balking threshold and the absolute balking jump l
 
 \textbf{Interpretation.} The absolute balking threshold and jump level matter for system-level delay and access. A class is benefited only when its balking rule differs from the other class.
 
-\section{No-Show Step Sensitivity}
+\section{No-Show}
+
+\subsection{Step Sensitivity}
 
 \begin{figure}[H]
     \centering
@@ -258,7 +263,7 @@ The no-show step is the probability jump after the no-show threshold.
 
 \textbf{Interpretation.} No-show asymmetry can strongly benefit one class in service completion, but it is not a booking-delay lever.
 
-\section{No-Show Threshold Sensitivity}
+\subsection{Threshold Sensitivity}
 
 \begin{figure}[H]
     \centering
@@ -274,7 +279,7 @@ A higher no-show threshold means no-shows only increase after longer booking del
 
 \textbf{Interpretation.} No-show threshold differences matter, but less than no-show step differences. Thresholds determine when the risk begins; step size determines how severe the risk becomes.
 
-\section{No-Show Threshold and Jump Level}
+\subsection{Threshold and Jump Level}
 
 \begin{figure}[H]
     \centering
@@ -290,7 +295,9 @@ This sweep varies the absolute no-show threshold and the absolute no-show jump l
 
 \textbf{Interpretation.} Absolute no-show threshold and jump level explain utilization loss. Class benefit appears only when one class has a lower no-show jump or a higher no-show threshold than the other.
 
-\section{Cancellation Probability Sensitivity}
+\section{Cancellation}
+
+\subsection{Probability Sensitivity}
 
 \begin{figure}[H]
     \centering
@@ -306,7 +313,9 @@ Cancellation is not threshold-based in the current model. It is a constant daily
 
 \textbf{Interpretation.} If cancellation differs by class, class outcomes can diverge sharply even when arrival rates and booking rules are otherwise symmetric.
 
-\section{Arrival Rate and Class Mix}
+\section{Arrival and Demand}
+
+\subsection{Arrival Rate and Class Mix}
 
 \begin{figure}[H]
     \centering
@@ -331,7 +340,7 @@ This sweep varies:
 
 \textbf{Interpretation.} Because the two classes have identical behavior and value in the baseline, changing $p$ mostly changes volume, not priority. Class mix alone does not create a strong structural benefit.
 
-\section{Class Arrival Rate Sweeps}
+\subsection{Class Arrival Rate Sweeps}
 
 \begin{figure}[H]
     \centering
@@ -346,6 +355,156 @@ These plots vary one class's arrival rate at a time while holding the other clas
 \textbf{Class-benefit dynamic.} Changing only one class's arrival rate does not create a large persistent class advantage in the current symmetric baseline. The largest access advantage in this sweep is about $0.014$ in absolute value, and the largest delay advantage is about $0.068$ days.
 
 \textbf{Interpretation.} Own-class arrival volume matters for congestion, but because the booking policy is FCFS and the classes are behaviorally symmetric, it does not strongly privilege either class.
+
+\subsection{Additional FCFS Policy Analysis}
+
+The previous sections vary many model parameters. This section focuses only on the first policy, FCFS, and asks how it behaves as total demand increases while the two classes remain symmetric.
+
+\subsubsection{Code Used}
+
+The figure generator now includes a dedicated FCFS stress loop. The full code is in \texttt{docs/generate\_metric\_analysis\_figures.py}; the core logic is:
+
+\begin{verbatim}
+lambda_total_base = sum(
+    p.lambda_per_day for p in BASE_CONFIG.classes.values()
+)
+class_1_share = (
+    BASE_CONFIG.classes[1].lambda_per_day / lambda_total_base
+)
+
+for multiplier in FCFS_STRESS_MULTIPLIERS:
+    lambda_total = lambda_total_base * multiplier
+    config = set_arrival_mix(BASE_CONFIG, lambda_total, class_1_share)
+    result = run_result(config, seed)
+    rows.append({
+        "arrival_multiplier": multiplier,
+        **result_metrics_from_result(result),
+        **outcome_rates_from_result(result),
+    })
+\end{verbatim}
+
+The outcome decomposition is measured relative to arrivals:
+
+\[
+1 = r_{\text{served}} + r_{\text{balked}} + r_{\text{no offer}}
++ r_{\text{canceled}} + r_{\text{no-show}} + r_{\text{unresolved booked}}.
+\]
+
+\subsubsection{Capacity Stress Results}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{fcfs_capacity_stress_curves.png}
+    \caption{FCFS capacity stress curves as total arrival rate changes and class mix stays 50/50.}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{fcfs_arrival_outcome_decomposition.png}
+    \caption{Final outcome decomposition for measured arrivals under FCFS.}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{rrrrrrrrr}
+\toprule
+Arrival mult. & Avg. util. & Overall svc. & Offered delay & Served & Balked & No offer & Lost after booking & $\Delta_{\text{access}}$ \\
+\midrule
+0.30 & 0.943 & 0.998 & 0.22 & 0.998 & 0.000 & 0.000 & 0.002 & -0.000 \\
+1.00 & 0.839 & 0.269 & 9.30 & 0.269 & 0.356 & 0.000 & 0.376 & 0.001 \\
+1.70 & 0.841 & 0.157 & 10.59 & 0.157 & 0.242 & 0.346 & 0.255 & 0.001 \\
+\bottomrule
+\end{tabular}
+}
+\caption{Selected FCFS stress points. Outcome columns are shares of measured arrivals. Lost after booking combines cancellations, no-shows, and unresolved booked patients at the end of the run.}
+\end{table}
+
+\textbf{Aggregate impact.} FCFS has a clear stress pattern. When demand is below capacity, almost every arrival is served, and utilization is below 1 only because there are not enough arrivals to fill every slot. Near the baseline load, utilization remains high, but only about $27\%$ of arrivals complete service. Under heavy overload, utilization is still about $84\%$, while the served share falls to about $16\%$.
+
+\textbf{Failure-mode dynamic.} The loss channel changes with load. At baseline, there is almost no no-offer loss; patients mostly leave through balking or after-booking losses. At high arrival pressure, no-offers become a major failure mode because the FCFS calendar horizon fills.
+
+\textbf{Class-benefit dynamic.} This FCFS stress test preserves identical behavior for both classes. The largest observed access gap across the stress curve is about $0.005$, so congestion alone does not create a meaningful class benefit. It hurts both classes almost equally.
+
+\textbf{Interpretation.} Utilization is not enough to evaluate FCFS. The clinic can look busy while access is poor. The best aggregate diagnostic pair is \texttt{average\_utilization} with \texttt{overall\_percent\_serviced}, plus the outcome decomposition to show whether patients are lost before booking, at offer time, or after booking.
+
+\section{Regression Screening Analysis}
+
+The heatmaps show one or two parameters at a time. To compare many parameters simultaneously, I also ran a randomized FCFS simulation screen and fit standardized linear regressions to the simulated outputs.
+
+\subsection{Design}
+
+\begin{itemize}
+    \item 240 random parameter settings were sampled.
+    \item Each setting was simulated with 2 random seeds and averaged.
+    \item The regression inputs were total arrival rate, class mix, and mean/gap versions of balking, no-show, and cancellation parameters.
+    \item Coefficients are standardized: larger absolute values mean stronger average association over the sampled range.
+\end{itemize}
+
+For example:
+
+\[
+\text{balking step mean} = \frac{\text{class 1 step} + \text{class 2 step}}{2},
+\qquad
+\text{balking step gap} = \text{class 1 step} - \text{class 2 step}.
+\]
+
+Mean features mainly explain aggregate outcomes. Gap features mainly explain which class is benefited.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{regression_standardized_coefficients.png}
+    \caption{Largest standardized regression coefficients from the randomized FCFS simulation screen. Positive coefficients increase the target metric; negative coefficients decrease it.}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrr}
+\toprule
+Target metric & Full-sample $R^2$ & Test $R^2$ \\
+\midrule
+Average utilization & 0.675 & 0.545 \\
+Overall percent serviced & 0.799 & 0.719 \\
+Mean offered delay & 0.718 & 0.555 \\
+Class 1 access advantage & 0.639 & 0.708 \\
+\bottomrule
+\end{tabular}
+\caption{Regression fit quality. Test $R^2$ uses a random 80/20 train/test split.}
+\end{table}
+
+\begin{table}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llr}
+\toprule
+Target & Most important feature & Standardized coefficient \\
+\midrule
+Average utilization & Average no-show threshold & 0.512 \\
+Average utilization & Average no-show step & -0.423 \\
+Average utilization & Average cancellation probability & 0.320 \\
+\addlinespace
+Overall percent serviced & Total arrival rate & -0.774 \\
+Overall percent serviced & Average no-show threshold & 0.251 \\
+Overall percent serviced & Average no-show step & -0.175 \\
+\addlinespace
+Mean offered delay & Total arrival rate & 0.576 \\
+Mean offered delay & Average cancellation probability & -0.441 \\
+Mean offered delay & Average balking threshold & 0.278 \\
+\addlinespace
+Class 1 access advantage & Cancellation probability gap & -0.452 \\
+Class 1 access advantage & Balking threshold gap & 0.429 \\
+Class 1 access advantage & Balking step gap & -0.349 \\
+\bottomrule
+\end{tabular}
+}
+\caption{Top regression drivers. Gap means class 1 value minus class 2 value.}
+\end{table}
+
+\textbf{Aggregate findings.} Overall access is dominated by demand pressure: higher total arrival rate has the largest negative coefficient for \texttt{overall\_percent\_serviced}. Utilization is driven mostly by no-show behavior, especially the no-show threshold and step. Offered delay increases with total arrival rate and with more tolerant balking thresholds.
+
+\textbf{Class-benefit findings.} Class advantage is explained by class differences, not by absolute parameter levels. Class 1 is hurt when its cancellation probability is higher than class 2's, helped when its balking threshold is higher, hurt when its balking step is higher, helped when its no-show threshold is higher, and hurt when its no-show step is higher.
+
+\textbf{Caution.} This is a screening regression, not a replacement for the heatmaps. The model is nonlinear, so coefficients should be read as average directional effects over the sampled range. The CSV outputs are saved as \texttt{regression\_simulation\_data.csv}, \texttt{regression\_standardized\_coefficients.csv}, and \texttt{regression\_model\_scores.csv}.
 
 \section{Impact Ranking}
 
@@ -376,6 +535,8 @@ Common no-show threshold--jump & 0.008 & Utilization & Absolute effect; no struc
 \begin{enumerate}
     \item \textbf{For aggregate utilization, no-show behavior matters most.} No-shows directly waste booked slots.
     \item \textbf{For aggregate access and delay, total demand pressure matters strongly.} Higher arrival pressure lowers percent serviced and increases offered delay.
+    \item \textbf{For FCFS specifically, high utilization can hide poor access.} In the stress curve, utilization stays near $0.84$ at high load even while the served share falls to about $0.16$.
+    \item \textbf{The regression screen confirms the same split.} Aggregate performance is driven mainly by total arrival rate and average no-show behavior; class advantage is driven by class-specific gaps in cancellation, balking, and no-show parameters.
     \item \textbf{For class benefit, asymmetry matters more than absolute level.} Off-diagonal heatmap regions show which class is benefited. The diagonal and the common threshold--jump sweeps show the absolute-level effect when both classes are treated similarly.
     \item \textbf{Cancellation asymmetry is the largest class-benefit driver.} A class with lower cancellation probability has much higher percent serviced.
     \item \textbf{Balking asymmetry controls who stays in the system.} The class that balks less, or tolerates longer waits, is served more often.

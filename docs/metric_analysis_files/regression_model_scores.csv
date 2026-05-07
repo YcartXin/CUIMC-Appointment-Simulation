@@ -1,0 +1,5 @@
+target,target_label,full_sample_r2,test_r2
+average_utilization,Average utilization,0.6754574010940844,0.5449982025163118
+overall_percent_serviced,Overall percent serviced,0.7994011007225166,0.7189299852176383
+mean_offered_booking_delay,Mean offered delay,0.7182443907559971,0.5546115772258541
+access_advantage_class_1,Class 1 access advantage,0.6392455092581366,0.7076745347161466
