@@ -1,13 +1,17 @@
 from pathlib import Path
+import sys
 
-from engine_files.config_loader import load_config
-from engine_files.engine import ClinicAppointmentSimulation
+REPO_DIR = Path(__file__).resolve().parents[1]
+if str(REPO_DIR) not in sys.path:
+    sys.path.insert(0, str(REPO_DIR))
+
+from simulation.config_loader import load_config
+from simulation.engine import ClinicAppointmentSimulation
 
 
 
 def main() -> None:
-    repo_dir = Path(__file__).resolve().parent
-    config = load_config(repo_dir / "configs" / "baseline.yaml")
+    config = load_config(REPO_DIR / "configs" / "baseline.yaml")
 
     sim = ClinicAppointmentSimulation(config)
     results = sim.run()

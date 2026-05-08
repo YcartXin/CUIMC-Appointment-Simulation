@@ -469,13 +469,16 @@ where \(i\) is the patient’s class.
 
 ## Repository Structure
 
-- `model.py`: parameter objects, booking objects, metrics, and results
-- `engine.py`: simulation engine
-- `config_loader.py`: YAML loader
-- `run_simulation.py`: runs one scenario
-- `compare_scenarios.py`: compares two scenarios
+- `simulation/model.py`: parameter objects, booking objects, metrics, and results
+- `simulation/engine.py`: simulation engine
+- `simulation/config_loader.py`: YAML loader
+- `analysis/`: shared metric and plotting-style helpers
+- `scripts/run_simulation.py`: runs one scenario
+- `scripts/compare_scenarios.py`: compares two scenarios
+- `scripts/generate_metric_analysis_figures.py`: builds report figures and manifest
+- `experiments/`: parameter sweeps used by reports
 - `configs/`: scenario parameter files
-- `notebook/`: exploratory notebooks
+- `notebooks/`: exploratory notebooks
 
 ## Running the Simulation
 
@@ -488,4 +491,11 @@ pip install -r requirements.txt
 Run the baseline scenario:
 
 ```bash
-python run_simulation.py
+python scripts/run_simulation.py
+```
+
+Compare the baseline scenario with `configs/scenario_2.yaml`:
+
+```bash
+python scripts/compare_scenarios.py
+```

@@ -2,8 +2,8 @@
 
 This is a short recap of the most recent metric and sensitivity analysis. The detailed version is in:
 
-- `docs/metric_analysis.tex`
-- `docs/metric_analysis.pdf`
+- `outputs/reports/metric_analysis/rendered/metric_analysis.tex`
+- `outputs/reports/metric_analysis/rendered/metric_analysis.pdf`
 
 The goal of the recent work was to understand:
 

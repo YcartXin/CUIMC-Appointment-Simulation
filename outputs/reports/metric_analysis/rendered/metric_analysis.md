@@ -1,6 +1,6 @@
 # FCFS Appointment Simulation: Metric-Focused Sensitivity Report
 
-Canonical source: `metric_analysis.qmd`. This Markdown file is a generated or
+Canonical source: `docs/reports/metric_analysis.qmd`. This Markdown file is a generated or
 companion surface and should not be edited as an independent report.
 
 This report is organized by metric. Each section starts with the simplest driver plots and then moves to class-by-class heatmaps or regression evidence.
@@ -44,67 +44,67 @@ Color code:
 
 `average_utilization` is completed visits per available slot. No-shows do not count because the slot did not become a completed visit.
 
-![Average utilization drivers](metric_analysis_files/metric_utilization_drivers.png)
+![Average utilization drivers](../figures/metric_utilization_drivers.png)
 
 No-show behavior is the clearest direct driver. Demand pressure is more subtle: utilization can stay high even when access is poor. The Class 1 and Class 2 lines split utilization into each class's share of all available slots.
 
-![No-show step interaction](metric_analysis_files/no_show_step_interaction_heatmap.png)
+![No-show step interaction](../figures/no_show_step_interaction_heatmap.png)
 
-![No-show threshold interaction](metric_analysis_files/no_show_threshold_interaction_heatmap.png)
+![No-show threshold interaction](../figures/no_show_threshold_interaction_heatmap.png)
 
 ## Overall Served Rate
 
 `overall_percent_serviced` is the main access metric: served arrivals divided by all arrivals.
 
-![Overall served-rate drivers](metric_analysis_files/metric_access_drivers.png)
+![Overall served-rate drivers](../figures/metric_access_drivers.png)
 
 The strongest aggregate driver is total arrival pressure. No-shows and cancellations reduce completed visits after booking. Balking reduces served rate because patients reject long-delay offers. In the driver plot, the vertical distance between Class 1 and Class 2 shows the class effect.
 
-![Outcome decomposition](metric_analysis_files/fcfs_arrival_outcome_decomposition.png)
+![Outcome decomposition](../figures/fcfs_arrival_outcome_decomposition.png)
 
-![Arrival mix interaction](metric_analysis_files/arrival_mix_interaction_heatmap.png)
+![Arrival mix interaction](../figures/arrival_mix_interaction_heatmap.png)
 
-![Cancellation interaction](metric_analysis_files/cancellation_probability_interaction_heatmap.png)
+![Cancellation interaction](../figures/cancellation_probability_interaction_heatmap.png)
 
-![Balking step interaction](metric_analysis_files/balking_step_interaction_heatmap.png)
+![Balking step interaction](../figures/balking_step_interaction_heatmap.png)
 
 ## Mean Offered Booking Delay
 
 `mean_offered_booking_delay` averages the delay offered to patients who received an offer, including patients who later balked. Patients with `no_offer` are excluded.
 
-![Offered-wait drivers](metric_analysis_files/metric_wait_drivers.png)
+![Offered-wait drivers](../figures/metric_wait_drivers.png)
 
 Demand pressure raises offered wait. Balking and cancellation need careful interpretation because shorter waits can happen when patients leave the system, not only when access improves. The driver plot shows overall, Class 1, and Class 2 offered waits.
 
-![Arrival-rate wait slice](metric_analysis_files/arrival_rate_slice_wait.png)
+![Arrival-rate wait slice](../figures/arrival_rate_slice_wait.png)
 
-![Balking threshold interaction](metric_analysis_files/balking_threshold_interaction_heatmap.png)
+![Balking threshold interaction](../figures/balking_threshold_interaction_heatmap.png)
 
 ## Balking Rate
 
 `overall_balking_rate` is `balked / offered`. It is a diagnostic for rejected offers, not a final success metric.
 
-![Balking-rate drivers](metric_analysis_files/metric_balking_rate_drivers.png)
+![Balking-rate drivers](../figures/metric_balking_rate_drivers.png)
 
 Higher balking step raises rejection after the threshold. Lower threshold starts that high rejection probability earlier. The driver plot shows overall, Class 1, and Class 2 balking rates.
 
-![Balking step balking-rate heatmap](metric_analysis_files/balking_step_balking_rate_heatmap.png)
+![Balking step balking-rate heatmap](../figures/balking_step_balking_rate_heatmap.png)
 
-![Balking threshold balking-rate heatmap](metric_analysis_files/balking_threshold_balking_rate_heatmap.png)
+![Balking threshold balking-rate heatmap](../figures/balking_threshold_balking_rate_heatmap.png)
 
 ## Class Served-Rate Gap
 
 `access_advantage_class_1 = percent_serviced_1 - percent_serviced_2`. Positive means Class 1 is served more often; negative means Class 2 is served more often.
 
-![Class gap drivers](metric_analysis_files/metric_class_gap_drivers.png)
+![Class gap drivers](../figures/metric_class_gap_drivers.png)
 
 Higher Class 1 cancellation probability, balking step, or no-show step moves the Class 1 line below the Class 2 line. A higher Class 1 balking threshold helps Class 1 because it tolerates longer offered waits.
 
-![Cancellation class gap heatmap](metric_analysis_files/cancellation_probability_interaction_heatmap.png)
+![Cancellation class gap heatmap](../figures/cancellation_probability_interaction_heatmap.png)
 
-![No-show class gap heatmap](metric_analysis_files/no_show_step_interaction_heatmap.png)
+![No-show class gap heatmap](../figures/no_show_step_interaction_heatmap.png)
 
-![Balking threshold class gap heatmap](metric_analysis_files/balking_threshold_interaction_heatmap.png)
+![Balking threshold class gap heatmap](../figures/balking_threshold_interaction_heatmap.png)
 
 ## Regression Screen
 
@@ -123,7 +123,7 @@ The regression screen uses 240 randomized FCFS parameter settings with two seeds
 | Class gap | balking threshold gap | 0.429 |
 | Class gap | balking step gap | -0.349 |
 
-![Regression coefficients](metric_analysis_files/regression_standardized_coefficients.png)
+![Regression coefficients](../figures/regression_standardized_coefficients.png)
 
 ## Bottom Line
 

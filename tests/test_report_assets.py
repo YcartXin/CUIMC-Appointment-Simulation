@@ -8,10 +8,12 @@ from urllib.parse import unquote
 
 REPO_DIR = Path(__file__).resolve().parents[1]
 DOCS = [
-    REPO_DIR / "docs" / "metric_analysis.qmd",
-    REPO_DIR / "docs" / "metric_analysis.md",
-    REPO_DIR / "docs" / "Class 1 Balking Sensitivity Analysis.qmd",
-    REPO_DIR / "docs" / "Class 1 Balking Threshold Analysis.qmd",
+    REPO_DIR / "docs" / "reports" / "metric_analysis.qmd",
+    REPO_DIR / "docs" / "companions" / "Class 1 Balking Sensitivity Analysis.qmd",
+    REPO_DIR / "docs" / "companions" / "Class 1 Balking Threshold Analysis.qmd",
+]
+OPTIONAL_DOCS = [
+    REPO_DIR / "outputs" / "reports" / "metric_analysis" / "rendered" / "metric_analysis.md",
 ]
 IMAGE_PATTERN = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
 
@@ -20,7 +22,7 @@ class ReportAssetsTest(unittest.TestCase):
     def test_local_report_images_exist(self) -> None:
         missing = []
 
-        for doc_path in DOCS:
+        for doc_path in [*DOCS, *(path for path in OPTIONAL_DOCS if path.exists())]:
             text = doc_path.read_text(encoding="utf-8")
             for match in IMAGE_PATTERN.finditer(text):
                 target = unquote(match.group(1).strip())
@@ -36,4 +38,3 @@ class ReportAssetsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

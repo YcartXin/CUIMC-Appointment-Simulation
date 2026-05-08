@@ -1,7 +1,12 @@
 from pathlib import Path
+import sys
 
-from config_loader import load_config
-from engine import ClinicAppointmentSimulation
+REPO_DIR = Path(__file__).resolve().parents[1]
+if str(REPO_DIR) not in sys.path:
+    sys.path.insert(0, str(REPO_DIR))
+
+from simulation.config_loader import load_config
+from simulation.engine import ClinicAppointmentSimulation
 
 
 def run_scenario(config_path: Path):
@@ -23,10 +28,8 @@ def aggregate_mean_offered_booking_delay(results) -> float:
 
 
 def main() -> None:
-    repo_dir = Path(__file__).resolve().parent
-
-    baseline_path = repo_dir / "configs" / "baseline.yaml"
-    scenario_2_path = repo_dir / "configs" / "scenario_2.yaml"
+    baseline_path = REPO_DIR / "configs" / "baseline.yaml"
+    scenario_2_path = REPO_DIR / "configs" / "scenario_2.yaml"
 
     baseline_results = run_scenario(baseline_path)
     scenario_2_results = run_scenario(scenario_2_path)

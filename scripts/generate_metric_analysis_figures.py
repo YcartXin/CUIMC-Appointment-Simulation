@@ -21,9 +21,9 @@ REPO_DIR = Path(__file__).resolve().parents[1]
 if str(REPO_DIR) not in sys.path:
     sys.path.insert(0, str(REPO_DIR))
 
-from engine_files.config_loader import load_config
-from engine_files.engine import ClinicAppointmentSimulation
-from engine_files.model import ThresholdRule
+from simulation.config_loader import load_config
+from simulation.engine import ClinicAppointmentSimulation
+from simulation.model import ThresholdRule
 from analysis.metrics import (
     outcome_rates_from_result,
     result_metrics_from_result,
@@ -54,8 +54,11 @@ from analysis.plot_style import (
 )
 
 
-OUT_DIR = Path(__file__).resolve().parent / "metric_analysis_files"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR = REPO_DIR / "outputs" / "reports" / "metric_analysis"
+OUT_DIR = OUTPUT_DIR / "figures"
+DATA_DIR = OUTPUT_DIR / "data"
+for directory in (OUT_DIR, DATA_DIR):
+    directory.mkdir(parents=True, exist_ok=True)
 
 BASE_CONFIG = load_config(REPO_DIR / "configs" / "baseline.yaml")
 SCENARIO_2_CONFIG = load_config(REPO_DIR / "configs" / "scenario_2.yaml")
@@ -785,7 +788,7 @@ def draw_balking_slice_lines(df, x_name, y_name, fixed_y, baseline_x, xlabel, fi
     nearest_y = y_values[nearest_position(y_values, fixed_y)]
     slice_df = df[df[y_name] == nearest_y].copy()
     slice_df = slice_df.sort_values(x_name)
-    slice_df.to_csv(OUT_DIR / filename.replace(".png", ".csv"), index=False)
+    slice_df.to_csv(DATA_DIR / filename.replace(".png", ".csv"), index=False)
 
     specs = [
         ("average_utilization", "Average utilization", "rate"),
@@ -987,7 +990,7 @@ def draw_fcfs_capacity_stress():
         rows.append(pd.DataFrame(seed_rows).mean(numeric_only=True).to_dict())
 
     df = pd.DataFrame(rows)
-    df.to_csv(OUT_DIR / "fcfs_capacity_stress_results.csv", index=False)
+    df.to_csv(DATA_DIR / "fcfs_capacity_stress_results.csv", index=False)
 
     fig, axes = plt.subplots(2, 2, figsize=(13, 8.5), constrained_layout=True)
 
@@ -1550,7 +1553,7 @@ def run_regression_screening():
         rows.append({**params, **metrics})
 
     data = add_regression_features(pd.DataFrame(rows))
-    data.to_csv(OUT_DIR / "regression_simulation_data.csv", index=False)
+    data.to_csv(DATA_DIR / "regression_simulation_data.csv", index=False)
 
     coefficient_rows = []
     score_rows = []
@@ -1579,8 +1582,8 @@ def run_regression_screening():
 
     coef_df = pd.DataFrame(coefficient_rows)
     score_df = pd.DataFrame(score_rows)
-    coef_df.to_csv(OUT_DIR / "regression_standardized_coefficients.csv", index=False)
-    score_df.to_csv(OUT_DIR / "regression_model_scores.csv", index=False)
+    coef_df.to_csv(DATA_DIR / "regression_standardized_coefficients.csv", index=False)
+    score_df.to_csv(DATA_DIR / "regression_model_scores.csv", index=False)
     plot_regression_coefficients(coef_df)
     return data, coef_df, score_df
 
@@ -1654,7 +1657,9 @@ def serializable_values(values):
 
 def generated_artifacts(run_started_at):
     artifacts = []
-    for path in sorted(OUT_DIR.rglob("*")):
+    for path in sorted(OUTPUT_DIR.rglob("*")):
+        if (OUTPUT_DIR / "rendered") in path.parents:
+            continue
         if path.is_file() and path.name != "manifest.json" and path.stat().st_mtime >= run_started_at:
             artifacts.append(path.relative_to(REPO_DIR).as_posix())
     return artifacts
@@ -1693,7 +1698,7 @@ def write_manifest(row_counts, run_started_at):
         "generated_artifacts": generated_artifacts(run_started_at),
     }
 
-    with (OUT_DIR / "manifest.json").open("w", encoding="utf-8") as handle:
+    with (OUTPUT_DIR / "manifest.json").open("w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=2, sort_keys=True)
         handle.write("\n")
 

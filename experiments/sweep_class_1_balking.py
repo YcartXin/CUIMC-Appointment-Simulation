@@ -20,9 +20,9 @@ import pandas as pd
 REPO_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_DIR))
 
-from engine_files.config_loader import load_config
-from engine_files.engine import ClinicAppointmentSimulation
-from engine_files.model import SimulationConfig, ThresholdRule
+from simulation.config_loader import load_config
+from simulation.engine import ClinicAppointmentSimulation
+from simulation.model import SimulationConfig, ThresholdRule
 from analysis.metrics import aggregate_result_row, class_result_rows
 from analysis.plot_style import driver_line_style
 

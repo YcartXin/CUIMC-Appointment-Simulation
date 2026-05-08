@@ -631,13 +631,15 @@ X^D_{i,r}
 <section id="repository-structure" class="level2">
 <h2 class="anchored" data-anchor-id="repository-structure">Repository Structure</h2>
 <ul>
-<li><code>model.py</code>: parameter objects, booking objects, metrics, and results</li>
-<li><code>engine.py</code>: simulation engine</li>
-<li><code>config_loader.py</code>: YAML loader</li>
-<li><code>run_simulation.py</code>: runs one scenario</li>
-<li><code>compare_scenarios.py</code>: compares two scenarios</li>
+<li><code>simulation/model.py</code>: parameter objects, booking objects, metrics, and results</li>
+<li><code>simulation/engine.py</code>: simulation engine</li>
+<li><code>simulation/config_loader.py</code>: YAML loader</li>
+<li><code>scripts/run_simulation.py</code>: runs one scenario</li>
+<li><code>scripts/compare_scenarios.py</code>: compares two scenarios</li>
+<li><code>scripts/generate_metric_analysis_figures.py</code>: builds report figures and manifest</li>
+<li><code>experiments/</code>: parameter sweeps used by reports</li>
 <li><code>configs/</code>: scenario parameter files</li>
-<li><code>notebook/</code>: exploratory notebooks</li>
+<li><code>notebooks/</code>: exploratory notebooks</li>
 </ul>
 </section>
 <section id="running-the-simulation" class="level2">

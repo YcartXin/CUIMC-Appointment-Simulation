@@ -9,7 +9,7 @@ from analysis.metrics import (
     outcome_rates_from_result,
     result_metrics_from_result,
 )
-from engine_files.model import ClassMetrics, SimulationResults, SlotMetrics
+from simulation.model import ClassMetrics, SimulationResults, SlotMetrics
 
 
 class MetricsTest(unittest.TestCase):

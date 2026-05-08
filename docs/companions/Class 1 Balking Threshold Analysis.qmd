@@ -6,7 +6,7 @@ format:
 ---
 
 This is a companion extract. The canonical metric-first report is
-[`metric_analysis.qmd`](metric_analysis.qmd), where this sweep is included in
+[`metric_analysis.qmd`](../reports/metric_analysis.qmd), where this sweep is included in
 the Balking Deep Dive.
 
 ## Overview
@@ -26,7 +26,7 @@ With `horizon_days = 14`, possible offered delays are `tau = 0, 1, ..., 13`. A l
 
 ## Aggregate Average Utilization
 
-![Aggregate average utilization](../outputs/class1_balking_threshold/figures/average_utilization_aggregate.png)
+![Aggregate average utilization](../../outputs/class1_balking_threshold/figures/average_utilization_aggregate.png)
 
 Aggregate utilization should be read as the share of clinic slots that become completed visits, averaged across measured days. Because the system remains capacity-constrained, utilization may not move as sharply as class-level access metrics.
 
@@ -34,7 +34,7 @@ The key question for this figure is whether earlier Class 1 balking reduces no-s
 
 ## Mean Accepted Booking Delay
 
-![Mean accepted booking delay by class](../outputs/class1_balking_threshold/figures/mean_accepted_delay_by_class.png)
+![Mean accepted booking delay by class](../../outputs/class1_balking_threshold/figures/mean_accepted_delay_by_class.png)
 
 Class 1 accepted delay generally rises as the balking threshold increases. This is expected: when the threshold is higher, Class 1 tolerates longer waits before high balking applies, so more long-delay appointments remain in the accepted sample.
 
@@ -42,7 +42,7 @@ The comparison with Class 2 is more subtle. Class 2’s balking rule is fixed, s
 
 ## Mean Offered Booking Delay
 
-![Mean offered booking delay by class](../outputs/class1_balking_threshold/figures/mean_offered_delay_by_class.png)
+![Mean offered booking delay by class](../../outputs/class1_balking_threshold/figures/mean_offered_delay_by_class.png)
 
 Mean offered delay is the broader congestion measure because it includes both patients who accept and patients who balk. It is therefore less affected by the accepted-sample selection problem.
 
@@ -52,7 +52,7 @@ Because both classes draw from the same appointment calendar, offered delay can 
 
 ## Percent Serviced
 
-![Percent serviced by class](../outputs/class1_balking_threshold/figures/percent_serviced_by_class.png)
+![Percent serviced by class](../../outputs/class1_balking_threshold/figures/percent_serviced_by_class.png)
 
 Percent serviced is the clearest access metric. Lower Class 1 thresholds usually reduce Class 1’s serviced share because more Class 1 patients reject appointments at shorter delays. Class 2 may benefit if those rejected offers free capacity that Class 2 can use.
 
@@ -60,13 +60,13 @@ This figure should be interpreted together with accepted delay. A lower accepted
 
 ## Balking Rate
 
-![Balking rate by class](../outputs/class1_balking_threshold/figures/balking_rate_by_class.png)
+![Balking rate by class](../../outputs/class1_balking_threshold/figures/balking_rate_by_class.png)
 
 The balking-rate plot shows whether the threshold change is actually moving patients into rejection behavior. A lower threshold should raise Class 1 balking when offered waits exceed the new cutoff.
 
 ## Service Gap
 
-![Service gap](../outputs/class1_balking_threshold/figures/service_gap.png)
+![Service gap](../../outputs/class1_balking_threshold/figures/service_gap.png)
 
 The service gap directly shows whether the threshold change mainly redistributes completed service between classes.
 

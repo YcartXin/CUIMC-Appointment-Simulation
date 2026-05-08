@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable
 
-from engine_files.model import SimulationResults
+from simulation.model import SimulationResults
 
 
 TWO_CLASS_IDS = (1, 2)

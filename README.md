@@ -17,17 +17,22 @@ The simulation includes:
 
 ## Repository structure
 
-- `engine_files/model.py`: parameter objects, booking objects, metrics, and result containers
-- `engine_files/engine.py`: simulation engine and event logic
-- `engine_files/config_loader.py`: loads YAML scenario files into Python objects
+- `simulation/model.py`: parameter objects, booking objects, metrics, and result containers
+- `simulation/engine.py`: simulation engine and event logic
+- `simulation/config_loader.py`: loads YAML scenario files into Python objects
 - `analysis/`: shared metric and plotting-style helpers for studies
-- `run_simulation.py`: runs one simulation scenario
-- `compare_scenarios.py`: compares two simulation scenarios
+- `scripts/run_simulation.py`: runs one simulation scenario
+- `scripts/compare_scenarios.py`: compares two simulation scenarios
+- `scripts/generate_metric_analysis_figures.py`: builds metric report figures and manifest
+- `experiments/`: parameter sweeps used by reports
 - `configs/baseline.yaml`: baseline parameter file
 - `configs/scenario_2.yaml`: comparison scenario file
-- `docs/simulation_documentation.qmd`: simulation documentation source
-- `docs/metric_analysis.qmd`: canonical metric-focused study source
-- `docs/metric_analysis_files/`: generated figures, CSVs, and manifest for the metric report
+- `notebooks/`: interactive exploration notebooks
+- `docs/`: documentation sources and archived notes
+- `docs/reference/simulation_documentation.qmd`: simulation documentation source
+- `docs/reports/metric_analysis.qmd`: canonical metric-focused study source
+- `outputs/`: generated figures, CSVs, manifests, rendered reports, and sweep outputs
+- `outputs/reports/metric_analysis/`: metric report figures, data, manifest, and rendered report artifacts
 
 ## Installation
 
@@ -55,4 +60,11 @@ Run the test suite:
 
 ```bash
 make check
+```
+
+Run one-off scenarios:
+
+```bash
+python scripts/run_simulation.py
+python scripts/compare_scenarios.py
 ```
