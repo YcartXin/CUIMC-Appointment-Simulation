@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 import matplotlib.pyplot as plt
-from matplotlib.colors import TwoSlopeNorm
+from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 import numpy as np
 import pandas as pd
 
@@ -76,6 +76,16 @@ FEATURE_LABELS = {
     "cancel_prob_mean": "avg cancellation prob.",
     "cancel_prob_gap_c1_minus_c2": "cancellation prob. gap",
 }
+
+OVERALL_COLOR = "#222222"
+CLASS_1_COLOR = "#1f77b4"
+CLASS_2_COLOR = "#ff7f0e"
+UTILIZATION_COLOR = "#2ca02c"
+BASELINE_COLOR = "#6b6b6b"
+CLASS_GAP_CMAP = LinearSegmentedColormap.from_list(
+    "class_gap_orange_white_blue",
+    [CLASS_2_COLOR, "#f7f7f7", CLASS_1_COLOR],
+)
 
 
 def run_result(config, seed):
@@ -299,21 +309,50 @@ def pivot(df, x_name, y_name, metric):
     return df.pivot(index=y_name, columns=x_name, values=metric).sort_index().sort_index(axis=1)
 
 
-def heatmap_panel(ax, table, title, xlabel, ylabel, diverging=False, vmin=None, vmax=None):
+def format_axis_value(value):
+    value = float(value)
+    if value.is_integer():
+        return str(int(value))
+    return f"{value:.2f}"
+
+
+def tick_positions(values, max_ticks=8):
+    values = list(values)
+    if len(values) <= max_ticks:
+        return list(range(len(values)))
+    positions = np.linspace(0, len(values) - 1, max_ticks)
+    return sorted(set(int(round(position)) for position in positions))
+
+
+def heatmap_panel(
+    ax,
+    table,
+    title,
+    xlabel,
+    ylabel,
+    diverging=False,
+    vmin=None,
+    vmax=None,
+    cmap=None,
+    max_ticks=8,
+):
     if diverging:
         max_abs = float(np.nanmax(np.abs(table.values)))
         norm = TwoSlopeNorm(vmin=-max_abs, vcenter=0.0, vmax=max_abs) if max_abs > 0 else None
-        image = ax.imshow(table.values, origin="lower", aspect="auto", cmap="RdBu_r", norm=norm)
+        image = ax.imshow(table.values, origin="lower", aspect="auto", cmap=cmap or CLASS_GAP_CMAP, norm=norm)
     else:
-        image = ax.imshow(table.values, origin="lower", aspect="auto", cmap="viridis", vmin=vmin, vmax=vmax)
+        image = ax.imshow(table.values, origin="lower", aspect="auto", cmap=cmap or "YlGnBu", vmin=vmin, vmax=vmax)
 
-    ax.set_title(title)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.set_xticks(range(len(table.columns)))
-    ax.set_xticklabels([f"{v:.2f}" if isinstance(v, float) else str(v) for v in table.columns], rotation=45)
-    ax.set_yticks(range(len(table.index)))
-    ax.set_yticklabels([f"{v:.2f}" if isinstance(v, float) else str(v) for v in table.index])
+    ax.set_title(title, fontsize=13)
+    ax.set_xlabel(xlabel, fontsize=11)
+    ax.set_ylabel(ylabel, fontsize=11)
+    x_positions = tick_positions(table.columns, max_ticks=max_ticks)
+    y_positions = tick_positions(table.index, max_ticks=max_ticks)
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels([format_axis_value(table.columns[position]) for position in x_positions], rotation=35, ha="right")
+    ax.set_yticks(y_positions)
+    ax.set_yticklabels([format_axis_value(table.index[position]) for position in y_positions])
+    ax.tick_params(axis="both", labelsize=9)
     return image
 
 
@@ -415,6 +454,202 @@ def draw_behavior_panel(
 
     fig.savefig(OUT_DIR / filename, dpi=190, bbox_inches="tight")
     plt.close(fig)
+
+
+def metric_heatmap_style(metric):
+    if metric == "average_utilization":
+        return "Greens", "rate"
+    if metric in {"overall_percent_serviced", "class_1_percent_serviced", "class_2_percent_serviced"}:
+        return "YlGnBu", "rate"
+    if "booking_delay" in metric:
+        return "YlOrRd", "days"
+    if "advantage" in metric:
+        return CLASS_GAP_CMAP, "difference"
+    return "YlGnBu", "value"
+
+
+def draw_two_metric_heatmap(df, x_name, y_name, xlabel, ylabel, filename, title, panels, fixed_y=None, fixed_x=None):
+    fig, axes = plt.subplots(1, 2, figsize=(13.8, 5.8), constrained_layout=True)
+    fig.suptitle(title, fontsize=15)
+
+    for ax, panel in zip(axes, panels):
+        table = pivot(df, x_name, y_name, panel["metric"])
+        cmap, default_label = metric_heatmap_style(panel["metric"])
+        image = heatmap_panel(
+            ax,
+            table,
+            panel["title"],
+            xlabel,
+            ylabel,
+            diverging=panel.get("diverging", False),
+            cmap=panel.get("cmap", cmap),
+            max_ticks=panel.get("max_ticks", 8),
+        )
+        mark_heatmap_slice(ax, table, fixed_y=fixed_y, fixed_x=fixed_x)
+        colorbar = fig.colorbar(image, ax=ax, shrink=0.88)
+        colorbar.set_label(panel.get("label", default_label))
+
+    fig.savefig(OUT_DIR / filename, dpi=190, bbox_inches="tight")
+    plt.close(fig)
+
+
+def nearest_value(values, target):
+    values = sorted(values)
+    return values[nearest_position(values, target)]
+
+
+def slice_with_fixed(df, x_name, y_name, fixed_axis, fixed_value):
+    if fixed_axis == y_name:
+        actual_value = nearest_value(df[y_name].unique(), fixed_value)
+        return df[df[y_name] == actual_value].sort_values(x_name).copy(), actual_value
+    actual_value = nearest_value(df[x_name].unique(), fixed_value)
+    return df[df[x_name] == actual_value].sort_values(y_name).copy(), actual_value
+
+
+def style_line_axis(ax, xlabel, ylabel, y_range=None):
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    if y_range is not None:
+        ax.set_ylim(*y_range)
+    ax.grid(True, alpha=0.25)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+
+def draw_slice_metric_figure(
+    df,
+    x_name,
+    y_name,
+    baseline_x,
+    baseline_y,
+    xlabel,
+    ylabel,
+    filename,
+    title,
+    metrics,
+    metric_ylabel,
+    y_range=None,
+):
+    left_df, left_fixed = slice_with_fixed(df, x_name, y_name, y_name, baseline_y)
+    right_df, right_fixed = slice_with_fixed(df, x_name, y_name, x_name, baseline_x)
+
+    fig, axes = plt.subplots(1, 2, figsize=(13.8, 5.2), constrained_layout=True, sharey=y_range is not None)
+    fig.suptitle(title, fontsize=15)
+
+    for metric, label, color in metrics:
+        axes[0].plot(left_df[x_name], left_df[metric], marker="o", linewidth=2.2, color=color, label=label)
+    axes[0].axvline(baseline_x, color=BASELINE_COLOR, linestyle="--", linewidth=1.2, label="baseline")
+    axes[0].set_title(f"Class 1 varies; Class 2 fixed at {format_axis_value(left_fixed)}")
+    style_line_axis(axes[0], xlabel, metric_ylabel, y_range=y_range)
+
+    for metric, label, color in metrics:
+        axes[1].plot(right_df[y_name], right_df[metric], marker="o", linewidth=2.2, color=color, label=label)
+    axes[1].axvline(baseline_y, color=BASELINE_COLOR, linestyle="--", linewidth=1.2, label="baseline")
+    axes[1].set_title(f"Class 2 varies; Class 1 fixed at {format_axis_value(right_fixed)}")
+    style_line_axis(axes[1], ylabel, metric_ylabel, y_range=y_range)
+
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=min(len(labels), 4), frameon=False)
+    fig.savefig(OUT_DIR / filename, dpi=190, bbox_inches="tight")
+    plt.close(fig)
+
+
+def draw_behavior_slice_figures(df, x_name, y_name, baseline_x, baseline_y, xlabel, ylabel, prefix, title):
+    draw_slice_metric_figure(
+        df,
+        x_name,
+        y_name,
+        baseline_x,
+        baseline_y,
+        xlabel,
+        ylabel,
+        f"{prefix}_slice_access.png",
+        f"{title}: served rate slices",
+        [
+            ("overall_percent_serviced", "overall", OVERALL_COLOR),
+            ("class_1_percent_serviced", "Class 1", CLASS_1_COLOR),
+            ("class_2_percent_serviced", "Class 2", CLASS_2_COLOR),
+        ],
+        "served rate",
+        y_range=(0, 1.05),
+    )
+    draw_slice_metric_figure(
+        df,
+        x_name,
+        y_name,
+        baseline_x,
+        baseline_y,
+        xlabel,
+        ylabel,
+        f"{prefix}_slice_utilization.png",
+        f"{title}: utilization slices",
+        [("average_utilization", "utilization", UTILIZATION_COLOR)],
+        "utilization",
+        y_range=(0, 1.05),
+    )
+    draw_slice_metric_figure(
+        df,
+        x_name,
+        y_name,
+        baseline_x,
+        baseline_y,
+        xlabel,
+        ylabel,
+        f"{prefix}_slice_wait.png",
+        f"{title}: offered-wait slices",
+        [
+            ("mean_offered_booking_delay", "overall", OVERALL_COLOR),
+            ("class_1_mean_offered_booking_delay", "Class 1", CLASS_1_COLOR),
+            ("class_2_mean_offered_booking_delay", "Class 2", CLASS_2_COLOR),
+        ],
+        "offered wait (days)",
+    )
+
+
+def draw_arrival_rate_slice_figures(df, baseline_share):
+    slice_df, actual_share = slice_with_fixed(df, "lambda_total", "class_1_share", "class_1_share", baseline_share)
+    specs = [
+        (
+            "arrival_rate_slice_access.png",
+            "Arrival rate at 50/50 mix: served rate",
+            [
+                ("overall_percent_serviced", "overall", OVERALL_COLOR),
+                ("class_1_percent_serviced", "Class 1", CLASS_1_COLOR),
+                ("class_2_percent_serviced", "Class 2", CLASS_2_COLOR),
+            ],
+            "served rate",
+            (0, 1.05),
+        ),
+        (
+            "arrival_rate_slice_utilization.png",
+            "Arrival rate at 50/50 mix: utilization",
+            [("average_utilization", "utilization", UTILIZATION_COLOR)],
+            "utilization",
+            (0, 1.05),
+        ),
+        (
+            "arrival_rate_slice_wait.png",
+            "Arrival rate at 50/50 mix: offered wait",
+            [
+                ("mean_offered_booking_delay", "overall", OVERALL_COLOR),
+                ("class_1_mean_offered_booking_delay", "Class 1", CLASS_1_COLOR),
+                ("class_2_mean_offered_booking_delay", "Class 2", CLASS_2_COLOR),
+            ],
+            "offered wait (days)",
+            None,
+        ),
+    ]
+
+    for filename, title, metrics, ylabel, y_range in specs:
+        fig, ax = plt.subplots(figsize=(8.8, 5.2), constrained_layout=True)
+        for metric, label, color in metrics:
+            ax.plot(slice_df["lambda_total"], slice_df[metric], marker="o", linewidth=2.2, color=color, label=label)
+        ax.axvline(sum(params.lambda_per_day for params in BASE_CONFIG.classes.values()), color=BASELINE_COLOR, linestyle="--", linewidth=1.2, label="baseline")
+        ax.set_title(f"{title}\nClass 1 share fixed at {actual_share:.2f}")
+        style_line_axis(ax, "total arrivals per day", ylabel, y_range=y_range)
+        ax.legend(frameon=False)
+        fig.savefig(OUT_DIR / filename, dpi=190, bbox_inches="tight")
+        plt.close(fig)
 
 
 def draw_single_metric_heatmap(
@@ -634,6 +869,21 @@ def draw_arrival_mix():
         "arrival_mix_behavior_panels.png",
         "Arrival rate and class mix",
     )
+    draw_two_metric_heatmap(
+        df,
+        "class_1_share",
+        "lambda_total",
+        "Class 1 arrival share",
+        "total arrivals per day",
+        "arrival_mix_interaction_heatmap.png",
+        "Arrival rate and class mix",
+        [
+            {"metric": "overall_percent_serviced", "title": "Overall served rate", "label": "rate", "cmap": "YlGnBu"},
+            {"metric": "mean_offered_booking_delay", "title": "Overall offered wait", "label": "days", "cmap": "YlOrRd"},
+        ],
+    )
+    baseline_share = BASE_CONFIG.classes[1].lambda_per_day / lambda_total_base
+    draw_arrival_rate_slice_figures(df, baseline_share)
     return df
 
 
@@ -749,6 +999,23 @@ def draw_fcfs_capacity_stress():
     ax.legend()
 
     fig.savefig(OUT_DIR / "fcfs_capacity_stress_curves.png", dpi=190, bbox_inches="tight")
+    plt.close(fig)
+
+    fig, axes = plt.subplots(1, 2, figsize=(13.8, 5.2), constrained_layout=True)
+    axes[0].plot(df.lambda_total, df.average_utilization, marker="o", linewidth=2.2, color=UTILIZATION_COLOR, label="utilization")
+    axes[0].plot(df.lambda_total, df.overall_percent_serviced, marker="o", linewidth=2.2, color=OVERALL_COLOR, label="overall served rate")
+    axes[0].axvline(baseline_lambda_total, color=BASELINE_COLOR, linewidth=1.2, linestyle="--", label="baseline")
+    axes[0].set_title("Capacity use vs access")
+    style_line_axis(axes[0], "total arrivals per day", "rate", y_range=(0, 1.05))
+    axes[0].legend(frameon=False)
+
+    axes[1].plot(df.lambda_total, df.mean_offered_booking_delay, marker="o", linewidth=2.2, color=CLASS_2_COLOR, label="offered wait")
+    axes[1].plot(df.lambda_total, df.mean_accepted_booking_delay, marker="o", linewidth=2.2, color=CLASS_1_COLOR, label="accepted wait")
+    axes[1].axvline(baseline_lambda_total, color=BASELINE_COLOR, linewidth=1.2, linestyle="--", label="baseline")
+    axes[1].set_title("Waits under demand pressure")
+    style_line_axis(axes[1], "total arrivals per day", "days")
+    axes[1].legend(frameon=False)
+    fig.savefig(OUT_DIR / "fcfs_stress_access_wait.png", dpi=190, bbox_inches="tight")
     plt.close(fig)
 
     fig, ax = plt.subplots(figsize=(12, 5.5), constrained_layout=True)
@@ -958,6 +1225,9 @@ def main():
     scenario_df = draw_scenario_comparison()
     baseline_balk_step = BASE_CONFIG.classes[1].balk_prob.high - BASE_CONFIG.classes[1].balk_prob.low
     baseline_balk_threshold = BASE_CONFIG.classes[1].balk_prob.threshold
+    baseline_no_show_step = BASE_CONFIG.classes[1].no_show_prob.high - BASE_CONFIG.classes[1].no_show_prob.low
+    baseline_no_show_threshold = BASE_CONFIG.classes[1].no_show_prob.threshold
+    baseline_cancel_prob = BASE_CONFIG.classes[1].cancel_prob
 
     balk_step_df = grid_records(
         STEP_GRID,
@@ -987,6 +1257,32 @@ def main():
         "Balking step by class",
         fixed_y=baseline_balk_step,
         subtitle=f"Dashed row: class 2 fixed at baseline step = {baseline_balk_step:.2f}",
+    )
+    draw_behavior_slice_figures(
+        balk_step_df,
+        "class_1_step",
+        "class_2_step",
+        baseline_balk_step,
+        baseline_balk_step,
+        "Class 1 balking step",
+        "Class 2 balking step",
+        "balking_step",
+        "Balking step",
+    )
+    draw_two_metric_heatmap(
+        balk_step_df,
+        "class_1_step",
+        "class_2_step",
+        "Class 1 balking step",
+        "Class 2 balking step",
+        "balking_step_interaction_heatmap.png",
+        "Balking step interaction",
+        [
+            {"metric": "overall_percent_serviced", "title": "Overall served rate", "label": "rate", "cmap": "YlGnBu"},
+            {"metric": "access_advantage_class_1", "title": "Class gap: served rate", "label": "Class 1 - Class 2", "diverging": True},
+        ],
+        fixed_y=baseline_balk_step,
+        fixed_x=baseline_balk_step,
     )
     draw_balking_class_service_heatmaps(balk_step_df, baseline_balk_step)
     balk_step_slice_df = draw_balking_slice_lines(
@@ -1029,6 +1325,32 @@ def main():
         "Balking threshold by class",
         fixed_y=baseline_balk_threshold,
         subtitle=f"Dashed row: class 2 fixed at baseline threshold = {baseline_balk_threshold}",
+    )
+    draw_behavior_slice_figures(
+        balk_threshold_df,
+        "class_1_threshold",
+        "class_2_threshold",
+        baseline_balk_threshold,
+        baseline_balk_threshold,
+        "Class 1 balking threshold",
+        "Class 2 balking threshold",
+        "balking_threshold",
+        "Balking threshold",
+    )
+    draw_two_metric_heatmap(
+        balk_threshold_df,
+        "class_1_threshold",
+        "class_2_threshold",
+        "Class 1 balking threshold",
+        "Class 2 balking threshold",
+        "balking_threshold_interaction_heatmap.png",
+        "Balking threshold interaction",
+        [
+            {"metric": "mean_offered_booking_delay", "title": "Overall offered wait", "label": "days", "cmap": "YlOrRd"},
+            {"metric": "access_advantage_class_1", "title": "Class gap: served rate", "label": "Class 1 - Class 2", "diverging": True},
+        ],
+        fixed_y=baseline_balk_threshold,
+        fixed_x=baseline_balk_threshold,
     )
     draw_balking_threshold_class_service_heatmaps(balk_threshold_df, baseline_balk_threshold)
     balk_threshold_slice_df = draw_balking_slice_lines(
@@ -1085,6 +1407,32 @@ def main():
         "no_show_step_behavior_panels.png",
         "No-show step by class",
     )
+    draw_behavior_slice_figures(
+        no_show_step_df,
+        "class_1_step",
+        "class_2_step",
+        baseline_no_show_step,
+        baseline_no_show_step,
+        "Class 1 no-show step",
+        "Class 2 no-show step",
+        "no_show_step",
+        "No-show step",
+    )
+    draw_two_metric_heatmap(
+        no_show_step_df,
+        "class_1_step",
+        "class_2_step",
+        "Class 1 no-show step",
+        "Class 2 no-show step",
+        "no_show_step_interaction_heatmap.png",
+        "No-show step interaction",
+        [
+            {"metric": "average_utilization", "title": "Utilization", "label": "rate", "cmap": "Greens"},
+            {"metric": "access_advantage_class_1", "title": "Class gap: served rate", "label": "Class 1 - Class 2", "diverging": True},
+        ],
+        fixed_y=baseline_no_show_step,
+        fixed_x=baseline_no_show_step,
+    )
 
     no_show_threshold_df = grid_records(
         THRESHOLD_GRID,
@@ -1110,6 +1458,32 @@ def main():
         "class 2 no-show threshold",
         "no_show_threshold_behavior_panels.png",
         "No-show threshold by class",
+    )
+    draw_behavior_slice_figures(
+        no_show_threshold_df,
+        "class_1_threshold",
+        "class_2_threshold",
+        baseline_no_show_threshold,
+        baseline_no_show_threshold,
+        "Class 1 no-show threshold",
+        "Class 2 no-show threshold",
+        "no_show_threshold",
+        "No-show threshold",
+    )
+    draw_two_metric_heatmap(
+        no_show_threshold_df,
+        "class_1_threshold",
+        "class_2_threshold",
+        "Class 1 no-show threshold",
+        "Class 2 no-show threshold",
+        "no_show_threshold_interaction_heatmap.png",
+        "No-show threshold interaction",
+        [
+            {"metric": "average_utilization", "title": "Utilization", "label": "rate", "cmap": "Greens"},
+            {"metric": "access_advantage_class_1", "title": "Class gap: served rate", "label": "Class 1 - Class 2", "diverging": True},
+        ],
+        fixed_y=baseline_no_show_threshold,
+        fixed_x=baseline_no_show_threshold,
     )
 
     no_show_threshold_jump_df = grid_records(
@@ -1153,6 +1527,32 @@ def main():
         "class 2 cancellation probability",
         "cancellation_behavior_panels.png",
         "Cancellation probability by class",
+    )
+    draw_behavior_slice_figures(
+        cancel_df,
+        "class_1_cancel_prob",
+        "class_2_cancel_prob",
+        baseline_cancel_prob,
+        baseline_cancel_prob,
+        "Class 1 cancellation probability",
+        "Class 2 cancellation probability",
+        "cancellation_probability",
+        "Cancellation probability",
+    )
+    draw_two_metric_heatmap(
+        cancel_df,
+        "class_1_cancel_prob",
+        "class_2_cancel_prob",
+        "Class 1 cancellation probability",
+        "Class 2 cancellation probability",
+        "cancellation_probability_interaction_heatmap.png",
+        "Cancellation probability interaction",
+        [
+            {"metric": "overall_percent_serviced", "title": "Overall served rate", "label": "rate", "cmap": "YlGnBu"},
+            {"metric": "access_advantage_class_1", "title": "Class gap: served rate", "label": "Class 1 - Class 2", "diverging": True},
+        ],
+        fixed_y=baseline_cancel_prob,
+        fixed_x=baseline_cancel_prob,
     )
 
     arrival_df = draw_arrival_mix()
