@@ -354,6 +354,69 @@ def draw_four_panel(df, x_name, y_name, xlabel, ylabel, filename, title, fixed_y
     plt.close(fig)
 
 
+def draw_behavior_panel(
+    df,
+    x_name,
+    y_name,
+    xlabel,
+    ylabel,
+    filename,
+    title,
+    fixed_y=None,
+    fixed_x=None,
+    subtitle=None,
+):
+    specs = [
+        ("overall_percent_serviced", "Overall served rate", "rate", False),
+        ("class_1_percent_serviced", "Class 1 served rate", "rate", False),
+        ("class_2_percent_serviced", "Class 2 served rate", "rate", False),
+        ("mean_offered_booking_delay", "Overall offered wait", "days", False),
+        ("class_1_mean_offered_booking_delay", "Class 1 offered wait", "days", False),
+        ("class_2_mean_offered_booking_delay", "Class 2 offered wait", "days", False),
+    ]
+
+    fig, axes = plt.subplots(2, 3, figsize=(15, 8.8), constrained_layout=True)
+    fig.suptitle(f"{title}\n{subtitle}" if subtitle else title, fontsize=14)
+
+    rate_metrics = [metric for metric, _, units, _ in specs if units == "rate"]
+    wait_metrics = [metric for metric, _, units, _ in specs if units == "days"]
+    rate_vmin = float(df[rate_metrics].min().min())
+    rate_vmax = float(df[rate_metrics].max().max())
+    wait_vmin = float(df[wait_metrics].min().min())
+    wait_vmax = float(df[wait_metrics].max().max())
+
+    for ax, (metric, panel_title, units, diverging) in zip(axes.ravel(), specs):
+        table = pivot(df, x_name, y_name, metric)
+        if units == "rate":
+            image = heatmap_panel(
+                ax,
+                table,
+                panel_title,
+                xlabel,
+                ylabel,
+                diverging=diverging,
+                vmin=rate_vmin,
+                vmax=rate_vmax,
+            )
+        else:
+            image = heatmap_panel(
+                ax,
+                table,
+                panel_title,
+                xlabel,
+                ylabel,
+                diverging=diverging,
+                vmin=wait_vmin,
+                vmax=wait_vmax,
+            )
+        mark_heatmap_slice(ax, table, fixed_y=fixed_y, fixed_x=fixed_x)
+        colorbar = fig.colorbar(image, ax=ax, shrink=0.85)
+        colorbar.set_label(units)
+
+    fig.savefig(OUT_DIR / filename, dpi=190, bbox_inches="tight")
+    plt.close(fig)
+
+
 def draw_single_metric_heatmap(
     df,
     x_name,
@@ -389,37 +452,81 @@ def draw_single_metric_heatmap(
     plt.close(fig)
 
 
-def draw_balking_class_service_heatmaps(df, baseline_balk_step):
+def draw_class_service_pair_heatmaps(
+    df,
+    x_name,
+    y_name,
+    xlabel,
+    ylabel,
+    class_1_filename,
+    class_2_filename,
+    class_1_title,
+    class_2_title,
+    fixed_y=None,
+    fixed_x=None,
+):
     vmin = float(df[["class_1_percent_serviced", "class_2_percent_serviced"]].min().min())
     vmax = float(df[["class_1_percent_serviced", "class_2_percent_serviced"]].max().max())
 
     draw_single_metric_heatmap(
         df,
-        "class_1_step",
-        "class_2_step",
+        x_name,
+        y_name,
         "class_1_percent_serviced",
-        "class 1 balking step",
-        "class 2 balking step",
-        "balking_step_class1_service_heatmap.png",
-        "Class 1 percent serviced under balking step changes",
+        xlabel,
+        ylabel,
+        class_1_filename,
+        class_1_title,
         "class 1 percent serviced",
-        fixed_y=baseline_balk_step,
+        fixed_y=fixed_y,
+        fixed_x=fixed_x,
         vmin=vmin,
         vmax=vmax,
     )
     draw_single_metric_heatmap(
         df,
-        "class_1_step",
-        "class_2_step",
+        x_name,
+        y_name,
         "class_2_percent_serviced",
-        "class 1 balking step",
-        "class 2 balking step",
-        "balking_step_class2_service_heatmap.png",
-        "Class 2 percent serviced under balking step changes",
+        xlabel,
+        ylabel,
+        class_2_filename,
+        class_2_title,
         "class 2 percent serviced",
-        fixed_y=baseline_balk_step,
+        fixed_y=fixed_y,
+        fixed_x=fixed_x,
         vmin=vmin,
         vmax=vmax,
+    )
+
+
+def draw_balking_class_service_heatmaps(df, baseline_balk_step):
+    draw_class_service_pair_heatmaps(
+        df,
+        "class_1_step",
+        "class_2_step",
+        "class 1 balking step",
+        "class 2 balking step",
+        "balking_step_class1_service_heatmap.png",
+        "balking_step_class2_service_heatmap.png",
+        "Class 1 served rate under balking step changes",
+        "Class 2 served rate under balking step changes",
+        fixed_y=baseline_balk_step,
+    )
+
+
+def draw_balking_threshold_class_service_heatmaps(df, baseline_balk_threshold):
+    draw_class_service_pair_heatmaps(
+        df,
+        "class_1_threshold",
+        "class_2_threshold",
+        "class 1 balking threshold",
+        "class 2 balking threshold",
+        "balking_threshold_class1_service_heatmap.png",
+        "balking_threshold_class2_service_heatmap.png",
+        "Class 1 served rate under balking threshold changes",
+        "Class 2 served rate under balking threshold changes",
+        fixed_y=baseline_balk_threshold,
     )
 
 
@@ -500,21 +607,32 @@ def draw_scenario_comparison():
 
 def draw_arrival_mix():
     lambda_total_base = sum(params.lambda_per_day for params in BASE_CONFIG.classes.values())
+    lambda_total_values = lambda_total_base * ARRIVAL_MULTIPLIERS
     df = grid_records(
-        ARRIVAL_MULTIPLIERS,
+        lambda_total_values,
         CLASS_1_SHARES,
-        "arrival_multiplier",
+        "lambda_total",
         "class_1_share",
-        lambda multiplier, share: set_arrival_mix(BASE_CONFIG, lambda_total_base * multiplier, share),
+        lambda lambda_total, share: set_arrival_mix(BASE_CONFIG, lambda_total, share),
     )
+    df["arrival_multiplier"] = df["lambda_total"] / lambda_total_base
     draw_four_panel(
         df,
         "class_1_share",
-        "arrival_multiplier",
+        "lambda_total",
         "class 1 share p",
-        "total lambda multiplier",
+        "total arrivals per day",
         "arrival_mix_benefit_heatmaps.png",
         "Arrival pressure and class mix",
+    )
+    draw_behavior_panel(
+        df,
+        "class_1_share",
+        "lambda_total",
+        "class 1 share p",
+        "total arrivals per day",
+        "arrival_mix_behavior_panels.png",
+        "Arrival rate and class mix",
     )
     return df
 
@@ -590,41 +708,42 @@ def draw_fcfs_capacity_stress():
     fig, axes = plt.subplots(2, 2, figsize=(13, 8.5), constrained_layout=True)
 
     ax = axes[0, 0]
-    ax.plot(df.arrival_multiplier, df.average_utilization, marker="o", label="average utilization")
-    ax.plot(df.arrival_multiplier, df.overall_percent_serviced, marker="o", label="overall percent serviced")
-    ax.axvline(1.0, color="black", linewidth=0.8, linestyle="--")
+    baseline_lambda_total = lambda_total_base
+    ax.plot(df.lambda_total, df.average_utilization, marker="o", label="average utilization")
+    ax.plot(df.lambda_total, df.overall_percent_serviced, marker="o", label="overall percent serviced")
+    ax.axvline(baseline_lambda_total, color="black", linewidth=0.8, linestyle="--")
     ax.set_title("Capacity and access")
-    ax.set_xlabel("arrival-rate multiplier")
+    ax.set_xlabel("total arrivals per day")
     ax.set_ylabel("rate")
     ax.set_ylim(0, 1.05)
     ax.legend()
 
     ax = axes[0, 1]
-    ax.plot(df.arrival_multiplier, df.mean_accepted_booking_delay, marker="o", label="accepted delay")
-    ax.plot(df.arrival_multiplier, df.mean_offered_booking_delay, marker="o", label="offered delay")
-    ax.axvline(1.0, color="black", linewidth=0.8, linestyle="--")
+    ax.plot(df.lambda_total, df.mean_accepted_booking_delay, marker="o", label="accepted delay")
+    ax.plot(df.lambda_total, df.mean_offered_booking_delay, marker="o", label="offered delay")
+    ax.axvline(baseline_lambda_total, color="black", linewidth=0.8, linestyle="--")
     ax.set_title("Booking delay")
-    ax.set_xlabel("arrival-rate multiplier")
+    ax.set_xlabel("total arrivals per day")
     ax.set_ylabel("days")
     ax.legend()
 
     ax = axes[1, 0]
-    ax.plot(df.arrival_multiplier, df.class_1_percent_serviced, marker="o", label="class 1")
-    ax.plot(df.arrival_multiplier, df.class_2_percent_serviced, marker="o", label="class 2")
-    ax.axvline(1.0, color="black", linewidth=0.8, linestyle="--")
-    ax.set_title("Class access under symmetric FCFS")
-    ax.set_xlabel("arrival-rate multiplier")
+    ax.plot(df.lambda_total, df.class_1_percent_serviced, marker="o", label="class 1")
+    ax.plot(df.lambda_total, df.class_2_percent_serviced, marker="o", label="class 2")
+    ax.axvline(baseline_lambda_total, color="black", linewidth=0.8, linestyle="--")
+    ax.set_title("Class access under FCFS")
+    ax.set_xlabel("total arrivals per day")
     ax.set_ylabel("percent serviced")
     ax.set_ylim(0, 1.05)
     ax.legend()
 
     ax = axes[1, 1]
-    ax.plot(df.arrival_multiplier, df.balked_rate, marker="o", label="balked")
-    ax.plot(df.arrival_multiplier, df.no_offer_rate, marker="o", label="no offer")
-    ax.plot(df.arrival_multiplier, df.lost_after_booking_rate, marker="o", label="lost after booking")
-    ax.axvline(1.0, color="black", linewidth=0.8, linestyle="--")
+    ax.plot(df.lambda_total, df.balked_rate, marker="o", label="balked")
+    ax.plot(df.lambda_total, df.no_offer_rate, marker="o", label="no offer")
+    ax.plot(df.lambda_total, df.lost_after_booking_rate, marker="o", label="lost after booking")
+    ax.axvline(baseline_lambda_total, color="black", linewidth=0.8, linestyle="--")
     ax.set_title("Main loss channels")
-    ax.set_xlabel("arrival-rate multiplier")
+    ax.set_xlabel("total arrivals per day")
     ax.set_ylabel("share of arrivals")
     ax.set_ylim(0, 1.05)
     ax.legend()
@@ -642,14 +761,14 @@ def draw_fcfs_capacity_stress():
         ("no_offer_rate", "no offer"),
     ]
     ax.stackplot(
-        df.arrival_multiplier,
+        df.lambda_total,
         *[df[column] for column, _ in outcomes],
         labels=[label for _, label in outcomes],
         alpha=0.9,
     )
-    ax.axvline(1.0, color="black", linewidth=0.8, linestyle="--")
+    ax.axvline(baseline_lambda_total, color="black", linewidth=0.8, linestyle="--")
     ax.set_title("Final outcome decomposition per arrival")
-    ax.set_xlabel("arrival-rate multiplier")
+    ax.set_xlabel("total arrivals per day")
     ax.set_ylabel("share of arrivals")
     ax.set_ylim(0, 1.0)
     ax.legend(loc="center left", bbox_to_anchor=(1.0, 0.5))
@@ -858,6 +977,17 @@ def main():
         fixed_y=baseline_balk_step,
         subtitle=f"Dashed row: class 2 fixed at baseline step = {baseline_balk_step:.2f}",
     )
+    draw_behavior_panel(
+        balk_step_df,
+        "class_1_step",
+        "class_2_step",
+        "class 1 balking step",
+        "class 2 balking step",
+        "balking_step_behavior_panels.png",
+        "Balking step by class",
+        fixed_y=baseline_balk_step,
+        subtitle=f"Dashed row: class 2 fixed at baseline step = {baseline_balk_step:.2f}",
+    )
     draw_balking_class_service_heatmaps(balk_step_df, baseline_balk_step)
     balk_step_slice_df = draw_balking_slice_lines(
         balk_step_df,
@@ -889,6 +1019,18 @@ def main():
         fixed_y=baseline_balk_threshold,
         subtitle=f"Dashed row: class 2 fixed at baseline threshold = {baseline_balk_threshold}",
     )
+    draw_behavior_panel(
+        balk_threshold_df,
+        "class_1_threshold",
+        "class_2_threshold",
+        "class 1 balking threshold",
+        "class 2 balking threshold",
+        "balking_threshold_behavior_panels.png",
+        "Balking threshold by class",
+        fixed_y=baseline_balk_threshold,
+        subtitle=f"Dashed row: class 2 fixed at baseline threshold = {baseline_balk_threshold}",
+    )
+    draw_balking_threshold_class_service_heatmaps(balk_threshold_df, baseline_balk_threshold)
     balk_threshold_slice_df = draw_balking_slice_lines(
         balk_threshold_df,
         "class_1_threshold",
@@ -934,6 +1076,15 @@ def main():
         "no_show_step_benefit_heatmaps.png",
         "No-show step size by class",
     )
+    draw_behavior_panel(
+        no_show_step_df,
+        "class_1_step",
+        "class_2_step",
+        "class 1 no-show step",
+        "class 2 no-show step",
+        "no_show_step_behavior_panels.png",
+        "No-show step by class",
+    )
 
     no_show_threshold_df = grid_records(
         THRESHOLD_GRID,
@@ -949,6 +1100,15 @@ def main():
         "class 1 no-show threshold",
         "class 2 no-show threshold",
         "no_show_threshold_benefit_heatmaps.png",
+        "No-show threshold by class",
+    )
+    draw_behavior_panel(
+        no_show_threshold_df,
+        "class_1_threshold",
+        "class_2_threshold",
+        "class 1 no-show threshold",
+        "class 2 no-show threshold",
+        "no_show_threshold_behavior_panels.png",
         "No-show threshold by class",
     )
 
@@ -983,6 +1143,15 @@ def main():
         "class 1 cancellation probability",
         "class 2 cancellation probability",
         "cancellation_benefit_heatmaps.png",
+        "Cancellation probability by class",
+    )
+    draw_behavior_panel(
+        cancel_df,
+        "class_1_cancel_prob",
+        "class_2_cancel_prob",
+        "class 1 cancellation probability",
+        "class 2 cancellation probability",
+        "cancellation_behavior_panels.png",
         "Cancellation probability by class",
     )
 

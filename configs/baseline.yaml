@@ -7,7 +7,7 @@ seed: 11
 
 classes:
   1:
-    lambda_per_day: 60
+    lambda_per_day: 50
     cancel_prob: 0.1
     value: 1.0
     balk_prob:
@@ -18,11 +18,11 @@ classes:
     no_show_prob:
       type: threshold
       threshold: 6
-      low: 0.15
+      low: 0.00
       high: 0.3
 
   2:
-    lambda_per_day: 20
+    lambda_per_day: 50
     cancel_prob: 0.1
     value: 1.0
     balk_prob:
@@ -33,5 +33,5 @@ classes:
     no_show_prob:
       type: threshold
       threshold: 6
-      low: 0.15
+      low: 0.00
       high: 0.3
