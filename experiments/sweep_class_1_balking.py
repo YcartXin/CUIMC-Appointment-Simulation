@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Iterable
 
 import matplotlib.pyplot as plt
+from matplotlib.colors import to_rgb
 import numpy as np
 import pandas as pd
 
@@ -41,6 +42,51 @@ CLASS1_HIGH_BALK_VALUES = np.round(np.arange(0.0, 1.0, 0.1), 2)
 # 100 replications per parameter value.
 SEEDS = range(1, 101)
 
+BALKING_COLOR = "#9467bd"
+
+
+def blend_color(color: str, target: str = "#ffffff", amount: float = 0.5) -> tuple[float, float, float]:
+    base_rgb = np.array(to_rgb(color))
+    target_rgb = np.array(to_rgb(target))
+    return tuple((1.0 - amount) * base_rgb + amount * target_rgb)
+
+
+def series_style(label: str, index: int) -> dict[str, object]:
+    role = str(label).lower()
+    if "class 1" in role:
+        return {
+            "color": blend_color(BALKING_COLOR, "#000000", 0.10),
+            "linestyle": "--",
+            "marker": "s",
+            "linewidth": 2.2,
+        }
+    if "class 2" in role:
+        return {
+            "color": blend_color(BALKING_COLOR, amount=0.24),
+            "linestyle": ":",
+            "marker": "^",
+            "linewidth": 2.2,
+        }
+    if index == 1:
+        return {
+            "color": blend_color(BALKING_COLOR, "#000000", 0.10),
+            "linestyle": "--",
+            "marker": "s",
+            "linewidth": 2.2,
+        }
+    if index == 2:
+        return {
+            "color": blend_color(BALKING_COLOR, amount=0.24),
+            "linestyle": ":",
+            "marker": "^",
+            "linewidth": 2.2,
+        }
+    return {
+        "color": BALKING_COLOR,
+        "linestyle": "-",
+        "marker": "o",
+        "linewidth": 2.5,
+    }
 
 # ============================================================
 # Config modification
@@ -123,6 +169,19 @@ def run_sweep(
             sim = ClinicAppointmentSimulation(config)
             results = sim.run()
 
+            class_metrics = results.class_metrics
+            total_arrivals = sum(metrics.arrivals for metrics in class_metrics.values())
+            total_booked = sum(metrics.booked for metrics in class_metrics.values())
+            total_offered = sum(metrics.offered for metrics in class_metrics.values())
+            total_balked = sum(metrics.balked for metrics in class_metrics.values())
+            total_accepted_delay = sum(
+                metrics.total_booking_delay for metrics in class_metrics.values()
+            )
+            total_offered_delay = sum(
+                metrics.total_offered_booking_delay
+                for metrics in class_metrics.values()
+            )
+
             aggregate_rows.append(
                 {
                     "class1_high_balk": class1_high_balk,
@@ -130,10 +189,23 @@ def run_sweep(
                     "average_utilization": results.average_utilization,
                     "overall_percent_serviced": results.overall_percent_serviced,
                     "total_served": results.total_served,
+                    "mean_accepted_booking_delay": (
+                        total_accepted_delay / total_booked if total_booked else 0.0
+                    ),
+                    "mean_offered_booking_delay": (
+                        total_offered_delay / total_offered if total_offered else 0.0
+                    ),
+                    "overall_balking_rate": (
+                        total_balked / total_offered if total_offered else 0.0
+                    ),
+                    "total_arrivals": total_arrivals,
+                    "total_booked": total_booked,
+                    "total_offered": total_offered,
+                    "total_balked": total_balked,
                 }
             )
 
-            for class_id, metrics in results.class_metrics.items():
+            for class_id, metrics in class_metrics.items():
                 class_rows.append(
                     {
                         "class1_high_balk": class1_high_balk,
@@ -154,6 +226,20 @@ def run_sweep(
                             metrics.mean_offered_booking_delay
                         ),
                         "percent_serviced": metrics.percent_serviced,
+                        "slot_utilization": (
+                            metrics.served / results.total_slots
+                            if results.total_slots
+                            else 0.0
+                        ),
+                        "balking_rate": (
+                            metrics.balked / metrics.offered
+                            if metrics.offered
+                            else 0.0
+                        ),
+                        "total_booking_delay": metrics.total_booking_delay,
+                        "total_offered_booking_delay": (
+                            metrics.total_offered_booking_delay
+                        ),
                     }
                 )
 
@@ -201,6 +287,8 @@ def create_class_summary(class_results: pd.DataFrame) -> pd.DataFrame:
         "mean_accepted_booking_delay",
         "mean_offered_booking_delay",
         "percent_serviced",
+        "slot_utilization",
+        "balking_rate",
         "arrivals",
         "booked",
         "balked",
@@ -231,7 +319,14 @@ def create_aggregate_summary(aggregate_results: pd.DataFrame) -> pd.DataFrame:
     metrics = [
         "average_utilization",
         "overall_percent_serviced",
+        "mean_accepted_booking_delay",
+        "mean_offered_booking_delay",
+        "overall_balking_rate",
         "total_served",
+        "total_arrivals",
+        "total_booked",
+        "total_offered",
+        "total_balked",
     ]
 
     summaries = [
@@ -250,77 +345,66 @@ def create_aggregate_summary(aggregate_results: pd.DataFrame) -> pd.DataFrame:
 # Plotting helpers
 # ============================================================
 
-def plot_class_metric(
+def plot_overall_and_class_metric(
     class_summary: pd.DataFrame,
-    metric: str,
+    aggregate_summary: pd.DataFrame,
+    class_metric: str,
+    aggregate_metric: str,
     title: str,
     ylabel: str,
     output_path: Path,
+    y_limits: tuple[float, float] | None = None,
 ) -> None:
     """
-    Plot one class-level metric with separate lines for each class.
+    Plot one metric with overall, Class 1, and Class 2 values.
     """
 
-    plot_df = class_summary[class_summary["metric"] == metric].copy()
+    aggregate_df = aggregate_summary[
+        aggregate_summary["metric"] == aggregate_metric
+    ].copy()
+    aggregate_df = aggregate_df.sort_values("class1_high_balk")
+
+    class_df = class_summary[class_summary["metric"] == class_metric].copy()
 
     fig, ax = plt.subplots(figsize=(8, 5))
 
-    for class_id, sub in plot_df.groupby("class_id"):
+    ax.errorbar(
+        aggregate_df["class1_high_balk"],
+        aggregate_df["mean"],
+        yerr=aggregate_df["ci95"],
+        capsize=3,
+        label="overall",
+        **series_style("overall", 0),
+    )
+
+    for index, (class_id, sub) in enumerate(class_df.groupby("class_id"), start=1):
         sub = sub.sort_values("class1_high_balk")
 
         ax.errorbar(
             sub["class1_high_balk"],
             sub["mean"],
             yerr=sub["ci95"],
-            marker="o",
             capsize=3,
             label=f"Class {class_id}",
+            **series_style(f"Class {class_id}", index),
         )
 
     ax.set_title(title)
     ax.set_xlabel("Class 1 high balking probability")
     ax.set_ylabel(ylabel)
     ax.set_xticks(CLASS1_HIGH_BALK_VALUES)
+    if y_limits is not None:
+        ax.set_ylim(*y_limits)
     ax.grid(True, alpha=0.3)
-    ax.legend(title="Patient class")
-
-    fig.tight_layout()
-    fig.savefig(output_path, dpi=300)
-    plt.close(fig)
-
-
-def plot_aggregate_metric(
-    aggregate_summary: pd.DataFrame,
-    metric: str,
-    title: str,
-    ylabel: str,
-    output_path: Path,
-) -> None:
-    """
-    Plot one aggregate metric.
-    """
-
-    plot_df = aggregate_summary[aggregate_summary["metric"] == metric].copy()
-    plot_df = plot_df.sort_values("class1_high_balk")
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-
-    ax.errorbar(
-        plot_df["class1_high_balk"],
-        plot_df["mean"],
-        yerr=plot_df["ci95"],
-        marker="o",
-        capsize=3,
+    ax.legend(
+        title="Series",
+        frameon=False,
+        loc="center left",
+        bbox_to_anchor=(1.02, 0.5),
     )
 
-    ax.set_title(title)
-    ax.set_xlabel("Class 1 high balking probability")
-    ax.set_ylabel(ylabel)
-    ax.set_xticks(CLASS1_HIGH_BALK_VALUES)
-    ax.grid(True, alpha=0.3)
-
     fig.tight_layout()
-    fig.savefig(output_path, dpi=300)
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -329,46 +413,65 @@ def create_figures(
     aggregate_summary: pd.DataFrame,
 ) -> None:
     """
-    Create the four requested figures:
+    Create one figure per reported metric:
 
-    1. Mean accepted booking delay by class
-    2. Mean offered booking delay by class
-    3. Aggregate average utilization
-    4. Percent serviced by class
+    1. Mean accepted booking delay
+    2. Mean offered booking delay
+    3. Average utilization
+    4. Percent serviced
+    5. Balking rate
     """
 
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
 
-    plot_class_metric(
+    plot_overall_and_class_metric(
         class_summary=class_summary,
-        metric="mean_accepted_booking_delay",
-        title="Mean Accepted Booking Delay by Class",
+        aggregate_summary=aggregate_summary,
+        class_metric="mean_accepted_booking_delay",
+        aggregate_metric="mean_accepted_booking_delay",
+        title="Mean Accepted Booking Delay",
         ylabel="Mean accepted booking delay",
         output_path=FIGURE_DIR / "mean_accepted_delay_by_class.png",
     )
 
-    plot_class_metric(
+    plot_overall_and_class_metric(
         class_summary=class_summary,
-        metric="mean_offered_booking_delay",
-        title="Mean Offered Booking Delay by Class",
+        aggregate_summary=aggregate_summary,
+        class_metric="mean_offered_booking_delay",
+        aggregate_metric="mean_offered_booking_delay",
+        title="Mean Offered Booking Delay",
         ylabel="Mean offered booking delay",
         output_path=FIGURE_DIR / "mean_offered_delay_by_class.png",
     )
 
-    plot_aggregate_metric(
+    plot_overall_and_class_metric(
+        class_summary=class_summary,
         aggregate_summary=aggregate_summary,
-        metric="average_utilization",
-        title="Aggregate Average Utilization",
-        ylabel="Average utilization",
+        class_metric="slot_utilization",
+        aggregate_metric="average_utilization",
+        title="Average Utilization and Class Slot Shares",
+        ylabel="Share of available slots",
         output_path=FIGURE_DIR / "average_utilization_aggregate.png",
     )
 
-    plot_class_metric(
+    plot_overall_and_class_metric(
         class_summary=class_summary,
-        metric="percent_serviced",
-        title="Percent Serviced by Class",
-        ylabel="Percent serviced",
+        aggregate_summary=aggregate_summary,
+        class_metric="percent_serviced",
+        aggregate_metric="overall_percent_serviced",
+        title="Served Rate",
+        ylabel="Served rate",
         output_path=FIGURE_DIR / "percent_serviced_by_class.png",
+    )
+
+    plot_overall_and_class_metric(
+        class_summary=class_summary,
+        aggregate_summary=aggregate_summary,
+        class_metric="balking_rate",
+        aggregate_metric="overall_balking_rate",
+        title="Balking Rate Among Offered Patients",
+        ylabel="Balked / offered",
+        output_path=FIGURE_DIR / "balking_rate_by_class.png",
     )
 
 

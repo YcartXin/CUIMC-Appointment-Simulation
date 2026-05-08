@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
+from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm, to_rgb
 import numpy as np
 import pandas as pd
 
@@ -77,15 +77,140 @@ FEATURE_LABELS = {
     "cancel_prob_gap_c1_minus_c2": "cancellation prob. gap",
 }
 
-OVERALL_COLOR = "#222222"
-CLASS_1_COLOR = "#1f77b4"
-CLASS_2_COLOR = "#ff7f0e"
-UTILIZATION_COLOR = "#2ca02c"
-BASELINE_COLOR = "#6b6b6b"
-CLASS_GAP_CMAP = LinearSegmentedColormap.from_list(
-    "class_gap_orange_white_blue",
-    [CLASS_2_COLOR, "#f7f7f7", CLASS_1_COLOR],
-)
+ARRIVAL_COLOR = "#1f77b4"
+BALKING_COLOR = "#9467bd"
+NO_SHOW_COLOR = "#2ca02c"
+CANCELLATION_COLOR = "#d62728"
+BASELINE_COLOR = "#7f7f7f"
+
+# Backward-compatible aliases for older figure code. The color meaning is now
+# driver family, not metric family.
+OVERALL_COLOR = ARRIVAL_COLOR
+ACCESS_COLOR = ARRIVAL_COLOR
+UTILIZATION_COLOR = NO_SHOW_COLOR
+WAIT_COLOR = BALKING_COLOR
+ACCEPTED_WAIT_COLOR = BALKING_COLOR
+CLASS_1_COLOR = ARRIVAL_COLOR
+CLASS_2_COLOR = CANCELLATION_COLOR
+
+
+def blend_color(color, target="#ffffff", amount=0.5):
+    base_rgb = np.array(to_rgb(color))
+    target_rgb = np.array(to_rgb(target))
+    mixed = (1.0 - amount) * base_rgb + amount * target_rgb
+    return tuple(mixed)
+
+
+DRIVER_COLORS = {
+    "arrival": ARRIVAL_COLOR,
+    "balking": BALKING_COLOR,
+    "no_show": NO_SHOW_COLOR,
+    "cancellation": CANCELLATION_COLOR,
+}
+DRIVER_LABELS = {
+    "arrival": "Arrival pressure / mix",
+    "balking": "Balking",
+    "no_show": "No-show",
+    "cancellation": "Cancellation",
+}
+
+
+def driver_cmap(driver):
+    color = DRIVER_COLORS[driver]
+    return LinearSegmentedColormap.from_list(
+        f"{driver}_sequential",
+        [blend_color(color, amount=0.92), blend_color(color, amount=0.55), color, blend_color(color, "#000000", 0.18)],
+    )
+
+
+def driver_gap_cmap(driver):
+    color = DRIVER_COLORS[driver]
+    return LinearSegmentedColormap.from_list(
+        f"{driver}_gap",
+        [blend_color(color, amount=0.78), "#ffffff", blend_color(color, "#000000", 0.12)],
+    )
+
+
+DRIVER_CMAPS = {driver: driver_cmap(driver) for driver in DRIVER_COLORS}
+DRIVER_GAP_CMAPS = {driver: driver_gap_cmap(driver) for driver in DRIVER_COLORS}
+ACCESS_CMAP = DRIVER_CMAPS["arrival"]
+UTILIZATION_CMAP = DRIVER_CMAPS["no_show"]
+WAIT_CMAP = DRIVER_CMAPS["balking"]
+BALKING_CMAP = DRIVER_CMAPS["balking"]
+CLASS_GAP_CMAP = DRIVER_GAP_CMAPS["arrival"]
+
+
+def driver_from_text(*values):
+    text = " ".join(str(value).lower() for value in values if value is not None)
+    if "no_show" in text or "no-show" in text or "no show" in text:
+        return "no_show"
+    if "balk" in text:
+        return "balking"
+    if "cancel" in text:
+        return "cancellation"
+    if "arrival" in text or "lambda" in text or "class_1_share" in text or "capacity stress" in text:
+        return "arrival"
+    return None
+
+
+def series_role(label, index=0):
+    text = str(label).lower()
+    if "class 1" in text or "class_1" in text:
+        return "class_1"
+    if "class 2" in text or "class_2" in text:
+        return "class_2"
+    if index == 1:
+        return "class_1"
+    if index == 2:
+        return "class_2"
+    return "overall"
+
+
+def driver_line_style(driver, label, index=0):
+    if driver is None:
+        return {}
+
+    color = DRIVER_COLORS[driver]
+    role = series_role(label, index)
+    styles = {
+        "overall": {
+            "color": color,
+            "linestyle": "-",
+            "marker": "o",
+            "linewidth": 2.5,
+        },
+        "class_1": {
+            "color": blend_color(color, "#000000", 0.10),
+            "linestyle": "--",
+            "marker": "s",
+            "linewidth": 2.2,
+        },
+        "class_2": {
+            "color": blend_color(color, amount=0.24),
+            "linestyle": ":",
+            "marker": "^",
+            "linewidth": 2.2,
+        },
+    }
+    return styles[role]
+
+
+def plot_driver_line(ax, x, y, label, driver=None, color=None, index=0, **kwargs):
+    style = driver_line_style(driver, label, index)
+    if not style:
+        style = {
+            "marker": "o",
+            "linewidth": kwargs.pop("linewidth", 2.2),
+            "color": color,
+        }
+    style.update(kwargs)
+    ax.plot(x, y, label=label, **style)
+
+
+def driver_heatmap_cmap(driver, diverging=False):
+    if driver is None:
+        return CLASS_GAP_CMAP if diverging else ACCESS_CMAP
+    return DRIVER_GAP_CMAPS[driver] if diverging else DRIVER_CMAPS[driver]
 
 
 def run_result(config, seed):
@@ -107,9 +232,14 @@ def aggregate_delay_metrics(result):
 def result_metrics_from_result(result):
     c1 = result.class_metrics[1]
     c2 = result.class_metrics[2]
+    total_slots = result.total_slots
 
     class_1_delay = c1.mean_offered_booking_delay
     class_2_delay = c2.mean_offered_booking_delay
+    offered = c1.offered + c2.offered
+    overall_balking_rate = (c1.balked + c2.balked) / offered if offered else 0.0
+    class_1_balking_rate = c1.balked / c1.offered if c1.offered else 0.0
+    class_2_balking_rate = c2.balked / c2.offered if c2.offered else 0.0
 
     return {
         "average_utilization": result.average_utilization,
@@ -117,9 +247,15 @@ def result_metrics_from_result(result):
         **aggregate_delay_metrics(result),
         "class_1_percent_serviced": c1.percent_serviced,
         "class_2_percent_serviced": c2.percent_serviced,
+        "overall_balking_rate": overall_balking_rate,
+        "class_1_balking_rate": class_1_balking_rate,
+        "class_2_balking_rate": class_2_balking_rate,
+        "class_1_slot_utilization": c1.served / total_slots if total_slots else 0.0,
+        "class_2_slot_utilization": c2.served / total_slots if total_slots else 0.0,
         "class_1_mean_offered_booking_delay": class_1_delay,
         "class_2_mean_offered_booking_delay": class_2_delay,
         "access_advantage_class_1": c1.percent_serviced - c2.percent_serviced,
+        "balking_rate_gap_class_1": class_1_balking_rate - class_2_balking_rate,
         "delay_advantage_class_1": class_2_delay - class_1_delay,
     }
 
@@ -341,7 +477,7 @@ def heatmap_panel(
         norm = TwoSlopeNorm(vmin=-max_abs, vcenter=0.0, vmax=max_abs) if max_abs > 0 else None
         image = ax.imshow(table.values, origin="lower", aspect="auto", cmap=cmap or CLASS_GAP_CMAP, norm=norm)
     else:
-        image = ax.imshow(table.values, origin="lower", aspect="auto", cmap=cmap or "YlGnBu", vmin=vmin, vmax=vmax)
+        image = ax.imshow(table.values, origin="lower", aspect="auto", cmap=cmap or ACCESS_CMAP, vmin=vmin, vmax=vmax)
 
     ax.set_title(title, fontsize=13)
     ax.set_xlabel(xlabel, fontsize=11)
@@ -372,7 +508,8 @@ def mark_heatmap_slice(ax, table, fixed_y=None, fixed_x=None):
         ax.axvline(x_pos, color="white", linestyle="--", linewidth=1.7)
 
 
-def draw_four_panel(df, x_name, y_name, xlabel, ylabel, filename, title, fixed_y=None, fixed_x=None, subtitle=None):
+def draw_four_panel(df, x_name, y_name, xlabel, ylabel, filename, title, fixed_y=None, fixed_x=None, subtitle=None, driver=None):
+    driver = driver or driver_from_text(filename, title, xlabel, ylabel, x_name, y_name)
     specs = [
         ("average_utilization", "Average utilization", False),
         ("overall_percent_serviced", "Overall percent serviced", False),
@@ -385,9 +522,12 @@ def draw_four_panel(df, x_name, y_name, xlabel, ylabel, filename, title, fixed_y
 
     for ax, (metric, panel_title, diverging) in zip(axes.ravel(), specs):
         table = pivot(df, x_name, y_name, metric)
-        image = heatmap_panel(ax, table, panel_title, xlabel, ylabel, diverging=diverging)
+        _, colorbar_label = metric_heatmap_style(metric)
+        cmap = driver_heatmap_cmap(driver, diverging=diverging)
+        image = heatmap_panel(ax, table, panel_title, xlabel, ylabel, diverging=diverging, cmap=cmap)
         mark_heatmap_slice(ax, table, fixed_y=fixed_y, fixed_x=fixed_x)
-        fig.colorbar(image, ax=ax, shrink=0.85)
+        colorbar = fig.colorbar(image, ax=ax, shrink=0.85)
+        colorbar.set_label(colorbar_label)
 
     fig.savefig(OUT_DIR / filename, dpi=190, bbox_inches="tight")
     plt.close(fig)
@@ -404,7 +544,9 @@ def draw_behavior_panel(
     fixed_y=None,
     fixed_x=None,
     subtitle=None,
+    driver=None,
 ):
+    driver = driver or driver_from_text(filename, title, xlabel, ylabel, x_name, y_name)
     specs = [
         ("overall_percent_serviced", "Overall served rate", "rate", False),
         ("class_1_percent_serviced", "Class 1 served rate", "rate", False),
@@ -426,6 +568,7 @@ def draw_behavior_panel(
 
     for ax, (metric, panel_title, units, diverging) in zip(axes.ravel(), specs):
         table = pivot(df, x_name, y_name, metric)
+        cmap = driver_heatmap_cmap(driver, diverging=diverging)
         if units == "rate":
             image = heatmap_panel(
                 ax,
@@ -436,6 +579,7 @@ def draw_behavior_panel(
                 diverging=diverging,
                 vmin=rate_vmin,
                 vmax=rate_vmax,
+                cmap=cmap,
             )
         else:
             image = heatmap_panel(
@@ -447,6 +591,7 @@ def draw_behavior_panel(
                 diverging=diverging,
                 vmin=wait_vmin,
                 vmax=wait_vmax,
+                cmap=cmap,
             )
         mark_heatmap_slice(ax, table, fixed_y=fixed_y, fixed_x=fixed_x)
         colorbar = fig.colorbar(image, ax=ax, shrink=0.85)
@@ -457,32 +602,37 @@ def draw_behavior_panel(
 
 
 def metric_heatmap_style(metric):
+    if "advantage" in metric or "gap" in metric:
+        return CLASS_GAP_CMAP, "Class 1 - Class 2"
+    if "balking_rate" in metric:
+        return BALKING_CMAP, "rate"
     if metric == "average_utilization":
-        return "Greens", "rate"
+        return UTILIZATION_CMAP, "rate"
     if metric in {"overall_percent_serviced", "class_1_percent_serviced", "class_2_percent_serviced"}:
-        return "YlGnBu", "rate"
+        return ACCESS_CMAP, "rate"
     if "booking_delay" in metric:
-        return "YlOrRd", "days"
-    if "advantage" in metric:
-        return CLASS_GAP_CMAP, "difference"
-    return "YlGnBu", "value"
+        return WAIT_CMAP, "days"
+    return ACCESS_CMAP, "value"
 
 
-def draw_two_metric_heatmap(df, x_name, y_name, xlabel, ylabel, filename, title, panels, fixed_y=None, fixed_x=None):
+def draw_two_metric_heatmap(df, x_name, y_name, xlabel, ylabel, filename, title, panels, fixed_y=None, fixed_x=None, driver=None):
+    driver = driver or driver_from_text(filename, title, xlabel, ylabel, x_name, y_name)
     fig, axes = plt.subplots(1, 2, figsize=(13.8, 5.8), constrained_layout=True)
     fig.suptitle(title, fontsize=15)
 
     for ax, panel in zip(axes, panels):
         table = pivot(df, x_name, y_name, panel["metric"])
         cmap, default_label = metric_heatmap_style(panel["metric"])
+        diverging = panel.get("diverging", False)
+        panel_cmap = driver_heatmap_cmap(driver, diverging=diverging) if driver else panel.get("cmap", CLASS_GAP_CMAP if diverging else cmap)
         image = heatmap_panel(
             ax,
             table,
             panel["title"],
             xlabel,
             ylabel,
-            diverging=panel.get("diverging", False),
-            cmap=panel.get("cmap", cmap),
+            diverging=diverging,
+            cmap=panel_cmap,
             max_ticks=panel.get("max_ticks", 8),
         )
         mark_heatmap_slice(ax, table, fixed_y=fixed_y, fixed_x=fixed_x)
@@ -504,6 +654,13 @@ def slice_with_fixed(df, x_name, y_name, fixed_axis, fixed_value):
         return df[df[y_name] == actual_value].sort_values(x_name).copy(), actual_value
     actual_value = nearest_value(df[x_name].unique(), fixed_value)
     return df[df[x_name] == actual_value].sort_values(y_name).copy(), actual_value
+
+
+def diagonal_slice(df, x_name, y_name, common_name):
+    mask = np.isclose(df[x_name].astype(float), df[y_name].astype(float))
+    data = df[mask].copy()
+    data[common_name] = data[x_name]
+    return data.sort_values(common_name)
 
 
 def style_line_axis(ax, xlabel, ylabel, y_range=None):
@@ -529,21 +686,23 @@ def draw_slice_metric_figure(
     metrics,
     metric_ylabel,
     y_range=None,
+    driver=None,
 ):
+    driver = driver or driver_from_text(filename, title, xlabel, ylabel, x_name, y_name)
     left_df, left_fixed = slice_with_fixed(df, x_name, y_name, y_name, baseline_y)
     right_df, right_fixed = slice_with_fixed(df, x_name, y_name, x_name, baseline_x)
 
     fig, axes = plt.subplots(1, 2, figsize=(13.8, 5.2), constrained_layout=True, sharey=y_range is not None)
     fig.suptitle(title, fontsize=15)
 
-    for metric, label, color in metrics:
-        axes[0].plot(left_df[x_name], left_df[metric], marker="o", linewidth=2.2, color=color, label=label)
+    for index, (metric, label, color) in enumerate(metrics):
+        plot_driver_line(axes[0], left_df[x_name], left_df[metric], label, driver=driver, color=color, index=index)
     axes[0].axvline(baseline_x, color=BASELINE_COLOR, linestyle="--", linewidth=1.2, label="baseline")
     axes[0].set_title(f"Class 1 varies; Class 2 fixed at {format_axis_value(left_fixed)}")
     style_line_axis(axes[0], xlabel, metric_ylabel, y_range=y_range)
 
-    for metric, label, color in metrics:
-        axes[1].plot(right_df[y_name], right_df[metric], marker="o", linewidth=2.2, color=color, label=label)
+    for index, (metric, label, color) in enumerate(metrics):
+        plot_driver_line(axes[1], right_df[y_name], right_df[metric], label, driver=driver, color=color, index=index)
     axes[1].axvline(baseline_y, color=BASELINE_COLOR, linestyle="--", linewidth=1.2, label="baseline")
     axes[1].set_title(f"Class 2 varies; Class 1 fixed at {format_axis_value(right_fixed)}")
     style_line_axis(axes[1], ylabel, metric_ylabel, y_range=y_range)
@@ -555,6 +714,7 @@ def draw_slice_metric_figure(
 
 
 def draw_behavior_slice_figures(df, x_name, y_name, baseline_x, baseline_y, xlabel, ylabel, prefix, title):
+    driver = driver_from_text(prefix, title, xlabel, ylabel, x_name, y_name)
     draw_slice_metric_figure(
         df,
         x_name,
@@ -572,6 +732,7 @@ def draw_behavior_slice_figures(df, x_name, y_name, baseline_x, baseline_y, xlab
         ],
         "served rate",
         y_range=(0, 1.05),
+        driver=driver,
     )
     draw_slice_metric_figure(
         df,
@@ -586,6 +747,7 @@ def draw_behavior_slice_figures(df, x_name, y_name, baseline_x, baseline_y, xlab
         [("average_utilization", "utilization", UTILIZATION_COLOR)],
         "utilization",
         y_range=(0, 1.05),
+        driver=driver,
     )
     draw_slice_metric_figure(
         df,
@@ -603,7 +765,28 @@ def draw_behavior_slice_figures(df, x_name, y_name, baseline_x, baseline_y, xlab
             ("class_2_mean_offered_booking_delay", "Class 2", CLASS_2_COLOR),
         ],
         "offered wait (days)",
+        driver=driver,
     )
+    if prefix.startswith("balking"):
+        draw_slice_metric_figure(
+            df,
+            x_name,
+            y_name,
+            baseline_x,
+            baseline_y,
+            xlabel,
+            ylabel,
+            f"{prefix}_slice_balking_rate.png",
+            f"{title}: balking-rate slices",
+            [
+                ("overall_balking_rate", "overall", OVERALL_COLOR),
+                ("class_1_balking_rate", "Class 1", CLASS_1_COLOR),
+                ("class_2_balking_rate", "Class 2", CLASS_2_COLOR),
+            ],
+            "balking rate among offered patients",
+            y_range=(0, 1.05),
+            driver=driver,
+        )
 
 
 def draw_arrival_rate_slice_figures(df, baseline_share):
@@ -641,9 +824,10 @@ def draw_arrival_rate_slice_figures(df, baseline_share):
     ]
 
     for filename, title, metrics, ylabel, y_range in specs:
+        driver = "arrival"
         fig, ax = plt.subplots(figsize=(8.8, 5.2), constrained_layout=True)
-        for metric, label, color in metrics:
-            ax.plot(slice_df["lambda_total"], slice_df[metric], marker="o", linewidth=2.2, color=color, label=label)
+        for index, (metric, label, color) in enumerate(metrics):
+            plot_driver_line(ax, slice_df["lambda_total"], slice_df[metric], label, driver=driver, color=color, index=index)
         ax.axvline(sum(params.lambda_per_day for params in BASE_CONFIG.classes.values()), color=BASELINE_COLOR, linestyle="--", linewidth=1.2, label="baseline")
         ax.set_title(f"{title}\nClass 1 share fixed at {actual_share:.2f}")
         style_line_axis(ax, "total arrivals per day", ylabel, y_range=y_range)
@@ -666,8 +850,11 @@ def draw_single_metric_heatmap(
     fixed_x=None,
     vmin=None,
     vmax=None,
+    driver=None,
 ):
+    driver = driver or driver_from_text(filename, title, xlabel, ylabel, x_name, y_name)
     table = pivot(df, x_name, y_name, metric)
+    cmap = driver_heatmap_cmap(driver, diverging=False) if driver else metric_heatmap_style(metric)[0]
 
     fig, ax = plt.subplots(figsize=(8.5, 6.5), constrained_layout=True)
     image = heatmap_panel(
@@ -679,6 +866,7 @@ def draw_single_metric_heatmap(
         diverging=False,
         vmin=vmin,
         vmax=vmax,
+        cmap=cmap,
     )
     mark_heatmap_slice(ax, table, fixed_y=fixed_y, fixed_x=fixed_x)
     colorbar = fig.colorbar(image, ax=ax, shrink=0.85)
@@ -766,6 +954,7 @@ def draw_balking_threshold_class_service_heatmaps(df, baseline_balk_threshold):
 
 
 def draw_balking_slice_lines(df, x_name, y_name, fixed_y, baseline_x, xlabel, fixed_label, filename, title):
+    driver = "balking"
     y_values = sorted(df[y_name].unique())
     nearest_y = y_values[nearest_position(y_values, fixed_y)]
     slice_df = df[df[y_name] == nearest_y].copy()
@@ -782,11 +971,11 @@ def draw_balking_slice_lines(df, x_name, y_name, fixed_y, baseline_x, xlabel, fi
     fig, axes = plt.subplots(2, 2, figsize=(12, 8.5), constrained_layout=True)
     fig.suptitle(f"{title}\n{fixed_label}; all other parameters fixed at baseline", fontsize=14)
 
-    for ax, (metric, panel_title, ylabel) in zip(axes.ravel(), specs):
-        ax.plot(slice_df[x_name], slice_df[metric], marker="o", linewidth=2)
-        ax.axvline(baseline_x, color="black", linestyle="--", linewidth=1.1, label="class 1 baseline")
+    for index, (ax, (metric, panel_title, ylabel)) in enumerate(zip(axes.ravel(), specs)):
+        plot_driver_line(ax, slice_df[x_name], slice_df[metric], panel_title, driver=driver, index=index)
+        ax.axvline(baseline_x, color=BASELINE_COLOR, linestyle="--", linewidth=1.1, label="class 1 baseline")
         if "advantage" in metric:
-            ax.axhline(0, color="gray", linewidth=0.9)
+            ax.axhline(0, color=BASELINE_COLOR, linewidth=0.9)
         ax.set_title(panel_title)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
@@ -797,7 +986,8 @@ def draw_balking_slice_lines(df, x_name, y_name, fixed_y, baseline_x, xlabel, fi
     return slice_df
 
 
-def draw_threshold_jump_panel(df, x_name, y_name, xlabel, ylabel, filename, title):
+def draw_threshold_jump_panel(df, x_name, y_name, xlabel, ylabel, filename, title, driver=None):
+    driver = driver or driver_from_text(filename, title, xlabel, ylabel, x_name, y_name)
     specs = [
         ("average_utilization", "Average utilization", False),
         ("overall_percent_serviced", "Overall percent serviced", False),
@@ -810,8 +1000,11 @@ def draw_threshold_jump_panel(df, x_name, y_name, xlabel, ylabel, filename, titl
 
     for ax, (metric, panel_title, diverging) in zip(axes.ravel(), specs):
         table = pivot(df, x_name, y_name, metric)
-        image = heatmap_panel(ax, table, panel_title, xlabel, ylabel, diverging=diverging)
-        fig.colorbar(image, ax=ax, shrink=0.85)
+        _, colorbar_label = metric_heatmap_style(metric)
+        cmap = driver_heatmap_cmap(driver, diverging=diverging)
+        image = heatmap_panel(ax, table, panel_title, xlabel, ylabel, diverging=diverging, cmap=cmap)
+        colorbar = fig.colorbar(image, ax=ax, shrink=0.85)
+        colorbar.set_label(colorbar_label)
 
     fig.savefig(OUT_DIR / filename, dpi=190, bbox_inches="tight")
     plt.close(fig)
@@ -824,15 +1017,30 @@ def draw_scenario_comparison():
 
     df = pd.DataFrame(rows)
     fig, axes = plt.subplots(1, 3, figsize=(14, 4), constrained_layout=True)
-    df.set_index("scenario")[["average_utilization", "overall_percent_serviced"]].plot(kind="bar", ax=axes[0], rot=0)
+    df.set_index("scenario")[["average_utilization", "overall_percent_serviced"]].plot(
+        kind="bar",
+        ax=axes[0],
+        rot=0,
+        color=[UTILIZATION_COLOR, ACCESS_COLOR],
+    )
     axes[0].set_title("Aggregate rates")
     axes[0].set_ylabel("rate")
     axes[0].set_ylim(0, 1.05)
-    df.set_index("scenario")[["mean_accepted_booking_delay", "mean_offered_booking_delay"]].plot(kind="bar", ax=axes[1], rot=0)
+    df.set_index("scenario")[["mean_accepted_booking_delay", "mean_offered_booking_delay"]].plot(
+        kind="bar",
+        ax=axes[1],
+        rot=0,
+        color=[ACCEPTED_WAIT_COLOR, WAIT_COLOR],
+    )
     axes[1].set_title("Booking-delay metrics")
     axes[1].set_ylabel("days")
-    df.set_index("scenario")[["access_advantage_class_1", "delay_advantage_class_1"]].plot(kind="bar", ax=axes[2], rot=0)
-    axes[2].axhline(0, color="black", linewidth=0.8)
+    df.set_index("scenario")[["access_advantage_class_1", "delay_advantage_class_1"]].plot(
+        kind="bar",
+        ax=axes[2],
+        rot=0,
+        color=[CLASS_1_COLOR, CLASS_2_COLOR],
+    )
+    axes[2].axhline(0, color=BASELINE_COLOR, linewidth=0.8)
     axes[2].set_title("Class 1 advantage")
     axes[2].set_ylabel("difference")
     fig.savefig(OUT_DIR / "scenario_metric_comparison.png", dpi=190, bbox_inches="tight")
@@ -878,8 +1086,8 @@ def draw_arrival_mix():
         "arrival_mix_interaction_heatmap.png",
         "Arrival rate and class mix",
         [
-            {"metric": "overall_percent_serviced", "title": "Overall served rate", "label": "rate", "cmap": "YlGnBu"},
-            {"metric": "mean_offered_booking_delay", "title": "Overall offered wait", "label": "days", "cmap": "YlOrRd"},
+            {"metric": "overall_percent_serviced", "title": "Overall served rate", "label": "rate", "cmap": ACCESS_CMAP},
+            {"metric": "mean_offered_booking_delay", "title": "Overall offered wait", "label": "days", "cmap": WAIT_CMAP},
         ],
     )
     baseline_share = BASE_CONFIG.classes[1].lambda_per_day / lambda_total_base
@@ -909,18 +1117,18 @@ def draw_class_arrival_lines():
         data = df[df.target_class == target_class].sort_values("lambda_per_day")
 
         ax = axes[row_index, 0]
-        ax.plot(data.lambda_per_day, data.average_utilization, marker="o", label="average utilization")
-        ax.plot(data.lambda_per_day, data.overall_percent_serviced, marker="o", label="overall percent serviced")
-        ax.plot(data.lambda_per_day, data[f"class_{target_class}_percent_serviced"], marker="o", label=f"class {target_class} percent serviced")
+        plot_driver_line(ax, data.lambda_per_day, data.average_utilization, "average utilization", driver="arrival", index=0)
+        plot_driver_line(ax, data.lambda_per_day, data.overall_percent_serviced, "overall percent serviced", driver="arrival", index=1)
+        plot_driver_line(ax, data.lambda_per_day, data[f"class_{target_class}_percent_serviced"], f"class {target_class} percent serviced", driver="arrival", index=2)
         ax.set_title(f"Class {target_class}: rates vs own arrival rate")
         ax.set_xlabel("lambda per day")
         ax.set_ylabel("rate")
         ax.legend()
 
         ax = axes[row_index, 1]
-        ax.plot(data.lambda_per_day, data.access_advantage_class_1, marker="o", label="class 1 access advantage")
-        ax.plot(data.lambda_per_day, data.delay_advantage_class_1, marker="o", label="class 1 delay advantage")
-        ax.axhline(0, color="black", linewidth=0.8)
+        plot_driver_line(ax, data.lambda_per_day, data.access_advantage_class_1, "class 1 access advantage", driver="arrival", index=0)
+        plot_driver_line(ax, data.lambda_per_day, data.delay_advantage_class_1, "class 1 delay advantage", driver="arrival", index=1)
+        ax.axhline(0, color=BASELINE_COLOR, linewidth=0.8)
         ax.set_title(f"Class {target_class}: class advantage vs own arrival rate")
         ax.set_xlabel("lambda per day")
         ax.set_ylabel("difference")
@@ -959,9 +1167,9 @@ def draw_fcfs_capacity_stress():
 
     ax = axes[0, 0]
     baseline_lambda_total = lambda_total_base
-    ax.plot(df.lambda_total, df.average_utilization, marker="o", label="average utilization")
-    ax.plot(df.lambda_total, df.overall_percent_serviced, marker="o", label="overall percent serviced")
-    ax.axvline(baseline_lambda_total, color="black", linewidth=0.8, linestyle="--")
+    plot_driver_line(ax, df.lambda_total, df.average_utilization, "average utilization", driver="arrival", index=0)
+    plot_driver_line(ax, df.lambda_total, df.overall_percent_serviced, "overall percent serviced", driver="arrival", index=1)
+    ax.axvline(baseline_lambda_total, color=BASELINE_COLOR, linewidth=0.8, linestyle="--")
     ax.set_title("Capacity and access")
     ax.set_xlabel("total arrivals per day")
     ax.set_ylabel("rate")
@@ -969,18 +1177,18 @@ def draw_fcfs_capacity_stress():
     ax.legend()
 
     ax = axes[0, 1]
-    ax.plot(df.lambda_total, df.mean_accepted_booking_delay, marker="o", label="accepted delay")
-    ax.plot(df.lambda_total, df.mean_offered_booking_delay, marker="o", label="offered delay")
-    ax.axvline(baseline_lambda_total, color="black", linewidth=0.8, linestyle="--")
+    plot_driver_line(ax, df.lambda_total, df.mean_accepted_booking_delay, "accepted delay", driver="arrival", index=0)
+    plot_driver_line(ax, df.lambda_total, df.mean_offered_booking_delay, "offered delay", driver="arrival", index=1)
+    ax.axvline(baseline_lambda_total, color=BASELINE_COLOR, linewidth=0.8, linestyle="--")
     ax.set_title("Booking delay")
     ax.set_xlabel("total arrivals per day")
     ax.set_ylabel("days")
     ax.legend()
 
     ax = axes[1, 0]
-    ax.plot(df.lambda_total, df.class_1_percent_serviced, marker="o", label="class 1")
-    ax.plot(df.lambda_total, df.class_2_percent_serviced, marker="o", label="class 2")
-    ax.axvline(baseline_lambda_total, color="black", linewidth=0.8, linestyle="--")
+    plot_driver_line(ax, df.lambda_total, df.class_1_percent_serviced, "class 1", driver="arrival", index=0)
+    plot_driver_line(ax, df.lambda_total, df.class_2_percent_serviced, "class 2", driver="arrival", index=1)
+    ax.axvline(baseline_lambda_total, color=BASELINE_COLOR, linewidth=0.8, linestyle="--")
     ax.set_title("Class access under FCFS")
     ax.set_xlabel("total arrivals per day")
     ax.set_ylabel("percent serviced")
@@ -988,10 +1196,10 @@ def draw_fcfs_capacity_stress():
     ax.legend()
 
     ax = axes[1, 1]
-    ax.plot(df.lambda_total, df.balked_rate, marker="o", label="balked")
-    ax.plot(df.lambda_total, df.no_offer_rate, marker="o", label="no offer")
-    ax.plot(df.lambda_total, df.lost_after_booking_rate, marker="o", label="lost after booking")
-    ax.axvline(baseline_lambda_total, color="black", linewidth=0.8, linestyle="--")
+    plot_driver_line(ax, df.lambda_total, df.balked_rate, "balked", driver="balking", index=0)
+    plot_driver_line(ax, df.lambda_total, df.no_offer_rate, "no offer", driver="arrival", index=1)
+    plot_driver_line(ax, df.lambda_total, df.lost_after_booking_rate, "lost after booking", driver="cancellation", index=2)
+    ax.axvline(baseline_lambda_total, color=BASELINE_COLOR, linewidth=0.8, linestyle="--")
     ax.set_title("Main loss channels")
     ax.set_xlabel("total arrivals per day")
     ax.set_ylabel("share of arrivals")
@@ -1002,15 +1210,15 @@ def draw_fcfs_capacity_stress():
     plt.close(fig)
 
     fig, axes = plt.subplots(1, 2, figsize=(13.8, 5.2), constrained_layout=True)
-    axes[0].plot(df.lambda_total, df.average_utilization, marker="o", linewidth=2.2, color=UTILIZATION_COLOR, label="utilization")
-    axes[0].plot(df.lambda_total, df.overall_percent_serviced, marker="o", linewidth=2.2, color=OVERALL_COLOR, label="overall served rate")
+    plot_driver_line(axes[0], df.lambda_total, df.average_utilization, "utilization", driver="arrival", index=0)
+    plot_driver_line(axes[0], df.lambda_total, df.overall_percent_serviced, "overall served rate", driver="arrival", index=1)
     axes[0].axvline(baseline_lambda_total, color=BASELINE_COLOR, linewidth=1.2, linestyle="--", label="baseline")
     axes[0].set_title("Capacity use vs access")
     style_line_axis(axes[0], "total arrivals per day", "rate", y_range=(0, 1.05))
     axes[0].legend(frameon=False)
 
-    axes[1].plot(df.lambda_total, df.mean_offered_booking_delay, marker="o", linewidth=2.2, color=CLASS_2_COLOR, label="offered wait")
-    axes[1].plot(df.lambda_total, df.mean_accepted_booking_delay, marker="o", linewidth=2.2, color=CLASS_1_COLOR, label="accepted wait")
+    plot_driver_line(axes[1], df.lambda_total, df.mean_offered_booking_delay, "offered wait", driver="arrival", index=0)
+    plot_driver_line(axes[1], df.lambda_total, df.mean_accepted_booking_delay, "accepted wait", driver="arrival", index=1)
     axes[1].axvline(baseline_lambda_total, color=BASELINE_COLOR, linewidth=1.2, linestyle="--", label="baseline")
     axes[1].set_title("Waits under demand pressure")
     style_line_axis(axes[1], "total arrivals per day", "days")
@@ -1031,9 +1239,17 @@ def draw_fcfs_capacity_stress():
         df.lambda_total,
         *[df[column] for column, _ in outcomes],
         labels=[label for _, label in outcomes],
+        colors=[
+            ARRIVAL_COLOR,
+            NO_SHOW_COLOR,
+            CANCELLATION_COLOR,
+            blend_color(BASELINE_COLOR, amount=0.35),
+            BALKING_COLOR,
+            blend_color(ARRIVAL_COLOR, amount=0.45),
+        ],
         alpha=0.9,
     )
-    ax.axvline(baseline_lambda_total, color="black", linewidth=0.8, linestyle="--")
+    ax.axvline(baseline_lambda_total, color=BASELINE_COLOR, linewidth=0.8, linestyle="--")
     ax.set_title("Final outcome decomposition per arrival")
     ax.set_xlabel("total arrivals per day")
     ax.set_ylabel("share of arrivals")
@@ -1043,6 +1259,347 @@ def draw_fcfs_capacity_stress():
     plt.close(fig)
 
     return df
+
+
+def draw_metric_driver_panel(
+    ax,
+    data,
+    x_name,
+    series,
+    title,
+    xlabel,
+    ylabel,
+    baseline_x=None,
+    y_range=None,
+    zero_line=False,
+    driver=None,
+):
+    driver = driver or driver_from_text(title, xlabel, x_name)
+    for index, (metric, label, color) in enumerate(series):
+        plot_driver_line(ax, data[x_name], data[metric], label, driver=driver, color=color, index=index)
+    if baseline_x is not None:
+        ax.axvline(baseline_x, color=BASELINE_COLOR, linestyle="--", linewidth=1.2, label="baseline")
+    if zero_line:
+        ax.axhline(0, color=BASELINE_COLOR, linewidth=0.9)
+    ax.set_title(title)
+    style_line_axis(ax, xlabel, ylabel, y_range=y_range)
+    if len(series) > 1 or baseline_x is not None:
+        ax.legend(frameon=False, fontsize=9)
+
+
+def draw_metric_driver_figure(filename, title, panels):
+    fig, axes = plt.subplots(2, 2, figsize=(13.2, 8.8), constrained_layout=True)
+    fig.suptitle(title, fontsize=15)
+
+    for ax, panel in zip(axes.ravel(), panels):
+        draw_metric_driver_panel(ax=ax, **panel)
+
+    fig.savefig(OUT_DIR / filename, dpi=190, bbox_inches="tight")
+    plt.close(fig)
+
+
+def draw_metric_driver_figures(
+    class_arrival_df,
+    balk_step_df,
+    balk_threshold_df,
+    no_show_step_df,
+    no_show_threshold_df,
+    cancel_df,
+    baseline_balk_step,
+    baseline_balk_threshold,
+    baseline_no_show_step,
+    baseline_no_show_threshold,
+    baseline_cancel_prob,
+):
+    baseline_class_1_arrival = BASE_CONFIG.classes[1].lambda_per_day
+    class_1_arrival = class_arrival_df[class_arrival_df["target_class"] == 1].sort_values("lambda_per_day").copy()
+    balk_step_class_1, _ = slice_with_fixed(
+        balk_step_df,
+        "class_1_step",
+        "class_2_step",
+        "class_2_step",
+        baseline_balk_step,
+    )
+    balk_threshold_class_1, _ = slice_with_fixed(
+        balk_threshold_df,
+        "class_1_threshold",
+        "class_2_threshold",
+        "class_2_threshold",
+        baseline_balk_threshold,
+    )
+    no_show_step_class_1, _ = slice_with_fixed(
+        no_show_step_df,
+        "class_1_step",
+        "class_2_step",
+        "class_2_step",
+        baseline_no_show_step,
+    )
+    no_show_threshold_class_1, _ = slice_with_fixed(
+        no_show_threshold_df,
+        "class_1_threshold",
+        "class_2_threshold",
+        "class_2_threshold",
+        baseline_no_show_threshold,
+    )
+    cancel_class_1, _ = slice_with_fixed(
+        cancel_df,
+        "class_1_cancel_prob",
+        "class_2_cancel_prob",
+        "class_2_cancel_prob",
+        baseline_cancel_prob,
+    )
+
+    slot_utilization_series = [
+        ("average_utilization", "overall", OVERALL_COLOR),
+        ("class_1_slot_utilization", "Class 1", CLASS_1_COLOR),
+        ("class_2_slot_utilization", "Class 2", CLASS_2_COLOR),
+    ]
+    access_series = [
+        ("overall_percent_serviced", "overall", OVERALL_COLOR),
+        ("class_1_percent_serviced", "Class 1", CLASS_1_COLOR),
+        ("class_2_percent_serviced", "Class 2", CLASS_2_COLOR),
+    ]
+    wait_series = [
+        ("mean_offered_booking_delay", "overall", OVERALL_COLOR),
+        ("class_1_mean_offered_booking_delay", "Class 1", CLASS_1_COLOR),
+        ("class_2_mean_offered_booking_delay", "Class 2", CLASS_2_COLOR),
+    ]
+    balking_series = [
+        ("overall_balking_rate", "overall", OVERALL_COLOR),
+        ("class_1_balking_rate", "Class 1", CLASS_1_COLOR),
+        ("class_2_balking_rate", "Class 2", CLASS_2_COLOR),
+    ]
+
+    draw_metric_driver_figure(
+        "metric_utilization_drivers.png",
+        "Average utilization: Class 1 slices with Class 2 fixed",
+        [
+            {
+                "data": class_1_arrival,
+                "x_name": "lambda_per_day",
+                "series": slot_utilization_series,
+                "title": "Class 1 arrival rate changes",
+                "xlabel": "Class 1 arrivals per day",
+                "ylabel": "slot share",
+                "baseline_x": baseline_class_1_arrival,
+                "y_range": (0, 1.05),
+            },
+            {
+                "data": no_show_step_class_1,
+                "x_name": "class_1_step",
+                "series": slot_utilization_series,
+                "title": "Class 1 no-show step changes",
+                "xlabel": "Class 1 no-show high-delay probability",
+                "ylabel": "slot share",
+                "baseline_x": baseline_no_show_step,
+                "y_range": (0, 1.05),
+            },
+            {
+                "data": no_show_threshold_class_1,
+                "x_name": "class_1_threshold",
+                "series": slot_utilization_series,
+                "title": "Class 1 no-show threshold changes",
+                "xlabel": "Class 1 no-show threshold (days)",
+                "ylabel": "slot share",
+                "baseline_x": baseline_no_show_threshold,
+                "y_range": (0, 1.05),
+            },
+            {
+                "data": cancel_class_1,
+                "x_name": "class_1_cancel_prob",
+                "series": slot_utilization_series,
+                "title": "Class 1 cancellation changes",
+                "xlabel": "Class 1 cancellation probability",
+                "ylabel": "slot share",
+                "baseline_x": baseline_cancel_prob,
+                "y_range": (0, 1.05),
+            },
+        ],
+    )
+
+    draw_metric_driver_figure(
+        "metric_access_drivers.png",
+        "Served rate: Class 1 slices with Class 2 fixed",
+        [
+            {
+                "data": class_1_arrival,
+                "x_name": "lambda_per_day",
+                "series": access_series,
+                "title": "Class 1 arrival rate changes",
+                "xlabel": "Class 1 arrivals per day",
+                "ylabel": "served rate",
+                "baseline_x": baseline_class_1_arrival,
+                "y_range": (0, 1.05),
+            },
+            {
+                "data": balk_step_class_1,
+                "x_name": "class_1_step",
+                "series": access_series,
+                "title": "Class 1 balking step changes",
+                "xlabel": "Class 1 balking high-delay probability",
+                "ylabel": "served rate",
+                "baseline_x": baseline_balk_step,
+                "y_range": (0, 1.05),
+            },
+            {
+                "data": no_show_step_class_1,
+                "x_name": "class_1_step",
+                "series": access_series,
+                "title": "Class 1 no-show step changes",
+                "xlabel": "Class 1 no-show high-delay probability",
+                "ylabel": "served rate",
+                "baseline_x": baseline_no_show_step,
+                "y_range": (0, 1.05),
+            },
+            {
+                "data": cancel_class_1,
+                "x_name": "class_1_cancel_prob",
+                "series": access_series,
+                "title": "Class 1 cancellation changes",
+                "xlabel": "Class 1 cancellation probability",
+                "ylabel": "served rate",
+                "baseline_x": baseline_cancel_prob,
+                "y_range": (0, 1.05),
+            },
+        ],
+    )
+
+    draw_metric_driver_figure(
+        "metric_wait_drivers.png",
+        "Mean offered booking delay: Class 1 slices with Class 2 fixed",
+        [
+            {
+                "data": class_1_arrival,
+                "x_name": "lambda_per_day",
+                "series": wait_series,
+                "title": "Class 1 arrival rate changes",
+                "xlabel": "Class 1 arrivals per day",
+                "ylabel": "days",
+                "baseline_x": baseline_class_1_arrival,
+            },
+            {
+                "data": balk_step_class_1,
+                "x_name": "class_1_step",
+                "series": wait_series,
+                "title": "Class 1 balking step changes",
+                "xlabel": "Class 1 balking high-delay probability",
+                "ylabel": "days",
+                "baseline_x": baseline_balk_step,
+            },
+            {
+                "data": balk_threshold_class_1,
+                "x_name": "class_1_threshold",
+                "series": wait_series,
+                "title": "Class 1 balking threshold changes",
+                "xlabel": "Class 1 balking threshold (days)",
+                "ylabel": "days",
+                "baseline_x": baseline_balk_threshold,
+            },
+            {
+                "data": cancel_class_1,
+                "x_name": "class_1_cancel_prob",
+                "series": wait_series,
+                "title": "Class 1 cancellation changes",
+                "xlabel": "Class 1 cancellation probability",
+                "ylabel": "days",
+                "baseline_x": baseline_cancel_prob,
+            },
+        ],
+    )
+
+    draw_metric_driver_figure(
+        "metric_class_gap_drivers.png",
+        "Served-rate values behind class gaps: Class 1 slices",
+        [
+            {
+                "data": cancel_class_1,
+                "x_name": "class_1_cancel_prob",
+                "series": access_series,
+                "title": "Class 1 cancellation changes",
+                "xlabel": "Class 1 cancellation probability",
+                "ylabel": "served rate",
+                "baseline_x": baseline_cancel_prob,
+                "y_range": (0, 1.05),
+            },
+            {
+                "data": balk_step_class_1,
+                "x_name": "class_1_step",
+                "series": access_series,
+                "title": "Class 1 balking step changes",
+                "xlabel": "Class 1 balking high-delay probability",
+                "ylabel": "served rate",
+                "baseline_x": baseline_balk_step,
+                "y_range": (0, 1.05),
+            },
+            {
+                "data": balk_threshold_class_1,
+                "x_name": "class_1_threshold",
+                "series": access_series,
+                "title": "Class 1 balking threshold changes",
+                "xlabel": "Class 1 balking threshold (days)",
+                "ylabel": "served rate",
+                "baseline_x": baseline_balk_threshold,
+                "y_range": (0, 1.05),
+            },
+            {
+                "data": no_show_step_class_1,
+                "x_name": "class_1_step",
+                "series": access_series,
+                "title": "Class 1 no-show step changes",
+                "xlabel": "Class 1 no-show high-delay probability",
+                "ylabel": "served rate",
+                "baseline_x": baseline_no_show_step,
+                "y_range": (0, 1.05),
+            },
+        ],
+    )
+
+    draw_metric_driver_figure(
+        "metric_balking_rate_drivers.png",
+        "Balking rate: Class 1 slices with Class 2 fixed",
+        [
+            {
+                "data": class_1_arrival,
+                "x_name": "lambda_per_day",
+                "series": balking_series,
+                "title": "Class 1 arrival rate changes",
+                "xlabel": "Class 1 arrivals per day",
+                "ylabel": "balked / offered",
+                "baseline_x": baseline_class_1_arrival,
+                "y_range": (0, 1.05),
+            },
+            {
+                "data": balk_step_class_1,
+                "x_name": "class_1_step",
+                "series": balking_series,
+                "title": "Class 1 balking step changes",
+                "xlabel": "Class 1 balking high-delay probability",
+                "ylabel": "balked / offered",
+                "baseline_x": baseline_balk_step,
+                "y_range": (0, 1.05),
+            },
+            {
+                "data": balk_threshold_class_1,
+                "x_name": "class_1_threshold",
+                "series": balking_series,
+                "title": "Class 1 balking threshold changes",
+                "xlabel": "Class 1 balking threshold (days)",
+                "ylabel": "balked / offered",
+                "baseline_x": baseline_balk_threshold,
+                "y_range": (0, 1.05),
+            },
+            {
+                "data": cancel_class_1,
+                "x_name": "class_1_cancel_prob",
+                "series": balking_series,
+                "title": "Class 1 cancellation changes",
+                "xlabel": "Class 1 cancellation probability",
+                "ylabel": "balked / offered",
+                "baseline_x": baseline_cancel_prob,
+                "y_range": (0, 1.05),
+            },
+        ],
+    )
 
 
 def add_regression_features(df):
@@ -1137,9 +1694,12 @@ def plot_regression_coefficients(coef_df):
         data = coef_df[coef_df["target"] == target].copy()
         data = data.reindex(data["coefficient"].abs().sort_values(ascending=False).index).head(8)
         data = data.sort_values("coefficient")
-        colors = ["#2f6fbb" if value > 0 else "#bb4a4a" for value in data["coefficient"]]
+        colors = [
+            DRIVER_COLORS.get(driver_from_text(feature), BASELINE_COLOR)
+            for feature in data["feature"]
+        ]
         ax.barh(data["feature_label"], data["coefficient"], color=colors)
-        ax.axvline(0, color="black", linewidth=0.9)
+        ax.axvline(0, color=BASELINE_COLOR, linewidth=0.9)
         ax.set_title(target_label)
         ax.set_xlabel("standardized coefficient")
 
@@ -1278,8 +1838,23 @@ def main():
         "balking_step_interaction_heatmap.png",
         "Balking step interaction",
         [
-            {"metric": "overall_percent_serviced", "title": "Overall served rate", "label": "rate", "cmap": "YlGnBu"},
+            {"metric": "overall_percent_serviced", "title": "Overall served rate", "label": "rate", "cmap": ACCESS_CMAP},
             {"metric": "access_advantage_class_1", "title": "Class gap: served rate", "label": "Class 1 - Class 2", "diverging": True},
+        ],
+        fixed_y=baseline_balk_step,
+        fixed_x=baseline_balk_step,
+    )
+    draw_two_metric_heatmap(
+        balk_step_df,
+        "class_1_step",
+        "class_2_step",
+        "Class 1 balking step",
+        "Class 2 balking step",
+        "balking_step_balking_rate_heatmap.png",
+        "Balking rate under balking-step changes",
+        [
+            {"metric": "overall_balking_rate", "title": "Overall balking rate", "label": "balked / offered", "cmap": BALKING_CMAP},
+            {"metric": "balking_rate_gap_class_1", "title": "Class gap: balking rate", "label": "Class 1 - Class 2", "diverging": True},
         ],
         fixed_y=baseline_balk_step,
         fixed_x=baseline_balk_step,
@@ -1346,8 +1921,23 @@ def main():
         "balking_threshold_interaction_heatmap.png",
         "Balking threshold interaction",
         [
-            {"metric": "mean_offered_booking_delay", "title": "Overall offered wait", "label": "days", "cmap": "YlOrRd"},
+            {"metric": "mean_offered_booking_delay", "title": "Overall offered wait", "label": "days", "cmap": WAIT_CMAP},
             {"metric": "access_advantage_class_1", "title": "Class gap: served rate", "label": "Class 1 - Class 2", "diverging": True},
+        ],
+        fixed_y=baseline_balk_threshold,
+        fixed_x=baseline_balk_threshold,
+    )
+    draw_two_metric_heatmap(
+        balk_threshold_df,
+        "class_1_threshold",
+        "class_2_threshold",
+        "Class 1 balking threshold",
+        "Class 2 balking threshold",
+        "balking_threshold_balking_rate_heatmap.png",
+        "Balking rate under balking-threshold changes",
+        [
+            {"metric": "overall_balking_rate", "title": "Overall balking rate", "label": "balked / offered", "cmap": BALKING_CMAP},
+            {"metric": "balking_rate_gap_class_1", "title": "Class gap: balking rate", "label": "Class 1 - Class 2", "diverging": True},
         ],
         fixed_y=baseline_balk_threshold,
         fixed_x=baseline_balk_threshold,
@@ -1427,7 +2017,7 @@ def main():
         "no_show_step_interaction_heatmap.png",
         "No-show step interaction",
         [
-            {"metric": "average_utilization", "title": "Utilization", "label": "rate", "cmap": "Greens"},
+            {"metric": "average_utilization", "title": "Utilization", "label": "rate", "cmap": UTILIZATION_CMAP},
             {"metric": "access_advantage_class_1", "title": "Class gap: served rate", "label": "Class 1 - Class 2", "diverging": True},
         ],
         fixed_y=baseline_no_show_step,
@@ -1479,7 +2069,7 @@ def main():
         "no_show_threshold_interaction_heatmap.png",
         "No-show threshold interaction",
         [
-            {"metric": "average_utilization", "title": "Utilization", "label": "rate", "cmap": "Greens"},
+            {"metric": "average_utilization", "title": "Utilization", "label": "rate", "cmap": UTILIZATION_CMAP},
             {"metric": "access_advantage_class_1", "title": "Class gap: served rate", "label": "Class 1 - Class 2", "diverging": True},
         ],
         fixed_y=baseline_no_show_threshold,
@@ -1548,7 +2138,7 @@ def main():
         "cancellation_probability_interaction_heatmap.png",
         "Cancellation probability interaction",
         [
-            {"metric": "overall_percent_serviced", "title": "Overall served rate", "label": "rate", "cmap": "YlGnBu"},
+            {"metric": "overall_percent_serviced", "title": "Overall served rate", "label": "rate", "cmap": ACCESS_CMAP},
             {"metric": "access_advantage_class_1", "title": "Class gap: served rate", "label": "Class 1 - Class 2", "diverging": True},
         ],
         fixed_y=baseline_cancel_prob,
@@ -1558,6 +2148,19 @@ def main():
     arrival_df = draw_arrival_mix()
     class_arrival_df = draw_class_arrival_lines()
     fcfs_stress_df = draw_fcfs_capacity_stress()
+    draw_metric_driver_figures(
+        class_arrival_df,
+        balk_step_df,
+        balk_threshold_df,
+        no_show_step_df,
+        no_show_threshold_df,
+        cancel_df,
+        baseline_balk_step,
+        baseline_balk_threshold,
+        baseline_no_show_step,
+        baseline_no_show_threshold,
+        baseline_cancel_prob,
+    )
     regression_data, regression_coef_df, regression_score_df = run_regression_screening()
 
     print("\nScenario comparison")

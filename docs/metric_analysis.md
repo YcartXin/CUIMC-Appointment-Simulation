@@ -1,206 +1,127 @@
-# Metric Definitions And Sensitivity Analysis
+# FCFS Appointment Simulation: Metric-Focused Sensitivity Report
 
-This document defines the final metrics used by the simulation and summarizes what the sensitivity plots show. The plots were generated from the current repository configuration, averaging each plotted point across three fixed random seeds.
+This report is organized by metric. Each section starts with the simplest driver plots and then moves to class-by-class heatmaps or regression evidence.
 
-The current baseline has symmetric patient classes: both classes have the same arrival rate, cancellation probability, balking rule, no-show rule, and value. Because of that, class labels are exchangeable in the baseline. When a class-1-vs-class-2 heatmap is symmetric, that means the absolute level of the parameter matters more than which class has the higher value.
+In the metric driver plots, Class 1 varies on the x-axis while Class 2 stays fixed at its baseline value. Each plot shows the overall value plus Class 1 and Class 2 values when a class-level value exists. For utilization, the class lines are each class's served slots divided by all available slots.
 
-## Notation
+The baseline treats Class 1 and Class 2 symmetrically: same arrival rate, cancellation probability, balking rule, no-show rule, and value. Symmetric heatmaps mostly show absolute parameter effects. Class advantage appears when the class assumptions differ.
 
-Let:
+## Metrics
 
-- `i` be patient class, currently `i = 1, 2`.
-- `D` be the number of measured days.
-- `S` be `slots_per_day`.
-- `tau` be the offered booking delay in days.
-- `A_i` be measured arrivals for class `i`.
-- `B_i` be booked patients for class `i`.
-- `K_i` be balked patients for class `i`.
-- `N_i` be no-offer patients for class `i`.
-- `C_i` be canceled booked patients for class `i`.
-- `H_i` be no-show booked patients for class `i`.
-- `V_i` be served patients for class `i`.
-- `O_i = B_i + K_i` be offered patients for class `i`.
+| Metric | Meaning | Main drivers |
+|---|---|---|
+| `average_utilization` | Completed visits / available slots | no-show risk, cancellation, demand |
+| `overall_percent_serviced` | served arrivals / all arrivals | total demand, no-show, cancellation, balking |
+| `mean_offered_booking_delay` | average offered delay among patients who received an offer | demand, balking tolerance, cancellation |
+| `overall_balking_rate` | balked / offered | balking step and threshold |
+| `access_advantage_class_1` | Class 1 served rate minus Class 2 served rate | class-specific behavior gaps |
 
-Patients with `no_offer` are not included in offered-delay metrics because they did not receive a slot offer.
+Baseline summary:
 
-## Exact Metric Definitions
+| Scenario | Utilization | Overall served | Accepted wait | Offered wait | Class gap | Delay gap |
+|---|---:|---:|---:|---:|---:|---:|
+| Baseline | 0.839 | 0.269 | 8.35 | 9.30 | 0.001 | 0.003 |
+| Scenario 2 | 1.000 | 0.395 | 4.29 | 5.06 | -0.008 | 0.005 |
 
-### Mean Accepted Booking Delay
+Scenario 2 changes several assumptions at once, so treat it as a comparison point rather than a one-parameter causal test.
 
-Class-level:
+Color code:
 
-```text
-mean_accepted_booking_delay_i =
-    sum(tau for class-i patients who accepted/booked a slot) / B_i
-```
+| Color | Meaning |
+|---|---|
+| Blue | arrival pressure, arrival mix, and demand-load changes |
+| Purple | balking step, balking threshold, and balking-rate diagnostics |
+| Green | no-show step and no-show threshold changes |
+| Red | cancellation probability changes |
+| Line style and marker | overall, Class 1, and Class 2 within the same driver family |
+| Gray dashed line | baseline assumption |
+| Driver-colored heatmaps | varied assumption family; for class gaps, lighter shades indicate Class 2 is higher and darker shades indicate Class 1 is higher |
 
-Aggregate:
+## Average Utilization
 
-```text
-mean_accepted_booking_delay =
-    sum_i total_booking_delay_i / sum_i B_i
-```
+`average_utilization` is completed visits per available slot. No-shows do not count because the slot did not become a completed visit.
 
-This is the old `mean_booking_delay`, kept in the model only as a backward-compatible alias.
+![Average utilization drivers](metric_analysis_files/metric_utilization_drivers.png)
 
-### Mean Offered Booking Delay
+No-show behavior is the clearest direct driver. Demand pressure is more subtle: utilization can stay high even when access is poor. The Class 1 and Class 2 lines split utilization into each class's share of all available slots.
 
-Class-level:
+![No-show step interaction](metric_analysis_files/no_show_step_interaction_heatmap.png)
 
-```text
-mean_offered_booking_delay_i =
-    sum(tau for class-i patients who received an offer) / O_i
-```
+![No-show threshold interaction](metric_analysis_files/no_show_threshold_interaction_heatmap.png)
 
-Aggregate:
+## Overall Served Rate
 
-```text
-mean_offered_booking_delay =
-    sum_i total_offered_booking_delay_i / sum_i O_i
-```
+`overall_percent_serviced` is the main access metric: served arrivals divided by all arrivals.
 
-This includes patients who accepted and patients who balked. It excludes `no_offer`.
+![Overall served-rate drivers](metric_analysis_files/metric_access_drivers.png)
 
-### Percent Serviced
+The strongest aggregate driver is total arrival pressure. No-shows and cancellations reduce completed visits after booking. Balking reduces served rate because patients reject long-delay offers. In the driver plot, the vertical distance between Class 1 and Class 2 shows the class effect.
 
-Class-level:
+![Outcome decomposition](metric_analysis_files/fcfs_arrival_outcome_decomposition.png)
 
-```text
-percent_serviced_i = V_i / A_i
-```
+![Arrival mix interaction](metric_analysis_files/arrival_mix_interaction_heatmap.png)
 
-Aggregate:
+![Cancellation interaction](metric_analysis_files/cancellation_probability_interaction_heatmap.png)
 
-```text
-overall_percent_serviced = sum_i V_i / sum_i A_i
-```
+![Balking step interaction](metric_analysis_files/balking_step_interaction_heatmap.png)
 
-This is the main access metric: it measures what share of arrivals ultimately became completed visits.
+## Mean Offered Booking Delay
 
-### Average Utilization
+`mean_offered_booking_delay` averages the delay offered to patients who received an offer, including patients who later balked. Patients with `no_offer` are excluded.
 
-For measured day `d`:
+![Offered-wait drivers](metric_analysis_files/metric_wait_drivers.png)
 
-```text
-daily_utilization_d = served_slots_d / S
-```
+Demand pressure raises offered wait. Balking and cancellation need careful interpretation because shorter waits can happen when patients leave the system, not only when access improves. The driver plot shows overall, Class 1, and Class 2 offered waits.
 
-Across the measurement window:
+![Arrival-rate wait slice](metric_analysis_files/arrival_rate_slice_wait.png)
 
-```text
-average_utilization = (1 / D) * sum_d daily_utilization_d
-```
+![Balking threshold interaction](metric_analysis_files/balking_threshold_interaction_heatmap.png)
 
-This counts served patients only. No-shows do not count as utilization. Utilization is aggregate only, not class-specific.
+## Balking Rate
 
-### Slot Diagnostics
+`overall_balking_rate` is `balked / offered`. It is a diagnostic for rejected offers, not a final success metric.
 
-These are still useful diagnostic counts:
+![Balking-rate drivers](metric_analysis_files/metric_balking_rate_drivers.png)
 
-```text
-booked_slots  = slots that had a booked appointment at service time, including no-shows
-served_slots  = booked slots that became completed visits
-no_show_slots = booked slots lost to no-shows
-```
+Higher balking step raises rejection after the threshold. Lower threshold starts that high rejection probability earlier. The driver plot shows overall, Class 1, and Class 2 balking rates.
 
-`booked_slots` is diagnostic, not a final utilization metric. `empty_slots` and `empty_slot_rate` are not used for final reporting.
+![Balking step balking-rate heatmap](metric_analysis_files/balking_step_balking_rate_heatmap.png)
 
-## Scenario Comparison
+![Balking threshold balking-rate heatmap](metric_analysis_files/balking_threshold_balking_rate_heatmap.png)
 
-![Scenario metric comparison](metric_analysis_files/scenario_metric_comparison.png)
+## Class Served-Rate Gap
 
-The baseline and scenario 2 differ on several dimensions at once, including arrival rates, horizon length, measurement length, balking threshold, balking step, and no-show threshold. Since the metrics are rates or averages, they are comparable despite different simulation lengths, but the scenario comparison should not be interpreted as a clean one-parameter causal test.
+`access_advantage_class_1 = percent_serviced_1 - percent_serviced_2`. Positive means Class 1 is served more often; negative means Class 2 is served more often.
 
-Across the current runs:
+![Class gap drivers](metric_analysis_files/metric_class_gap_drivers.png)
 
-| Scenario | Average utilization | Overall percent serviced | Mean accepted delay | Mean offered delay |
-|---|---:|---:|---:|---:|
-| Baseline | 0.839 | 0.269 | 8.32 | 9.27 |
-| Scenario 2 | 1.000 | 0.395 | 4.30 | 5.07 |
+Higher Class 1 cancellation probability, balking step, or no-show step moves the Class 1 line below the Class 2 line. A higher Class 1 balking threshold helps Class 1 because it tolerates longer offered waits.
 
-Scenario 2 has better access and shorter delays. The main reason is not a class-label difference; it changes absolute system conditions. It has lower total demand, more aggressive balking after shorter delays, and a no-show threshold that avoids no-shows within the available booking horizon.
+![Cancellation class gap heatmap](metric_analysis_files/cancellation_probability_interaction_heatmap.png)
 
-## Balking Step Sensitivity
+![No-show class gap heatmap](metric_analysis_files/no_show_step_interaction_heatmap.png)
 
-![Balking step heatmaps](metric_analysis_files/balking_step_heatmaps.png)
+![Balking threshold class gap heatmap](metric_analysis_files/balking_threshold_interaction_heatmap.png)
 
-The heatmaps vary the balking step size for class 1 and class 2 while holding other baseline settings fixed. With baseline `low = 0`, the step size is the post-threshold balking probability.
+## Regression Screen
 
-Main insight:
+The regression screen uses 240 randomized FCFS parameter settings with two seeds per setting.
 
-- The plots are roughly symmetric across the two class axes.
-- That means the aggregate metrics respond mostly to the absolute combined balking level, not to whether class 1 or class 2 has the larger step.
-- Higher balking step sizes reduce offered delay because patients reject long-delay offers more often.
-- Higher balking does not automatically improve access. A balked patient is still a lost arrival, so percent serviced can remain low even if delays improve.
+| Target metric | Most important feature | Standardized coefficient |
+|---|---|---:|
+| Utilization | average no-show threshold | 0.512 |
+| Utilization | average no-show step | -0.423 |
+| Utilization | average cancellation probability | 0.320 |
+| Overall served rate | total arrival rate | -0.774 |
+| Overall served rate | average no-show threshold | 0.251 |
+| Offered wait | total arrival rate | 0.576 |
+| Offered wait | average cancellation probability | -0.441 |
+| Class gap | cancellation probability gap | -0.452 |
+| Class gap | balking threshold gap | 0.429 |
+| Class gap | balking step gap | -0.349 |
 
-Interpretation: balking changes the tradeoff between access and delay. It can reduce congestion among patients who accept appointments, but it does so partly by losing demand.
+![Regression coefficients](metric_analysis_files/regression_standardized_coefficients.png)
 
-## No-Show Step Sensitivity
+## Bottom Line
 
-![No-show step heatmaps](metric_analysis_files/no_show_step_heatmaps.png)
-
-The no-show step has the clearest effect on utilization. When the no-show step is low for both classes, average utilization is near 1. When it is high for both classes, utilization falls sharply.
-
-Main insight:
-
-- Absolute no-show probability matters much more than the difference between classes.
-- The upper-left and lower-right corners are similar because class labels are symmetric in the baseline.
-- Mean offered delay barely changes in this sweep because no-shows happen after booking; they waste booked capacity but do not change the delay that was offered at booking time.
-
-Interpretation: no-show behavior is the most direct driver of utilization loss. If the goal is to improve utilization, no-show reduction is more important than fine-tuning class differences.
-
-## Arrival Rate And Class Mix
-
-![Arrival mix heatmaps](metric_analysis_files/arrival_mix_heatmaps.png)
-
-This sweep varies:
-
-```text
-lambda_total = multiplier * baseline lambda_total
-lambda_1     = p * lambda_total
-lambda_2     = (1 - p) * lambda_total
-```
-
-Main insight:
-
-- Total demand pressure matters strongly.
-- Class mix `p` matters weakly in the current baseline because the classes are behaviorally identical.
-- As total arrival rate rises, percent serviced drops and offered delay rises.
-- Average utilization can stay high even when access is poor.
-
-Interpretation: utilization alone is not enough. A clinic can be highly utilized while serving a small share of arrivals if demand greatly exceeds capacity.
-
-## Class Arrival Rate Sweeps
-
-![Class arrival rate plots](metric_analysis_files/class_arrival_rate_lines.png)
-
-These plots vary one class's arrival rate at a time while holding the other class fixed.
-
-Main insight:
-
-- The class 1 and class 2 curves are nearly the same because the baseline classes are symmetric.
-- Increasing a class's arrival rate lowers that class's percent serviced and increases its booking delays.
-- Average utilization changes less than access and delay once the system is already capacity constrained.
-
-Interpretation: in this model configuration, the absolute arrival rate matters more than which class receives the extra arrivals. Class differences would matter more if the classes had different values, different no-show behavior, different balking behavior, or different arrival volumes.
-
-## What Matters Most
-
-1. **No-show absolute level matters most for utilization.**  
-   No-shows directly turn booked capacity into lost visits. This is why average utilization responds strongly to no-show step size.
-
-2. **Total arrival pressure matters most for access and delay.**  
-   As `lambda_total` increases, percent serviced falls and offered delay rises. Class mix matters little when classes are otherwise identical.
-
-3. **Balking is a tradeoff, not a pure improvement.**  
-   Stronger balking can reduce accepted/offered delays, but it also means more arrivals leave without being served.
-
-4. **Class differences matter only when classes are truly different.**  
-   In the baseline, classes are symmetric. The class-1-vs-class-2 plots mainly show absolute parameter effects. A real class-difference effect would appear as a strong difference between the upper-left and lower-right heatmap corners.
-
-5. **Use at least two final metrics together.**  
-   Recommended reporting pair:
-   - `average_utilization` for capacity use
-   - `overall_percent_serviced` for access
-
-   Add `mean_offered_booking_delay` when the question is patient-facing access, because it includes patients who balked after receiving long-delay offers.
+Use `overall_percent_serviced` for access and `average_utilization` for capacity use. Use `mean_offered_booking_delay` for patient-facing wait. Use balking rate and class gaps as diagnostics that explain why the final metrics moved.
