@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import hashlib
+import importlib.metadata as importlib_metadata
+import json
+import platform
+import subprocess
+import time
 from dataclasses import replace
 from itertools import product
 from pathlib import Path
 import sys
 
 import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm, to_rgb
+from matplotlib.colors import TwoSlopeNorm
 import numpy as np
 import pandas as pd
 
@@ -18,6 +24,34 @@ if str(REPO_DIR) not in sys.path:
 from engine_files.config_loader import load_config
 from engine_files.engine import ClinicAppointmentSimulation
 from engine_files.model import ThresholdRule
+from analysis.metrics import (
+    outcome_rates_from_result,
+    result_metrics_from_result,
+)
+from analysis.plot_style import (
+    ACCEPTED_WAIT_COLOR,
+    ACCESS_CMAP,
+    ACCESS_COLOR,
+    ARRIVAL_COLOR,
+    BALKING_CMAP,
+    BALKING_COLOR,
+    BASELINE_COLOR,
+    CANCELLATION_COLOR,
+    CLASS_1_COLOR,
+    CLASS_2_COLOR,
+    CLASS_GAP_CMAP,
+    DRIVER_COLORS,
+    NO_SHOW_COLOR,
+    OVERALL_COLOR,
+    UTILIZATION_CMAP,
+    UTILIZATION_COLOR,
+    WAIT_CMAP,
+    WAIT_COLOR,
+    blend_color,
+    driver_from_text,
+    driver_heatmap_cmap,
+    plot_driver_line,
+)
 
 
 OUT_DIR = Path(__file__).resolve().parent / "metric_analysis_files"
@@ -77,221 +111,13 @@ FEATURE_LABELS = {
     "cancel_prob_gap_c1_minus_c2": "cancellation prob. gap",
 }
 
-ARRIVAL_COLOR = "#1f77b4"
-BALKING_COLOR = "#9467bd"
-NO_SHOW_COLOR = "#2ca02c"
-CANCELLATION_COLOR = "#d62728"
-BASELINE_COLOR = "#7f7f7f"
-
-# Backward-compatible aliases for older figure code. The color meaning is now
-# driver family, not metric family.
-OVERALL_COLOR = ARRIVAL_COLOR
-ACCESS_COLOR = ARRIVAL_COLOR
-UTILIZATION_COLOR = NO_SHOW_COLOR
-WAIT_COLOR = BALKING_COLOR
-ACCEPTED_WAIT_COLOR = BALKING_COLOR
-CLASS_1_COLOR = ARRIVAL_COLOR
-CLASS_2_COLOR = CANCELLATION_COLOR
-
-
-def blend_color(color, target="#ffffff", amount=0.5):
-    base_rgb = np.array(to_rgb(color))
-    target_rgb = np.array(to_rgb(target))
-    mixed = (1.0 - amount) * base_rgb + amount * target_rgb
-    return tuple(mixed)
-
-
-DRIVER_COLORS = {
-    "arrival": ARRIVAL_COLOR,
-    "balking": BALKING_COLOR,
-    "no_show": NO_SHOW_COLOR,
-    "cancellation": CANCELLATION_COLOR,
-}
-DRIVER_LABELS = {
-    "arrival": "Arrival pressure / mix",
-    "balking": "Balking",
-    "no_show": "No-show",
-    "cancellation": "Cancellation",
-}
-
-
-def driver_cmap(driver):
-    color = DRIVER_COLORS[driver]
-    return LinearSegmentedColormap.from_list(
-        f"{driver}_sequential",
-        [blend_color(color, amount=0.92), blend_color(color, amount=0.55), color, blend_color(color, "#000000", 0.18)],
-    )
-
-
-def driver_gap_cmap(driver):
-    color = DRIVER_COLORS[driver]
-    return LinearSegmentedColormap.from_list(
-        f"{driver}_gap",
-        [blend_color(color, amount=0.78), "#ffffff", blend_color(color, "#000000", 0.12)],
-    )
-
-
-DRIVER_CMAPS = {driver: driver_cmap(driver) for driver in DRIVER_COLORS}
-DRIVER_GAP_CMAPS = {driver: driver_gap_cmap(driver) for driver in DRIVER_COLORS}
-ACCESS_CMAP = DRIVER_CMAPS["arrival"]
-UTILIZATION_CMAP = DRIVER_CMAPS["no_show"]
-WAIT_CMAP = DRIVER_CMAPS["balking"]
-BALKING_CMAP = DRIVER_CMAPS["balking"]
-CLASS_GAP_CMAP = DRIVER_GAP_CMAPS["arrival"]
-
-
-def driver_from_text(*values):
-    text = " ".join(str(value).lower() for value in values if value is not None)
-    if "no_show" in text or "no-show" in text or "no show" in text:
-        return "no_show"
-    if "balk" in text:
-        return "balking"
-    if "cancel" in text:
-        return "cancellation"
-    if "arrival" in text or "lambda" in text or "class_1_share" in text or "capacity stress" in text:
-        return "arrival"
-    return None
-
-
-def series_role(label, index=0):
-    text = str(label).lower()
-    if "class 1" in text or "class_1" in text:
-        return "class_1"
-    if "class 2" in text or "class_2" in text:
-        return "class_2"
-    if index == 1:
-        return "class_1"
-    if index == 2:
-        return "class_2"
-    return "overall"
-
-
-def driver_line_style(driver, label, index=0):
-    if driver is None:
-        return {}
-
-    color = DRIVER_COLORS[driver]
-    role = series_role(label, index)
-    styles = {
-        "overall": {
-            "color": color,
-            "linestyle": "-",
-            "marker": "o",
-            "linewidth": 2.5,
-        },
-        "class_1": {
-            "color": blend_color(color, "#000000", 0.10),
-            "linestyle": "--",
-            "marker": "s",
-            "linewidth": 2.2,
-        },
-        "class_2": {
-            "color": blend_color(color, amount=0.24),
-            "linestyle": ":",
-            "marker": "^",
-            "linewidth": 2.2,
-        },
-    }
-    return styles[role]
-
-
-def plot_driver_line(ax, x, y, label, driver=None, color=None, index=0, **kwargs):
-    style = driver_line_style(driver, label, index)
-    if not style:
-        style = {
-            "marker": "o",
-            "linewidth": kwargs.pop("linewidth", 2.2),
-            "color": color,
-        }
-    style.update(kwargs)
-    ax.plot(x, y, label=label, **style)
-
-
-def driver_heatmap_cmap(driver, diverging=False):
-    if driver is None:
-        return CLASS_GAP_CMAP if diverging else ACCESS_CMAP
-    return DRIVER_GAP_CMAPS[driver] if diverging else DRIVER_CMAPS[driver]
-
-
 def run_result(config, seed):
     seeded = replace(config, seed=seed)
     return ClinicAppointmentSimulation(seeded).run()
 
 
-def aggregate_delay_metrics(result):
-    booked = sum(m.booked for m in result.class_metrics.values())
-    offered = sum(m.offered for m in result.class_metrics.values())
-    accepted_delay = sum(m.total_booking_delay for m in result.class_metrics.values())
-    offered_delay = sum(m.total_offered_booking_delay for m in result.class_metrics.values())
-    return {
-        "mean_accepted_booking_delay": accepted_delay / booked if booked else 0.0,
-        "mean_offered_booking_delay": offered_delay / offered if offered else 0.0,
-    }
-
-
-def result_metrics_from_result(result):
-    c1 = result.class_metrics[1]
-    c2 = result.class_metrics[2]
-    total_slots = result.total_slots
-
-    class_1_delay = c1.mean_offered_booking_delay
-    class_2_delay = c2.mean_offered_booking_delay
-    offered = c1.offered + c2.offered
-    overall_balking_rate = (c1.balked + c2.balked) / offered if offered else 0.0
-    class_1_balking_rate = c1.balked / c1.offered if c1.offered else 0.0
-    class_2_balking_rate = c2.balked / c2.offered if c2.offered else 0.0
-
-    return {
-        "average_utilization": result.average_utilization,
-        "overall_percent_serviced": result.overall_percent_serviced,
-        **aggregate_delay_metrics(result),
-        "class_1_percent_serviced": c1.percent_serviced,
-        "class_2_percent_serviced": c2.percent_serviced,
-        "overall_balking_rate": overall_balking_rate,
-        "class_1_balking_rate": class_1_balking_rate,
-        "class_2_balking_rate": class_2_balking_rate,
-        "class_1_slot_utilization": c1.served / total_slots if total_slots else 0.0,
-        "class_2_slot_utilization": c2.served / total_slots if total_slots else 0.0,
-        "class_1_mean_offered_booking_delay": class_1_delay,
-        "class_2_mean_offered_booking_delay": class_2_delay,
-        "access_advantage_class_1": c1.percent_serviced - c2.percent_serviced,
-        "balking_rate_gap_class_1": class_1_balking_rate - class_2_balking_rate,
-        "delay_advantage_class_1": class_2_delay - class_1_delay,
-    }
-
-
 def result_metrics(config, seed=FINE_SEED):
     return result_metrics_from_result(run_result(config, seed))
-
-
-def outcome_rates_from_result(result):
-    totals = {
-        "arrivals": 0,
-        "booked": 0,
-        "balked": 0,
-        "no_offer": 0,
-        "canceled": 0,
-        "no_show": 0,
-        "served": 0,
-    }
-    for metrics in result.class_metrics.values():
-        for key in totals:
-            totals[key] += getattr(metrics, key)
-
-    resolved_booked = totals["canceled"] + totals["no_show"] + totals["served"]
-    totals["unresolved_booked"] = max(totals["booked"] - resolved_booked, 0)
-    arrivals = totals["arrivals"]
-
-    rates = {
-        "total_arrivals": arrivals,
-        "total_booked": totals["booked"],
-    }
-    for outcome in ["served", "balked", "no_offer", "canceled", "no_show", "unresolved_booked"]:
-        rates[f"{outcome}_rate"] = totals[outcome] / arrivals if arrivals else 0.0
-    rates["lost_after_booking_rate"] = (
-        (totals["canceled"] + totals["no_show"] + totals["unresolved_booked"]) / arrivals if arrivals else 0.0
-    )
-    return rates
 
 
 def mean_metrics(config, seeds):
@@ -1779,7 +1605,101 @@ def summarize_direction(df, name):
     print(worst_delay.to_string())
 
 
+def file_sha256(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def git_metadata():
+    def run_git(args):
+        completed = subprocess.run(
+            ["git", *args],
+            cwd=REPO_DIR,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        return completed.stdout.strip() if completed.returncode == 0 else None
+
+    status = run_git(["status", "--short"])
+    return {
+        "commit": run_git(["rev-parse", "HEAD"]),
+        "dirty": bool(status),
+    }
+
+
+def package_versions():
+    versions = {}
+    for package in ["numpy", "pandas", "matplotlib", "pyyaml", "jupyter"]:
+        try:
+            versions[package] = importlib_metadata.version(package)
+        except importlib_metadata.PackageNotFoundError:
+            versions[package] = None
+    return versions
+
+
+def serializable_values(values):
+    items = []
+    for value in list(values):
+        if isinstance(value, np.generic):
+            value = value.item()
+        if isinstance(value, float):
+            value = round(value, 10)
+        items.append(value)
+    return items
+
+
+def generated_artifacts(run_started_at):
+    artifacts = []
+    for path in sorted(OUT_DIR.rglob("*")):
+        if path.is_file() and path.name != "manifest.json" and path.stat().st_mtime >= run_started_at:
+            artifacts.append(path.relative_to(REPO_DIR).as_posix())
+    return artifacts
+
+
+def write_manifest(row_counts, run_started_at):
+    manifest = {
+        "command": [Path(sys.executable).name, *sys.argv],
+        "git": git_metadata(),
+        "config_hashes": {
+            "configs/baseline.yaml": file_sha256(REPO_DIR / "configs" / "baseline.yaml"),
+            "configs/scenario_2.yaml": file_sha256(REPO_DIR / "configs" / "scenario_2.yaml"),
+        },
+        "environment": {
+            "python": platform.python_version(),
+            "platform": platform.platform(),
+            "packages": package_versions(),
+        },
+        "seeds": {
+            "fine_seed": FINE_SEED,
+            "scenario_seeds": SCENARIO_SEEDS,
+            "regression_seeds": REGRESSION_SEEDS,
+            "regression_random_seed": REGRESSION_RANDOM_SEED,
+        },
+        "grids": {
+            "step_grid": serializable_values(STEP_GRID),
+            "prob_grid": serializable_values(PROB_GRID),
+            "threshold_grid": serializable_values(THRESHOLD_GRID),
+            "arrival_multipliers": serializable_values(ARRIVAL_MULTIPLIERS),
+            "class_1_shares": serializable_values(CLASS_1_SHARES),
+            "class_arrival_multipliers": serializable_values(CLASS_ARRIVAL_MULTIPLIERS),
+            "fcfs_stress_multipliers": serializable_values(FCFS_STRESS_MULTIPLIERS),
+            "regression_scenarios": REGRESSION_SCENARIOS,
+        },
+        "row_counts": row_counts,
+        "generated_artifacts": generated_artifacts(run_started_at),
+    }
+
+    with (OUT_DIR / "manifest.json").open("w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+
+
 def main():
+    run_started_at = time.time()
     plt.style.use("default")
 
     scenario_df = draw_scenario_comparison()
@@ -2162,6 +2082,27 @@ def main():
         baseline_cancel_prob,
     )
     regression_data, regression_coef_df, regression_score_df = run_regression_screening()
+    write_manifest(
+        {
+            "scenario_comparison": len(scenario_df),
+            "balking_step_grid": len(balk_step_df),
+            "balking_threshold_grid": len(balk_threshold_df),
+            "balking_threshold_jump_grid": len(balk_threshold_jump_df),
+            "no_show_step_grid": len(no_show_step_df),
+            "no_show_threshold_grid": len(no_show_threshold_df),
+            "no_show_threshold_jump_grid": len(no_show_threshold_jump_df),
+            "cancellation_grid": len(cancel_df),
+            "arrival_mix_grid": len(arrival_df),
+            "class_arrival_grid": len(class_arrival_df),
+            "fcfs_capacity_stress": len(fcfs_stress_df),
+            "balking_class1_step_slice": len(balk_step_slice_df),
+            "balking_class1_threshold_slice": len(balk_threshold_slice_df),
+            "regression_simulation_data": len(regression_data),
+            "regression_coefficients": len(regression_coef_df),
+            "regression_scores": len(regression_score_df),
+        },
+        run_started_at,
+    )
 
     print("\nScenario comparison")
     print(

@@ -1,5 +1,8 @@
 # FCFS Appointment Simulation: Metric-Focused Sensitivity Report
 
+Canonical source: `metric_analysis.qmd`. This Markdown file is a generated or
+companion surface and should not be edited as an independent report.
+
 This report is organized by metric. Each section starts with the simplest driver plots and then moves to class-by-class heatmaps or regression evidence.
 
 In the metric driver plots, Class 1 varies on the x-axis while Class 2 stays fixed at its baseline value. Each plot shows the overall value plus Class 1 and Class 2 values when a class-level value exists. For utilization, the class lines are each class's served slots divided by all available slots.

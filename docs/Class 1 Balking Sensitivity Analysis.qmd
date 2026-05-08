@@ -5,16 +5,21 @@ format:
     embed-resources: true
 ---
 
+This is a companion extract. The canonical metric-first report is
+[`metric_analysis.qmd`](metric_analysis.qmd), where this sweep is included in
+the Balking Deep Dive.
+
 ## Overview
 
 This analysis varies only the high balking probability for Class 1 while holding all other simulation parameters fixed. The purpose is to assess how Class 1 balking behavior affects booking delay, utilization, and service access for both patient classes.
 
-The four reported outputs are:
+The five reported outputs are:
 
 - mean accepted booking delay by class
 - mean offered booking delay by class
 - aggregate average utilization
 - percent serviced by class
+- balking rate by class
 
 ## Aggregate Average Utilization
 
@@ -49,6 +54,12 @@ The similarity between the two class curves indicates that offered delay is larg
 Percent serviced shows the clearest class-level tradeoff. As Class 1 high balking probability rises, Class 1's serviced share falls while Class 2's serviced share rises.
 
 This suggests that Class 1 balking releases capacity that can be used by Class 2. However, this should not be interpreted as an overall access improvement. The aggregate utilization graph shows little change, meaning the main effect is a redistribution of service access between classes rather than a substantial improvement in total completed service.
+
+## Balking Rate
+
+![Balking rate by class](../outputs/class1_balking/figures/balking_rate_by_class.png)
+
+The balking-rate plot confirms that the mechanism is rejection of offered appointments after long waits. It should be interpreted as a diagnostic, not as a final access outcome.
 
 ## Main Takeaways
 

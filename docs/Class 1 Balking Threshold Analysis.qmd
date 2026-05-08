@@ -5,16 +5,22 @@ format:
     embed-resources: true
 ---
 
+This is a companion extract. The canonical metric-first report is
+[`metric_analysis.qmd`](metric_analysis.qmd), where this sweep is included in
+the Balking Deep Dive.
+
 ## Overview
 
 This analysis varies only the balking threshold for Class 1 while holding all other simulation parameters fixed. Class 1's low and high balking probabilities remain unchanged; only the delay point at which high balking begins is varied.
 
-The four reported outputs are:
+The six reported outputs are:
 
 - mean accepted booking delay by class
 - mean offered booking delay by class
 - aggregate average utilization
 - percent serviced by class
+- balking rate by class
+- service gap between classes
 
 With `horizon_days = 14`, possible offered delays are `tau = 0, 1, ..., 13`. A lower Class 1 balking threshold means Class 1 begins rejecting offers at shorter delays.
 
@@ -51,6 +57,18 @@ Because both classes draw from the same appointment calendar, offered delay can 
 Percent serviced is the clearest access metric. Lower Class 1 thresholds usually reduce Class 1’s serviced share because more Class 1 patients reject appointments at shorter delays. Class 2 may benefit if those rejected offers free capacity that Class 2 can use.
 
 This figure should be interpreted together with accepted delay. A lower accepted delay is not necessarily an improvement if it occurs because long-delay patients are balking and leaving the system. Percent serviced shows whether patients are actually reaching completed service.
+
+## Balking Rate
+
+![Balking rate by class](../outputs/class1_balking_threshold/figures/balking_rate_by_class.png)
+
+The balking-rate plot shows whether the threshold change is actually moving patients into rejection behavior. A lower threshold should raise Class 1 balking when offered waits exceed the new cutoff.
+
+## Service Gap
+
+![Service gap](../outputs/class1_balking_threshold/figures/service_gap.png)
+
+The service gap directly shows whether the threshold change mainly redistributes completed service between classes.
 
 ## Main Takeaways
 

@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Iterable
 
 import matplotlib.pyplot as plt
-from matplotlib.colors import to_rgb
 import numpy as np
 import pandas as pd
 
@@ -24,6 +23,8 @@ sys.path.insert(0, str(REPO_DIR))
 from engine_files.config_loader import load_config
 from engine_files.engine import ClinicAppointmentSimulation
 from engine_files.model import SimulationConfig, ThresholdRule
+from analysis.metrics import aggregate_result_row, class_result_rows
+from analysis.plot_style import driver_line_style
 
 
 # ============================================================
@@ -41,52 +42,6 @@ CLASS1_HIGH_BALK_VALUES = np.round(np.arange(0.0, 1.0, 0.1), 2)
 
 # 100 replications per parameter value.
 SEEDS = range(1, 101)
-
-BALKING_COLOR = "#9467bd"
-
-
-def blend_color(color: str, target: str = "#ffffff", amount: float = 0.5) -> tuple[float, float, float]:
-    base_rgb = np.array(to_rgb(color))
-    target_rgb = np.array(to_rgb(target))
-    return tuple((1.0 - amount) * base_rgb + amount * target_rgb)
-
-
-def series_style(label: str, index: int) -> dict[str, object]:
-    role = str(label).lower()
-    if "class 1" in role:
-        return {
-            "color": blend_color(BALKING_COLOR, "#000000", 0.10),
-            "linestyle": "--",
-            "marker": "s",
-            "linewidth": 2.2,
-        }
-    if "class 2" in role:
-        return {
-            "color": blend_color(BALKING_COLOR, amount=0.24),
-            "linestyle": ":",
-            "marker": "^",
-            "linewidth": 2.2,
-        }
-    if index == 1:
-        return {
-            "color": blend_color(BALKING_COLOR, "#000000", 0.10),
-            "linestyle": "--",
-            "marker": "s",
-            "linewidth": 2.2,
-        }
-    if index == 2:
-        return {
-            "color": blend_color(BALKING_COLOR, amount=0.24),
-            "linestyle": ":",
-            "marker": "^",
-            "linewidth": 2.2,
-        }
-    return {
-        "color": BALKING_COLOR,
-        "linestyle": "-",
-        "marker": "o",
-        "linewidth": 2.5,
-    }
 
 # ============================================================
 # Config modification
@@ -169,79 +124,25 @@ def run_sweep(
             sim = ClinicAppointmentSimulation(config)
             results = sim.run()
 
-            class_metrics = results.class_metrics
-            total_arrivals = sum(metrics.arrivals for metrics in class_metrics.values())
-            total_booked = sum(metrics.booked for metrics in class_metrics.values())
-            total_offered = sum(metrics.offered for metrics in class_metrics.values())
-            total_balked = sum(metrics.balked for metrics in class_metrics.values())
-            total_accepted_delay = sum(
-                metrics.total_booking_delay for metrics in class_metrics.values()
-            )
-            total_offered_delay = sum(
-                metrics.total_offered_booking_delay
-                for metrics in class_metrics.values()
-            )
-
             aggregate_rows.append(
-                {
-                    "class1_high_balk": class1_high_balk,
-                    "seed": seed,
-                    "average_utilization": results.average_utilization,
-                    "overall_percent_serviced": results.overall_percent_serviced,
-                    "total_served": results.total_served,
-                    "mean_accepted_booking_delay": (
-                        total_accepted_delay / total_booked if total_booked else 0.0
-                    ),
-                    "mean_offered_booking_delay": (
-                        total_offered_delay / total_offered if total_offered else 0.0
-                    ),
-                    "overall_balking_rate": (
-                        total_balked / total_offered if total_offered else 0.0
-                    ),
-                    "total_arrivals": total_arrivals,
-                    "total_booked": total_booked,
-                    "total_offered": total_offered,
-                    "total_balked": total_balked,
-                }
-            )
-
-            for class_id, metrics in class_metrics.items():
-                class_rows.append(
+                aggregate_result_row(
+                    results,
                     {
                         "class1_high_balk": class1_high_balk,
                         "seed": seed,
-                        "class_id": class_id,
-                        "arrivals": metrics.arrivals,
-                        "booked": metrics.booked,
-                        "balked": metrics.balked,
-                        "offered": metrics.offered,
-                        "no_offer": metrics.no_offer,
-                        "canceled": metrics.canceled,
-                        "no_show": metrics.no_show,
-                        "served": metrics.served,
-                        "mean_accepted_booking_delay": (
-                            metrics.mean_accepted_booking_delay
-                        ),
-                        "mean_offered_booking_delay": (
-                            metrics.mean_offered_booking_delay
-                        ),
-                        "percent_serviced": metrics.percent_serviced,
-                        "slot_utilization": (
-                            metrics.served / results.total_slots
-                            if results.total_slots
-                            else 0.0
-                        ),
-                        "balking_rate": (
-                            metrics.balked / metrics.offered
-                            if metrics.offered
-                            else 0.0
-                        ),
-                        "total_booking_delay": metrics.total_booking_delay,
-                        "total_offered_booking_delay": (
-                            metrics.total_offered_booking_delay
-                        ),
-                    }
+                    },
                 )
+            )
+
+            class_rows.extend(
+                class_result_rows(
+                    results,
+                    {
+                        "class1_high_balk": class1_high_balk,
+                        "seed": seed,
+                    },
+                )
+            )
 
     class_results = pd.DataFrame(class_rows)
     aggregate_results = pd.DataFrame(aggregate_rows)
@@ -374,7 +275,7 @@ def plot_overall_and_class_metric(
         yerr=aggregate_df["ci95"],
         capsize=3,
         label="overall",
-        **series_style("overall", 0),
+        **driver_line_style("balking", "overall", 0),
     )
 
     for index, (class_id, sub) in enumerate(class_df.groupby("class_id"), start=1):
@@ -386,7 +287,7 @@ def plot_overall_and_class_metric(
             yerr=sub["ci95"],
             capsize=3,
             label=f"Class {class_id}",
-            **series_style(f"Class {class_id}", index),
+            **driver_line_style("balking", f"Class {class_id}", index),
         )
 
     ax.set_title(title)

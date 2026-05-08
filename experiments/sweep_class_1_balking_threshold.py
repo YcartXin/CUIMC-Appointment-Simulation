@@ -23,6 +23,8 @@ sys.path.insert(0, str(REPO_DIR))
 from engine_files.config_loader import load_config
 from engine_files.engine import ClinicAppointmentSimulation
 from engine_files.model import SimulationConfig, ThresholdRule
+from analysis.metrics import aggregate_result_row, class_result_rows
+from analysis.plot_style import BASELINE_COLOR, driver_line_style
 
 
 # ============================================================
@@ -127,39 +129,24 @@ def run_sweep(
             results = sim.run()
 
             aggregate_rows.append(
-                {
-                    "class1_balk_threshold": class1_threshold,
-                    "seed": seed,
-                    "average_utilization": results.average_utilization,
-                    "overall_percent_serviced": results.overall_percent_serviced,
-                    "total_served": results.total_served,
-                    "total_value": results.total_value,
-                }
-            )
-
-            for class_id, metrics in results.class_metrics.items():
-                class_rows.append(
+                aggregate_result_row(
+                    results,
                     {
                         "class1_balk_threshold": class1_threshold,
                         "seed": seed,
-                        "class_id": class_id,
-                        "arrivals": metrics.arrivals,
-                        "booked": metrics.booked,
-                        "balked": metrics.balked,
-                        "offered": metrics.offered,
-                        "no_offer": metrics.no_offer,
-                        "canceled": metrics.canceled,
-                        "no_show": metrics.no_show,
-                        "served": metrics.served,
-                        "mean_accepted_booking_delay": (
-                            metrics.mean_accepted_booking_delay
-                        ),
-                        "mean_offered_booking_delay": (
-                            metrics.mean_offered_booking_delay
-                        ),
-                        "percent_serviced": metrics.percent_serviced,
-                    }
+                    },
                 )
+            )
+
+            class_rows.extend(
+                class_result_rows(
+                    results,
+                    {
+                        "class1_balk_threshold": class1_threshold,
+                        "seed": seed,
+                    },
+                )
+            )
 
     class_results = pd.DataFrame(class_rows)
     aggregate_results = pd.DataFrame(aggregate_rows)
@@ -205,6 +192,8 @@ def create_class_summary(class_results: pd.DataFrame) -> pd.DataFrame:
         "mean_accepted_booking_delay",
         "mean_offered_booking_delay",
         "percent_serviced",
+        "slot_utilization",
+        "balking_rate",
         "arrivals",
         "booked",
         "balked",
@@ -235,8 +224,15 @@ def create_aggregate_summary(aggregate_results: pd.DataFrame) -> pd.DataFrame:
     metrics = [
         "average_utilization",
         "overall_percent_serviced",
+        "mean_accepted_booking_delay",
+        "mean_offered_booking_delay",
+        "overall_balking_rate",
         "total_served",
         "total_value",
+        "total_arrivals",
+        "total_booked",
+        "total_offered",
+        "total_balked",
     ]
 
     summaries = [
@@ -329,6 +325,65 @@ def plot_aggregate_metric(
     plt.close(fig)
 
 
+def plot_overall_and_class_metric(
+    class_summary: pd.DataFrame,
+    aggregate_summary: pd.DataFrame,
+    class_metric: str,
+    aggregate_metric: str,
+    title: str,
+    ylabel: str,
+    output_path: Path,
+) -> None:
+    """
+    Plot one metric with overall, Class 1, and Class 2 values.
+    """
+
+    aggregate_df = aggregate_summary[
+        aggregate_summary["metric"] == aggregate_metric
+    ].copy()
+    aggregate_df = aggregate_df.sort_values("class1_balk_threshold")
+
+    class_df = class_summary[class_summary["metric"] == class_metric].copy()
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    ax.errorbar(
+        aggregate_df["class1_balk_threshold"],
+        aggregate_df["mean"],
+        yerr=aggregate_df["ci95"],
+        capsize=3,
+        label="overall",
+        **driver_line_style("balking", "overall", 0),
+    )
+
+    for index, (class_id, sub) in enumerate(class_df.groupby("class_id"), start=1):
+        sub = sub.sort_values("class1_balk_threshold")
+        ax.errorbar(
+            sub["class1_balk_threshold"],
+            sub["mean"],
+            yerr=sub["ci95"],
+            capsize=3,
+            label=f"Class {class_id}",
+            **driver_line_style("balking", f"Class {class_id}", index),
+        )
+
+    ax.set_title(title)
+    ax.set_xlabel("Class 1 balking threshold")
+    ax.set_ylabel(ylabel)
+    ax.set_xticks(CLASS1_BALK_THRESHOLDS)
+    ax.grid(True, alpha=0.3)
+    ax.legend(
+        title="Series",
+        frameon=False,
+        loc="center left",
+        bbox_to_anchor=(1.02, 0.5),
+    )
+
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+
 def create_service_gap_figure(class_summary: pd.DataFrame) -> None:
     """
     Plot service gap:
@@ -361,7 +416,7 @@ def create_service_gap_figure(class_summary: pd.DataFrame) -> None:
         marker="o",
     )
 
-    ax.axhline(0, linestyle="--", linewidth=1)
+    ax.axhline(0, color=BASELINE_COLOR, linestyle="--", linewidth=1)
     ax.set_title("Service Gap")
     ax.set_xlabel("Class 1 balking threshold")
     ax.set_ylabel("Class 2 percent serviced - Class 1 percent serviced")
@@ -383,36 +438,54 @@ def create_figures(
 
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
 
-    plot_class_metric(
+    plot_overall_and_class_metric(
         class_summary=class_summary,
-        metric="mean_accepted_booking_delay",
-        title="Mean Accepted Booking Delay by Class",
+        aggregate_summary=aggregate_summary,
+        class_metric="mean_accepted_booking_delay",
+        aggregate_metric="mean_accepted_booking_delay",
+        title="Mean Accepted Booking Delay",
         ylabel="Mean accepted booking delay",
         output_path=FIGURE_DIR / "mean_accepted_delay_by_class.png",
     )
 
-    plot_class_metric(
+    plot_overall_and_class_metric(
         class_summary=class_summary,
-        metric="mean_offered_booking_delay",
-        title="Mean Offered Booking Delay by Class",
+        aggregate_summary=aggregate_summary,
+        class_metric="mean_offered_booking_delay",
+        aggregate_metric="mean_offered_booking_delay",
+        title="Mean Offered Booking Delay",
         ylabel="Mean offered booking delay",
         output_path=FIGURE_DIR / "mean_offered_delay_by_class.png",
     )
 
-    plot_aggregate_metric(
+    plot_overall_and_class_metric(
+        class_summary=class_summary,
         aggregate_summary=aggregate_summary,
-        metric="average_utilization",
-        title="Aggregate Average Utilization",
-        ylabel="Average utilization",
+        class_metric="slot_utilization",
+        aggregate_metric="average_utilization",
+        title="Average Utilization and Class Slot Shares",
+        ylabel="Share of available slots",
         output_path=FIGURE_DIR / "average_utilization_aggregate.png",
     )
 
-    plot_class_metric(
+    plot_overall_and_class_metric(
         class_summary=class_summary,
-        metric="percent_serviced",
-        title="Percent Serviced by Class",
-        ylabel="Percent serviced",
+        aggregate_summary=aggregate_summary,
+        class_metric="percent_serviced",
+        aggregate_metric="overall_percent_serviced",
+        title="Served Rate",
+        ylabel="Served rate",
         output_path=FIGURE_DIR / "percent_serviced_by_class.png",
+    )
+
+    plot_overall_and_class_metric(
+        class_summary=class_summary,
+        aggregate_summary=aggregate_summary,
+        class_metric="balking_rate",
+        aggregate_metric="overall_balking_rate",
+        title="Balking Rate Among Offered Patients",
+        ylabel="Balked / offered",
+        output_path=FIGURE_DIR / "balking_rate_by_class.png",
     )
 
     create_service_gap_figure(class_summary)

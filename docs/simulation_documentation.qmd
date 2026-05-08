@@ -133,6 +133,27 @@ Class-level patient metrics are tracked for patients who arrive during the measu
 
 Slot-level utilization metrics are recorded for service days that fall within the measurement period.
 
+## Known Measurement Semantics
+
+The current implementation preserves two measurement conventions that matter
+when interpreting reports.
+
+First, cooldown must be long enough for late measurement-window bookings to
+resolve. A patient can be booked as far as `horizon_days - 1` days after arrival.
+If `cooldown_days < horizon_days - 1`, some measured arrivals accepted near the
+end of the measurement window can remain booked when the simulation stops. Those
+unresolved bookings are not counted as served, canceled, or no-show in the class
+metrics.
+
+Second, `total_value` is service-day based rather than measurement-cohort based.
+It increments whenever a patient is served, including patients who arrived
+during burn-in or cooldown and are therefore not tracked in class-level patient
+metrics. For cohort-aligned interpretation, use `total_served`,
+`overall_percent_serviced`, and the class-level metrics.
+
+The engine can represent more than two classes, but the current metric-focused
+study and class-gap figures are two-class analyses.
+
 ## Summary State
 
 The summary state is a compact representation of the booking calendar by patient class and residual day.

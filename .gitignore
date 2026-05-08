@@ -215,3 +215,20 @@ __marimo__/
 .Rhistory
 .RData
 .Rproj.user/
+
+# Quarto / LaTeX transient render files
+.quarto/
+docs/.quarto/
+docs/*_cache/
+docs/*.aux
+docs/*.bbl
+docs/*.bcf
+docs/*.blg
+docs/*.fdb_latexmk
+docs/*.fls
+docs/*.lof
+docs/*.lot
+docs/*.out
+docs/*.run.xml
+docs/*.synctex.gz
+docs/*.toc
