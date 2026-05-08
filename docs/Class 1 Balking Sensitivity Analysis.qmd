@@ -18,7 +18,7 @@ The four reported outputs are:
 
 ## Aggregate Average Utilization
 
-![Aggregate average utilization](../Outputs/class1_balking/figures/average_utilization_aggregate.png)
+![Aggregate average utilization](../outputs/class1_balking/figures/average_utilization_aggregate.png)
 
 Aggregate utilization remains nearly flat across Class 1 high balking probabilities. The confidence intervals overlap heavily, suggesting that changes in Class 1 balking behavior do not materially affect completed slot use under this parameter setting.
 
@@ -26,7 +26,7 @@ This is likely because total demand remains high enough to keep capacity used ev
 
 ## Mean Accepted Booking Delay
 
-![Mean accepted booking delay by class](../Outputs/class1_balking/figures/mean_accepted_delay_by_class.png)
+![Mean accepted booking delay by class](../outputs/class1_balking/figures/mean_accepted_delay_by_class.png)
 
 Class 1 accepted delay declines sharply as Class 1 high balking probability increases. This is expected because the metric only includes patients who accept/book an appointment; as Class 1 becomes more likely to reject long-delay offers, the remaining accepted Class 1 appointments are concentrated at shorter delays.
 
@@ -34,7 +34,7 @@ Class 2 shows a more nuanced pattern. Its accepted delay initially rises, then f
 
 ## Mean Offered Booking Delay
 
-![Mean offered booking delay by class](../Outputs/class1_balking/figures/mean_offered_delay_by_class.png)
+![Mean offered booking delay by class](../outputs/class1_balking/figures/mean_offered_delay_by_class.png)
 
 Mean offered delay includes both accepted patients and patients who balked, so it is a broader measure of the delay environment than accepted delay alone.
 
@@ -44,7 +44,7 @@ The similarity between the two class curves indicates that offered delay is larg
 
 ## Percent Serviced
 
-![Percent serviced by class](../Outputs/class1_balking/figures/percent_serviced_by_class.png)
+![Percent serviced by class](../outputs/class1_balking/figures/percent_serviced_by_class.png)
 
 Percent serviced shows the clearest class-level tradeoff. As Class 1 high balking probability rises, Class 1's serviced share falls while Class 2's serviced share rises.
 
