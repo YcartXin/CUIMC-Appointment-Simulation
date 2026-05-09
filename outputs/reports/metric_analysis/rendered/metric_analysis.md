@@ -108,22 +108,34 @@ Higher Class 1 cancellation probability, balking step, or no-show step moves the
 
 ## Regression Screen
 
-The regression screen uses 240 randomized FCFS parameter settings with two seeds per setting.
+The regression screen uses 240 randomized FCFS parameter settings with two seeds
+per setting. Significance is handled with `statsmodels` OLS using HC3 robust
+standard errors. The table and figure keep only coefficients with robust
+p-values below 0.05.
 
-| Target metric | Most important feature | Standardized coefficient |
-|---|---|---:|
-| Utilization | average no-show threshold | 0.512 |
-| Utilization | average no-show step | -0.423 |
-| Utilization | average cancellation probability | 0.320 |
-| Overall served rate | total arrival rate | -0.774 |
-| Overall served rate | average no-show threshold | 0.251 |
-| Offered wait | total arrival rate | 0.576 |
-| Offered wait | average cancellation probability | -0.441 |
-| Class gap | cancellation probability gap | -0.452 |
-| Class gap | balking threshold gap | 0.429 |
-| Class gap | balking step gap | -0.349 |
+| Target metric | Significant feature | Standardized coefficient | 95% HC3 CI | HC3 p-value |
+|---|---|---:|---:|---:|
+| Utilization | average no-show threshold | 0.512 | [0.433, 0.591] | <0.001 |
+| Utilization | average no-show step | -0.423 | [-0.501, -0.346] | <0.001 |
+| Utilization | average cancellation probability | 0.320 | [0.247, 0.393] | <0.001 |
+| Utilization | total arrival rate | -0.109 | [-0.188, -0.031] | 0.006 |
+| Utilization | average balking threshold | -0.086 | [-0.162, -0.009] | 0.028 |
+| Overall served rate | total arrival rate | -0.774 | [-0.855, -0.694] | <0.001 |
+| Overall served rate | average no-show threshold | 0.251 | [0.193, 0.308] | <0.001 |
+| Overall served rate | average no-show step | -0.175 | [-0.232, -0.119] | <0.001 |
+| Overall served rate | average cancellation probability | 0.117 | [0.058, 0.176] | <0.001 |
+| Offered wait | total arrival rate | 0.576 | [0.499, 0.653] | <0.001 |
+| Offered wait | average cancellation probability | -0.441 | [-0.506, -0.376] | <0.001 |
+| Offered wait | average balking threshold | 0.278 | [0.202, 0.353] | <0.001 |
+| Offered wait | average balking step | -0.206 | [-0.291, -0.122] | <0.001 |
+| Class gap | cancellation probability gap | -0.452 | [-0.558, -0.347] | <0.001 |
+| Class gap | balking threshold gap | 0.429 | [0.331, 0.528] | <0.001 |
+| Class gap | balking step gap | -0.349 | [-0.431, -0.266] | <0.001 |
+| Class gap | no-show threshold gap | 0.268 | [0.179, 0.357] | <0.001 |
+| Class gap | no-show step gap | -0.211 | [-0.286, -0.136] | <0.001 |
+| Class gap | class 1 arrival share | -0.120 | [-0.209, -0.030] | 0.009 |
 
-![Regression coefficients](../figures/regression_standardized_coefficients.png)
+![Significant regression coefficients](../figures/regression_significant_standardized_coefficients.png)
 
 ## Bottom Line
 

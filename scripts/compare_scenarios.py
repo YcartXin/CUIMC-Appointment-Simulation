@@ -7,6 +7,7 @@ if str(REPO_DIR) not in sys.path:
 
 from simulation.config_loader import load_config
 from simulation.engine import ClinicAppointmentSimulation
+from analysis.metrics import aggregate_delay_metrics
 
 
 def run_scenario(config_path: Path):
@@ -15,24 +16,14 @@ def run_scenario(config_path: Path):
     return sim.run()
 
 
-def aggregate_mean_accepted_booking_delay(results) -> float:
-    booked = sum(m.booked for m in results.class_metrics.values())
-    delay = sum(m.total_booking_delay for m in results.class_metrics.values())
-    return delay / booked if booked > 0 else 0.0
-
-
-def aggregate_mean_offered_booking_delay(results) -> float:
-    offered = sum(m.offered for m in results.class_metrics.values())
-    delay = sum(m.total_offered_booking_delay for m in results.class_metrics.values())
-    return delay / offered if offered > 0 else 0.0
-
-
 def main() -> None:
     baseline_path = REPO_DIR / "configs" / "baseline.yaml"
     scenario_2_path = REPO_DIR / "configs" / "scenario_2.yaml"
 
     baseline_results = run_scenario(baseline_path)
     scenario_2_results = run_scenario(scenario_2_path)
+    baseline_delays = aggregate_delay_metrics(baseline_results)
+    scenario_2_delays = aggregate_delay_metrics(scenario_2_results)
 
     print("=== Overall Comparison ===")
     print(f"Baseline average utilization:        {baseline_results.average_utilization:.3f}")
@@ -43,12 +34,12 @@ def main() -> None:
     print(f"Scenario 2 overall percent serviced: {scenario_2_results.overall_percent_serviced:.3f}")
     print()
 
-    print(f"Baseline mean accepted delay:       {aggregate_mean_accepted_booking_delay(baseline_results):.3f}")
-    print(f"Scenario 2 mean accepted delay:     {aggregate_mean_accepted_booking_delay(scenario_2_results):.3f}")
+    print(f"Baseline mean accepted delay:       {baseline_delays['mean_accepted_booking_delay']:.3f}")
+    print(f"Scenario 2 mean accepted delay:     {scenario_2_delays['mean_accepted_booking_delay']:.3f}")
     print()
 
-    print(f"Baseline mean offered delay:        {aggregate_mean_offered_booking_delay(baseline_results):.3f}")
-    print(f"Scenario 2 mean offered delay:      {aggregate_mean_offered_booking_delay(scenario_2_results):.3f}")
+    print(f"Baseline mean offered delay:        {baseline_delays['mean_offered_booking_delay']:.3f}")
+    print(f"Scenario 2 mean offered delay:      {scenario_2_delays['mean_offered_booking_delay']:.3f}")
 
     print("\n=== Class-Level Comparison ===")
     for class_id in baseline_results.class_metrics:

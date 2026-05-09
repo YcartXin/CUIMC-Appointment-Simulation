@@ -2,5 +2,6 @@ numpy
 pyyaml
 pandas
 matplotlib
+statsmodels
 jupyter
 tqdm

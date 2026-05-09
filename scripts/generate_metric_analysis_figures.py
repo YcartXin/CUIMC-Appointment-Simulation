@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import TwoSlopeNorm
 import numpy as np
 import pandas as pd
+import statsmodels.api as sm
 
 
 REPO_DIR = Path(__file__).resolve().parents[1]
@@ -76,6 +77,9 @@ FCFS_STRESS_MULTIPLIERS = np.linspace(0.3, 1.7, 15)
 REGRESSION_SCENARIOS = 240
 REGRESSION_SEEDS = [4101, 4102]
 REGRESSION_RANDOM_SEED = 9137
+REGRESSION_ALPHA = 0.05
+REGRESSION_COV_TYPE = "HC3"
+REGRESSION_MAX_COEFFICIENTS_PER_TARGET = 8
 
 REGRESSION_FEATURES = [
     "lambda_total",
@@ -453,7 +457,8 @@ def draw_two_metric_heatmap(df, x_name, y_name, xlabel, ylabel, filename, title,
         table = pivot(df, x_name, y_name, panel["metric"])
         cmap, default_label = metric_heatmap_style(panel["metric"])
         diverging = panel.get("diverging", False)
-        panel_cmap = driver_heatmap_cmap(driver, diverging=diverging) if driver else panel.get("cmap", CLASS_GAP_CMAP if diverging else cmap)
+        fallback_cmap = CLASS_GAP_CMAP if diverging else cmap
+        panel_cmap = driver_heatmap_cmap(driver, diverging=diverging) if driver else fallback_cmap
         image = heatmap_panel(
             ax,
             table,
@@ -483,13 +488,6 @@ def slice_with_fixed(df, x_name, y_name, fixed_axis, fixed_value):
         return df[df[y_name] == actual_value].sort_values(x_name).copy(), actual_value
     actual_value = nearest_value(df[x_name].unique(), fixed_value)
     return df[df[x_name] == actual_value].sort_values(y_name).copy(), actual_value
-
-
-def diagonal_slice(df, x_name, y_name, common_name):
-    mask = np.isclose(df[x_name].astype(float), df[y_name].astype(float))
-    data = df[mask].copy()
-    data[common_name] = data[x_name]
-    return data.sort_values(common_name)
 
 
 def style_line_axis(ax, xlabel, ylabel, y_range=None):
@@ -752,36 +750,6 @@ def draw_class_service_pair_heatmaps(
     )
 
 
-def draw_balking_class_service_heatmaps(df, baseline_balk_step):
-    draw_class_service_pair_heatmaps(
-        df,
-        "class_1_step",
-        "class_2_step",
-        "class 1 balking step",
-        "class 2 balking step",
-        "balking_step_class1_service_heatmap.png",
-        "balking_step_class2_service_heatmap.png",
-        "Class 1 served rate under balking step changes",
-        "Class 2 served rate under balking step changes",
-        fixed_y=baseline_balk_step,
-    )
-
-
-def draw_balking_threshold_class_service_heatmaps(df, baseline_balk_threshold):
-    draw_class_service_pair_heatmaps(
-        df,
-        "class_1_threshold",
-        "class_2_threshold",
-        "class 1 balking threshold",
-        "class 2 balking threshold",
-        "balking_threshold_class1_service_heatmap.png",
-        "balking_threshold_class2_service_heatmap.png",
-        "Class 1 served rate under balking threshold changes",
-        "Class 2 served rate under balking threshold changes",
-        fixed_y=baseline_balk_threshold,
-    )
-
-
 def draw_balking_slice_lines(df, x_name, y_name, fixed_y, baseline_x, xlabel, fixed_label, filename, title):
     driver = "balking"
     y_values = sorted(df[y_name].unique())
@@ -915,8 +883,8 @@ def draw_arrival_mix():
         "arrival_mix_interaction_heatmap.png",
         "Arrival rate and class mix",
         [
-            {"metric": "overall_percent_serviced", "title": "Overall served rate", "label": "rate", "cmap": ACCESS_CMAP},
-            {"metric": "mean_offered_booking_delay", "title": "Overall offered wait", "label": "days", "cmap": WAIT_CMAP},
+            {"metric": "overall_percent_serviced", "title": "Overall served rate", "label": "rate"},
+            {"metric": "mean_offered_booking_delay", "title": "Overall offered wait", "label": "days"},
         ],
     )
     baseline_share = BASE_CONFIG.classes[1].lambda_per_day / lambda_total_base
@@ -1466,25 +1434,26 @@ def sample_regression_parameters():
     return rows
 
 
-def standardized_ols_coefficients(df, features, target):
+def standardize_regression_data(df, features, target, x_mean=None, x_std=None, y_mean=None, y_std=None):
     x = df[features].to_numpy(dtype=float)
     y = df[target].to_numpy(dtype=float)
 
-    x_mean = x.mean(axis=0)
-    x_std = x.std(axis=0)
+    x_mean = x.mean(axis=0) if x_mean is None else x_mean
+    x_std = x.std(axis=0) if x_std is None else x_std
     x_std[x_std == 0] = 1.0
-    y_mean = y.mean()
-    y_std = y.std() or 1.0
+    y_mean = y.mean() if y_mean is None else y_mean
+    y_std = y.std() if y_std is None else y_std
+    y_std = y_std or 1.0
 
-    x_scaled = (x - x_mean) / x_std
+    x_scaled = pd.DataFrame((x - x_mean) / x_std, columns=features, index=df.index)
     y_scaled = (y - y_mean) / y_std
-    design = np.column_stack([np.ones(len(x_scaled)), x_scaled])
-    beta = np.linalg.lstsq(design, y_scaled, rcond=None)[0]
-    y_hat = np.sum(design * beta, axis=1)
-    ss_res = float(((y_scaled - y_hat) ** 2).sum())
-    ss_tot = float(((y_scaled - y_scaled.mean()) ** 2).sum())
-    r2 = 1.0 - ss_res / ss_tot if ss_tot else 0.0
-    return beta[1:], r2
+    return x_scaled, y_scaled, x_mean, x_std, y_mean, y_std
+
+
+def fit_standardized_ols(df, features, target):
+    x_scaled, y_scaled, *_ = standardize_regression_data(df, features, target)
+    design = sm.add_constant(x_scaled, has_constant="add")
+    return sm.OLS(y_scaled, design).fit(cov_type=REGRESSION_COV_TYPE)
 
 
 def train_test_r2(df, features, target):
@@ -1494,46 +1463,132 @@ def train_test_r2(df, features, target):
     train = df.iloc[indices[:train_count]]
     test = df.iloc[indices[train_count:]]
 
-    x_train = train[features].to_numpy(dtype=float)
-    y_train = train[target].to_numpy(dtype=float)
-    x_test = test[features].to_numpy(dtype=float)
     y_test = test[target].to_numpy(dtype=float)
 
-    x_mean = x_train.mean(axis=0)
-    x_std = x_train.std(axis=0)
-    x_std[x_std == 0] = 1.0
-    y_mean = y_train.mean()
-    y_std = y_train.std() or 1.0
+    x_train, y_train, x_mean, x_std, y_mean, y_std = standardize_regression_data(train, features, target)
+    train_design = sm.add_constant(x_train, has_constant="add")
+    model = sm.OLS(y_train, train_design).fit()
 
-    train_design = np.column_stack([np.ones(len(x_train)), (x_train - x_mean) / x_std])
-    beta = np.linalg.lstsq(train_design, (y_train - y_mean) / y_std, rcond=None)[0]
-
-    test_design = np.column_stack([np.ones(len(x_test)), (x_test - x_mean) / x_std])
-    y_hat = np.sum(test_design * beta, axis=1) * y_std + y_mean
+    x_test, *_ = standardize_regression_data(
+        test,
+        features,
+        target,
+        x_mean=x_mean,
+        x_std=x_std,
+        y_mean=y_mean,
+        y_std=y_std,
+    )
+    test_design = sm.add_constant(x_test, has_constant="add")
+    y_hat = np.asarray(model.predict(test_design)) * y_std + y_mean
     ss_res = float(((y_test - y_hat) ** 2).sum())
     ss_tot = float(((y_test - y_test.mean()) ** 2).sum())
     return 1.0 - ss_res / ss_tot if ss_tot else 0.0
 
 
-def plot_regression_coefficients(coef_df):
+def plot_significant_regression_coefficients(coef_df):
     fig, axes = plt.subplots(2, 2, figsize=(14, 9), constrained_layout=True)
-    fig.suptitle("Standardized regression coefficients from randomized FCFS simulations", fontsize=14)
+    fig.suptitle("Significant standardized regression coefficients from randomized FCFS simulations", fontsize=14)
 
     for ax, (target, target_label) in zip(axes.ravel(), REGRESSION_TARGETS.items()):
-        data = coef_df[coef_df["target"] == target].copy()
-        data = data.reindex(data["coefficient"].abs().sort_values(ascending=False).index).head(8)
+        data = coef_df[
+            (coef_df["target"] == target)
+            & (coef_df["significant_05_hc3"])
+        ].copy()
+        data = data.reindex(data["coefficient"].abs().sort_values(ascending=False).index)
+        data = data.head(REGRESSION_MAX_COEFFICIENTS_PER_TARGET)
         data = data.sort_values("coefficient")
+        ax.axvline(0, color=BASELINE_COLOR, linewidth=0.9)
+        ax.set_title(target_label)
+        ax.set_xlabel("standardized coefficient")
+        if data.empty:
+            ax.text(
+                0.5,
+                0.5,
+                "No coefficient passes p < 0.05",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                color=BASELINE_COLOR,
+            )
+            ax.set_yticks([])
+            continue
+
         colors = [
             DRIVER_COLORS.get(driver_from_text(feature), BASELINE_COLOR)
             for feature in data["feature"]
         ]
+        xerr = np.vstack(
+            [
+                data["coefficient"] - data["ci_low_95_hc3"],
+                data["ci_high_95_hc3"] - data["coefficient"],
+            ]
+        )
         ax.barh(data["feature_label"], data["coefficient"], color=colors)
-        ax.axvline(0, color=BASELINE_COLOR, linewidth=0.9)
-        ax.set_title(target_label)
-        ax.set_xlabel("standardized coefficient")
+        ax.errorbar(
+            data["coefficient"],
+            data["feature_label"],
+            xerr=xerr,
+            fmt="none",
+            ecolor=BASELINE_COLOR,
+            elinewidth=1.0,
+            capsize=3,
+        )
 
-    fig.savefig(OUT_DIR / "regression_standardized_coefficients.png", dpi=190, bbox_inches="tight")
+    fig.savefig(OUT_DIR / "regression_significant_standardized_coefficients.png", dpi=190, bbox_inches="tight")
     plt.close(fig)
+
+
+def build_regression_outputs(data):
+    coefficient_rows = []
+    score_rows = []
+    for target, target_label in REGRESSION_TARGETS.items():
+        model = fit_standardized_ols(data, REGRESSION_FEATURES, target)
+        confidence_intervals = model.conf_int(alpha=REGRESSION_ALPHA)
+        if isinstance(confidence_intervals, pd.DataFrame):
+            confidence_intervals = confidence_intervals.copy()
+            confidence_intervals.columns = ["low", "high"]
+        else:
+            confidence_intervals = pd.DataFrame(
+                confidence_intervals,
+                index=model.params.index,
+                columns=["low", "high"],
+            )
+        confidence_intervals = confidence_intervals.loc[REGRESSION_FEATURES]
+        significant = model.pvalues.loc[REGRESSION_FEATURES] < REGRESSION_ALPHA
+        test_r2 = train_test_r2(data, REGRESSION_FEATURES, target)
+        score_rows.append(
+            {
+                "target": target,
+                "target_label": target_label,
+                "full_sample_r2": float(model.rsquared),
+                "test_r2": test_r2,
+                "significant_coefficients_05_hc3": int(significant.sum()),
+            }
+        )
+        for feature in REGRESSION_FEATURES:
+            coefficient = float(model.params.loc[feature])
+            coefficient_rows.append(
+                {
+                    "target": target,
+                    "target_label": target_label,
+                    "feature": feature,
+                    "feature_label": FEATURE_LABELS[feature],
+                    "coefficient": coefficient,
+                    "abs_coefficient": abs(coefficient),
+                    "hc3_standard_error": float(model.bse.loc[feature]),
+                    "ci_low_95_hc3": float(confidence_intervals.loc[feature, "low"]),
+                    "ci_high_95_hc3": float(confidence_intervals.loc[feature, "high"]),
+                    "p_value_hc3": float(model.pvalues.loc[feature]),
+                    "significant_05_hc3": bool(significant.loc[feature]),
+                }
+            )
+
+    coef_df = pd.DataFrame(coefficient_rows)
+    score_df = pd.DataFrame(score_rows)
+    coef_df.to_csv(DATA_DIR / "regression_standardized_coefficients.csv", index=False)
+    score_df.to_csv(DATA_DIR / "regression_model_scores.csv", index=False)
+    plot_significant_regression_coefficients(coef_df)
+    return coef_df, score_df
 
 
 def run_regression_screening():
@@ -1555,36 +1610,7 @@ def run_regression_screening():
     data = add_regression_features(pd.DataFrame(rows))
     data.to_csv(DATA_DIR / "regression_simulation_data.csv", index=False)
 
-    coefficient_rows = []
-    score_rows = []
-    for target, target_label in REGRESSION_TARGETS.items():
-        coefficients, full_r2 = standardized_ols_coefficients(data, REGRESSION_FEATURES, target)
-        test_r2 = train_test_r2(data, REGRESSION_FEATURES, target)
-        score_rows.append(
-            {
-                "target": target,
-                "target_label": target_label,
-                "full_sample_r2": full_r2,
-                "test_r2": test_r2,
-            }
-        )
-        for feature, coefficient in zip(REGRESSION_FEATURES, coefficients):
-            coefficient_rows.append(
-                {
-                    "target": target,
-                    "target_label": target_label,
-                    "feature": feature,
-                    "feature_label": FEATURE_LABELS[feature],
-                    "coefficient": coefficient,
-                    "abs_coefficient": abs(coefficient),
-                }
-            )
-
-    coef_df = pd.DataFrame(coefficient_rows)
-    score_df = pd.DataFrame(score_rows)
-    coef_df.to_csv(DATA_DIR / "regression_standardized_coefficients.csv", index=False)
-    score_df.to_csv(DATA_DIR / "regression_model_scores.csv", index=False)
-    plot_regression_coefficients(coef_df)
+    coef_df, score_df = build_regression_outputs(data)
     return data, coef_df, score_df
 
 
@@ -1636,7 +1662,7 @@ def git_metadata():
 
 def package_versions():
     versions = {}
-    for package in ["numpy", "pandas", "matplotlib", "pyyaml", "jupyter"]:
+    for package in ["numpy", "pandas", "matplotlib", "statsmodels", "pyyaml", "jupyter"]:
         try:
             versions[package] = importlib_metadata.version(package)
         except importlib_metadata.PackageNotFoundError:
@@ -1693,6 +1719,13 @@ def write_manifest(row_counts, run_started_at):
             "class_arrival_multipliers": serializable_values(CLASS_ARRIVAL_MULTIPLIERS),
             "fcfs_stress_multipliers": serializable_values(FCFS_STRESS_MULTIPLIERS),
             "regression_scenarios": REGRESSION_SCENARIOS,
+        },
+        "regression_method": {
+            "estimator": "statsmodels OLS",
+            "cov_type": REGRESSION_COV_TYPE,
+            "alpha": REGRESSION_ALPHA,
+            "filter": "p_value_hc3 < 0.05",
+            "significance_column": "significant_05_hc3",
         },
         "row_counts": row_counts,
         "generated_artifacts": generated_artifacts(run_started_at),
@@ -1763,7 +1796,7 @@ def main():
         "balking_step_interaction_heatmap.png",
         "Balking step interaction",
         [
-            {"metric": "overall_percent_serviced", "title": "Overall served rate", "label": "rate", "cmap": ACCESS_CMAP},
+            {"metric": "overall_percent_serviced", "title": "Overall served rate", "label": "rate"},
             {"metric": "access_advantage_class_1", "title": "Class gap: served rate", "label": "Class 1 - Class 2", "diverging": True},
         ],
         fixed_y=baseline_balk_step,
@@ -1778,13 +1811,24 @@ def main():
         "balking_step_balking_rate_heatmap.png",
         "Balking rate under balking-step changes",
         [
-            {"metric": "overall_balking_rate", "title": "Overall balking rate", "label": "balked / offered", "cmap": BALKING_CMAP},
+            {"metric": "overall_balking_rate", "title": "Overall balking rate", "label": "balked / offered"},
             {"metric": "balking_rate_gap_class_1", "title": "Class gap: balking rate", "label": "Class 1 - Class 2", "diverging": True},
         ],
         fixed_y=baseline_balk_step,
         fixed_x=baseline_balk_step,
     )
-    draw_balking_class_service_heatmaps(balk_step_df, baseline_balk_step)
+    draw_class_service_pair_heatmaps(
+        balk_step_df,
+        "class_1_step",
+        "class_2_step",
+        "class 1 balking step",
+        "class 2 balking step",
+        "balking_step_class1_service_heatmap.png",
+        "balking_step_class2_service_heatmap.png",
+        "Class 1 served rate under balking step changes",
+        "Class 2 served rate under balking step changes",
+        fixed_y=baseline_balk_step,
+    )
     balk_step_slice_df = draw_balking_slice_lines(
         balk_step_df,
         "class_1_step",
@@ -1846,7 +1890,7 @@ def main():
         "balking_threshold_interaction_heatmap.png",
         "Balking threshold interaction",
         [
-            {"metric": "mean_offered_booking_delay", "title": "Overall offered wait", "label": "days", "cmap": WAIT_CMAP},
+            {"metric": "mean_offered_booking_delay", "title": "Overall offered wait", "label": "days"},
             {"metric": "access_advantage_class_1", "title": "Class gap: served rate", "label": "Class 1 - Class 2", "diverging": True},
         ],
         fixed_y=baseline_balk_threshold,
@@ -1861,13 +1905,24 @@ def main():
         "balking_threshold_balking_rate_heatmap.png",
         "Balking rate under balking-threshold changes",
         [
-            {"metric": "overall_balking_rate", "title": "Overall balking rate", "label": "balked / offered", "cmap": BALKING_CMAP},
+            {"metric": "overall_balking_rate", "title": "Overall balking rate", "label": "balked / offered"},
             {"metric": "balking_rate_gap_class_1", "title": "Class gap: balking rate", "label": "Class 1 - Class 2", "diverging": True},
         ],
         fixed_y=baseline_balk_threshold,
         fixed_x=baseline_balk_threshold,
     )
-    draw_balking_threshold_class_service_heatmaps(balk_threshold_df, baseline_balk_threshold)
+    draw_class_service_pair_heatmaps(
+        balk_threshold_df,
+        "class_1_threshold",
+        "class_2_threshold",
+        "class 1 balking threshold",
+        "class 2 balking threshold",
+        "balking_threshold_class1_service_heatmap.png",
+        "balking_threshold_class2_service_heatmap.png",
+        "Class 1 served rate under balking threshold changes",
+        "Class 2 served rate under balking threshold changes",
+        fixed_y=baseline_balk_threshold,
+    )
     balk_threshold_slice_df = draw_balking_slice_lines(
         balk_threshold_df,
         "class_1_threshold",
@@ -1942,7 +1997,7 @@ def main():
         "no_show_step_interaction_heatmap.png",
         "No-show step interaction",
         [
-            {"metric": "average_utilization", "title": "Utilization", "label": "rate", "cmap": UTILIZATION_CMAP},
+            {"metric": "average_utilization", "title": "Utilization", "label": "rate"},
             {"metric": "access_advantage_class_1", "title": "Class gap: served rate", "label": "Class 1 - Class 2", "diverging": True},
         ],
         fixed_y=baseline_no_show_step,
@@ -1994,7 +2049,7 @@ def main():
         "no_show_threshold_interaction_heatmap.png",
         "No-show threshold interaction",
         [
-            {"metric": "average_utilization", "title": "Utilization", "label": "rate", "cmap": UTILIZATION_CMAP},
+            {"metric": "average_utilization", "title": "Utilization", "label": "rate"},
             {"metric": "access_advantage_class_1", "title": "Class gap: served rate", "label": "Class 1 - Class 2", "diverging": True},
         ],
         fixed_y=baseline_no_show_threshold,
@@ -2063,7 +2118,7 @@ def main():
         "cancellation_probability_interaction_heatmap.png",
         "Cancellation probability interaction",
         [
-            {"metric": "overall_percent_serviced", "title": "Overall served rate", "label": "rate", "cmap": ACCESS_CMAP},
+            {"metric": "overall_percent_serviced", "title": "Overall served rate", "label": "rate"},
             {"metric": "access_advantage_class_1", "title": "Class gap: served rate", "label": "Class 1 - Class 2", "diverging": True},
         ],
         fixed_y=baseline_cancel_prob,
@@ -2172,11 +2227,24 @@ def main():
 
     print("\nRegression screening model scores")
     print(regression_score_df.to_string(index=False))
-    print("\nTop regression coefficients by target")
+    print("\nTop significant regression coefficients by target")
     for target, target_label in REGRESSION_TARGETS.items():
-        top = regression_coef_df[regression_coef_df["target"] == target].nlargest(5, "abs_coefficient")
+        top = regression_coef_df[
+            (regression_coef_df["target"] == target)
+            & (regression_coef_df["significant_05_hc3"])
+        ].nlargest(5, "abs_coefficient")
         print(f"\n{target_label}")
-        print(top[["feature_label", "coefficient"]].to_string(index=False))
+        print(
+            top[
+                [
+                    "feature_label",
+                    "coefficient",
+                    "ci_low_95_hc3",
+                    "ci_high_95_hc3",
+                    "p_value_hc3",
+                ]
+            ].to_string(index=False)
+        )
 
 
 if __name__ == "__main__":
