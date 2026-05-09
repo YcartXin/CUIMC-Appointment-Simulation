@@ -86,7 +86,7 @@
     "outputs/reports/metric_analysis/figures/scenario_metric_comparison.png"
   ],
   "git": {
-    "commit": "97d5e3e58f66f0a4e95f064b741766d35789849a",
+    "commit": "6aa48fbba28e856585df823fa0b9e2f5cbcfca9c",
     "dirty": true
   },
   "grids": {

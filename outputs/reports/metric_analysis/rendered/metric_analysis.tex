@@ -92,12 +92,26 @@ Purple & Balking step, balking threshold, and balking-rate diagnostics. \\
 Green & No-show step and no-show threshold changes. \\
 Red & Cancellation probability changes. \\
 Line style and marker & Overall, Class 1, and Class 2 within the same driver family. \\
-Gray dashed line & Baseline assumption in one-axis slices and heatmaps. \\
-Driver-colored heatmaps & The varied assumption family. For class-gap heatmaps, lighter shades indicate Class 2 is higher and darker shades indicate Class 1 is higher. \\
+Gray dashed line & Baseline assumption in one-axis slices. \\
+Black/white dashed crosshair & Baseline Class 1 and Class 2 assumptions in two-axis heatmaps. \\
+Driver-colored heatmaps & The varied assumption family. Overall metric panels use a sequential version of the driver color. Class-gap panels use a muted driver-adjacent diverging scale centered on a near-white zero; one side is Class 2 advantage and the other side is Class 1 advantage, as labeled by the colorbar sign. \\
 \bottomrule
 \end{tabular}
 \caption{Color key used throughout the metric-focused figures.}
 \end{table}
+
+\section{Known Measurement Semantics}
+
+This report preserves the current simulation semantics. These conventions are
+important for interpreting the metric values and are not model changes.
+
+\begin{itemize}
+    \item Class-level patient metrics are tracked for patients who arrive during the measurement window.
+    \item Slot utilization is tracked for service days during the measurement window.
+    \item If \texttt{cooldown\_days < horizon\_days - 1}, some late measurement-window bookings can remain unresolved after the simulation ends. These patients are currently not counted as served, canceled, or no-show.
+    \item \texttt{total\_value} is service-day based. It increments when a patient is served, including untracked burn-in or cooldown bookings, so it is not cohort-aligned with tracked class metrics.
+    \item The engine can support more than two classes, but this report and its class-gap metrics are explicitly two-class analyses.
+\end{itemize}
 
 \section{Average Utilization}
 
@@ -234,6 +248,78 @@ The simple class-gap plots show direction through the distance between class lin
 \mainfigure{balking_threshold_interaction_heatmap.png}{Balking threshold interaction heatmap. The right panel shows the served-rate gap created by tolerance differences.}{fig:metric-class-gap-balk-threshold}
 
 The heatmaps show symmetry around the baseline because the baseline classes are identical. Moving to the upper-left or lower-right corners creates opposite class advantages.
+
+\section{Balking Deep Dive}
+
+The balking deep dive isolates Class 1 balking behavior while Class 2 stays at
+baseline. This section is intentionally narrower than the main metric sections:
+it explains why a lower accepted delay can be a selection effect rather than a
+patient-access improvement.
+
+\subsection{Class 1 High Balking Probability}
+
+This sweep varies only the high balking probability for Class 1. All other
+simulation parameters, including Class 2 behavior, stay fixed.
+
+\mainfigure{../../../class1_balking/figures/average_utilization_aggregate.png}{Class 1 high-balking-probability sweep: aggregate utilization.}{fig:balk-deep-step-util}
+
+Aggregate utilization remains nearly flat across Class 1 high balking
+probabilities. Total demand remains high enough to keep capacity used even when
+more Class 1 patients reject long-delay offers.
+
+\mainfigure{../../../class1_balking/figures/mean_accepted_delay_by_class.png}{Class 1 high-balking-probability sweep: mean accepted delay by class.}{fig:balk-deep-step-accepted}
+
+Class 1 accepted delay declines as high balking probability increases because
+long-delay Class 1 patients increasingly reject appointments and leave the
+accepted sample.
+
+\mainfigure{../../../class1_balking/figures/mean_offered_delay_by_class.png}{Class 1 high-balking-probability sweep: mean offered delay by class.}{fig:balk-deep-step-offered}
+
+Offered delay is the broader congestion measure because it includes both
+accepted and balked patients. Once enough long-delay Class 1 patients reject
+offers, congestion falls and both classes can receive shorter offered delays.
+
+\mainfigure{../../../class1_balking/figures/percent_serviced_by_class.png}{Class 1 high-balking-probability sweep: served rate by class.}{fig:balk-deep-step-served}
+
+Percent serviced shows the class tradeoff: as Class 1 high balking probability
+rises, Class 1 access falls while Class 2 access rises.
+
+\mainfigure{../../../class1_balking/figures/balking_rate_by_class.png}{Class 1 high-balking-probability sweep: balking rate by class.}{fig:balk-deep-step-rate}
+
+The balking-rate plot confirms that this is a behavioral rejection mechanism,
+not just a capacity effect.
+
+\subsection{Class 1 Balking Threshold}
+
+This sweep varies only the Class 1 balking threshold. Class 1's low and high
+balking probabilities remain fixed. With \texttt{horizon\_days = 14}, possible
+offered delays are $\tau = 0, 1, \ldots, 13$.
+
+\mainfigure{../../../class1_balking_threshold/figures/average_utilization_aggregate.png}{Class 1 balking-threshold sweep: aggregate utilization.}{fig:balk-deep-threshold-util}
+
+Aggregate utilization should be read as completed slot use. If the curve is
+flat, the threshold mainly redistributes access rather than changing total
+completed capacity.
+
+\mainfigure{../../../class1_balking_threshold/figures/mean_accepted_delay_by_class.png}{Class 1 balking-threshold sweep: mean accepted delay by class.}{fig:balk-deep-threshold-accepted}
+
+Class 1 accepted delay generally rises as the threshold increases because Class
+1 tolerates longer waits before high balking applies.
+
+\mainfigure{../../../class1_balking_threshold/figures/mean_offered_delay_by_class.png}{Class 1 balking-threshold sweep: mean offered delay by class.}{fig:balk-deep-threshold-offered}
+
+Mean offered delay shows how the booking horizon changes when Class 1 begins
+balking earlier or later.
+
+\mainfigure{../../../class1_balking_threshold/figures/percent_serviced_by_class.png}{Class 1 balking-threshold sweep: served rate by class.}{fig:balk-deep-threshold-served}
+
+Percent serviced is the access metric that determines whether shorter accepted
+waits are actually good for patients.
+
+\mainfigure{../../../class1_balking_threshold/figures/service_gap.png}{Class 1 balking-threshold sweep: Class 1 minus Class 2 service gap.}{fig:balk-deep-threshold-gap}
+
+The service-gap figure directly shows whether changing the threshold primarily
+redistributes service between classes.
 
 \section{Regression Screen}
 

@@ -30,6 +30,8 @@ In the driver plots, each panel uses one driver-family color:
 | Green | no-show step and no-show threshold changes |
 | Red | cancellation probability changes |
 | Gray dashed line | baseline assumption |
+| Black/white dashed crosshair | baseline Class 1 and Class 2 assumptions in two-axis heatmaps |
+| Class-gap heatmaps | muted driver-adjacent diverging scale centered on near-white zero; the colorbar sign shows whether Class 1 or Class 2 is higher |
 
 Line style and marker distinguish overall, Class 1, and Class 2 within the same
 driver family. For utilization, the class lines are each class's completed slots
@@ -247,4 +249,3 @@ per setting.
 Use `overall_percent_serviced` for access and `average_utilization` for capacity
 use. Use `mean_offered_booking_delay` for patient-facing wait. Use balking rate
 and class gaps as diagnostics that explain why the final metrics moved.
-

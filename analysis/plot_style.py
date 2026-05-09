@@ -32,6 +32,15 @@ DRIVER_LABELS = {
     "no_show": "No-show",
     "cancellation": "Cancellation",
 }
+DRIVER_GAP_ENDPOINTS = {
+    # Negative values mean Class 2 advantage; positive values mean Class 1 advantage.
+    # These are deliberately muted driver-adjacent pairs: enough hue separation to
+    # read the sign, but not so saturated that the heatmap overpowers the metric.
+    "arrival": ("#4aa6b8", "#5a69b2"),
+    "balking": ("#626fb4", "#b35aa3"),
+    "no_show": ("#3c9b84", "#86a84e"),
+    "cancellation": ("#9d4775", "#d87058"),
+}
 
 
 def blend_color(color: str, target: str = "#ffffff", amount: float = 0.5) -> tuple[float, float, float]:
@@ -55,10 +64,16 @@ def driver_cmap(driver: str) -> LinearSegmentedColormap:
 
 
 def driver_gap_cmap(driver: str) -> LinearSegmentedColormap:
-    color = DRIVER_COLORS[driver]
+    negative_color, positive_color = DRIVER_GAP_ENDPOINTS[driver]
     return LinearSegmentedColormap.from_list(
         f"{driver}_gap",
-        [blend_color(color, amount=0.78), "#ffffff", blend_color(color, "#000000", 0.12)],
+        [
+            (0.0, blend_color(negative_color, "#000000", 0.06)),
+            (0.38, blend_color(negative_color, amount=0.42)),
+            (0.50, "#fafafa"),
+            (0.62, blend_color(positive_color, amount=0.42)),
+            (1.0, blend_color(positive_color, "#000000", 0.06)),
+        ],
     )
 
 
@@ -142,4 +157,3 @@ def driver_heatmap_cmap(driver: str | None, diverging: bool = False):
     if driver is None:
         return CLASS_GAP_CMAP if diverging else ACCESS_CMAP
     return DRIVER_GAP_CMAPS[driver] if diverging else DRIVER_CMAPS[driver]
-
