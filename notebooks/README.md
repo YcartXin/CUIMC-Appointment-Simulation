@@ -5,7 +5,7 @@ Open these notebooks in order:
 1. `01_simulation_basics.ipynb` explains the core code path from YAML config to simulation results and shared metric helpers.
 2. `02_metric_driver_slices.ipynb` recreates simple one-driver metric slices where Class 1 varies and Class 2 stays fixed.
 3. `03_heatmaps_and_report_artifacts.ipynb` builds compact interaction heatmaps and inspects the generated metric-report manifest.
-4. `04_metric_report_walkthrough.ipynb` mirrors `docs/reports/metric_analysis.qmd` in metric-first order and then shows every generated report figure not embedded in the prose.
+4. `04_metric_report_walkthrough.ipynb` mirrors `docs/reports/metric_analysis/metric_analysis.qmd` in metric-first order and then shows every generated report figure not embedded in the prose.
 5. `appointment_simulation_analysis.ipynb` is the broader scenario walkthrough, now adapted to the cleaned `simulation/` package layout.
 6. `parameter_sensitivity_analysis.ipynb` is the larger exploratory sweep workbook, using the shared metric and plot-style helpers.
 

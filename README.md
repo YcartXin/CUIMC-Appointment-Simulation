@@ -30,9 +30,9 @@ The simulation includes:
 - `notebooks/`: interactive exploration notebooks
 - `docs/`: documentation sources and archived notes
 - `docs/reference/simulation_documentation.qmd`: simulation documentation source
-- `docs/reports/metric_analysis.qmd`: canonical metric-focused study source
-- `outputs/`: generated figures, CSVs, manifests, rendered reports, and sweep outputs
-- `outputs/reports/metric_analysis/`: metric report figures, data, manifest, and rendered report artifacts
+- `docs/reference/simulation_explanation/`: rendered simulation documentation
+- `docs/reports/metric_analysis/`: canonical metric report source, figures, data, rendered thorough report, and research-style report variants
+- `outputs/`: generated companion reports, sweep outputs, and archived artifacts
 
 ## Installation
 

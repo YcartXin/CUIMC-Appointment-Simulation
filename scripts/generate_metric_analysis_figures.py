@@ -55,7 +55,7 @@ from analysis.plot_style import (
 )
 
 
-OUTPUT_DIR = REPO_DIR / "outputs" / "reports" / "metric_analysis"
+OUTPUT_DIR = REPO_DIR / "docs" / "reports" / "metric_analysis"
 OUT_DIR = OUTPUT_DIR / "figures"
 DATA_DIR = OUTPUT_DIR / "data"
 for directory in (OUT_DIR, DATA_DIR):
@@ -1683,8 +1683,15 @@ def serializable_values(values):
 
 def generated_artifacts(run_started_at):
     artifacts = []
+    excluded_dirs = {
+        OUTPUT_DIR / "current",
+        OUTPUT_DIR / "legacy",
+        OUTPUT_DIR / "research_style",
+        OUTPUT_DIR / "rendered",
+        OUTPUT_DIR / "thorough",
+    }
     for path in sorted(OUTPUT_DIR.rglob("*")):
-        if (OUTPUT_DIR / "rendered") in path.parents:
+        if any(directory in path.parents for directory in excluded_dirs):
             continue
         if path.is_file() and path.name != "manifest.json" and path.stat().st_mtime >= run_started_at:
             artifacts.append(path.relative_to(REPO_DIR).as_posix())
