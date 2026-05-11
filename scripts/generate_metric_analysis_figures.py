@@ -84,18 +84,16 @@ REGRESSION_MAX_COEFFICIENTS_PER_TARGET = 8
 REGRESSION_FEATURES = [
     "lambda_total",
     "class_1_share",
-    "balk_noshow_step_level",
-    "balk_minus_noshow_step",
-    "sign_balk_minus_noshow_step",
-    "balk_step_gap_c1_minus_c2",
-    "balk_noshow_threshold_level",
-    "balk_minus_noshow_threshold",
-    "sign_balk_minus_noshow_threshold",
-    "balk_threshold_gap_c1_minus_c2",
-    "no_show_step_gap_c1_minus_c2",
-    "no_show_threshold_gap_c1_minus_c2",
-    "cancel_prob_mean",
-    "cancel_prob_gap_c1_minus_c2",
+    "class_1_balk_step",
+    "class_2_balk_step",
+    "class_1_balk_threshold",
+    "class_2_balk_threshold",
+    "class_1_no_show_step",
+    "class_2_no_show_step",
+    "class_1_no_show_threshold",
+    "class_2_no_show_threshold",
+    "class_1_cancel_prob",
+    "class_2_cancel_prob",
 ]
 
 REGRESSION_TARGETS = {
@@ -108,18 +106,16 @@ REGRESSION_TARGETS = {
 FEATURE_LABELS = {
     "lambda_total": "total arrival rate",
     "class_1_share": "class 1 arrival share",
-    "balk_noshow_step_level": "avg step level (balk + no-show)",
-    "balk_minus_noshow_step": "balk step − no-show step",
-    "sign_balk_minus_noshow_step": "sign(balk step − no-show step)",
-    "balk_step_gap_c1_minus_c2": "balking step gap",
-    "balk_noshow_threshold_level": "avg threshold level (balk + no-show)",
-    "balk_minus_noshow_threshold": "balk threshold − no-show threshold",
-    "sign_balk_minus_noshow_threshold": "sign(balk threshold − no-show threshold)",
-    "balk_threshold_gap_c1_minus_c2": "balking threshold gap",
-    "no_show_step_gap_c1_minus_c2": "no-show step gap",
-    "no_show_threshold_gap_c1_minus_c2": "no-show threshold gap",
-    "cancel_prob_mean": "avg cancellation prob.",
-    "cancel_prob_gap_c1_minus_c2": "cancellation prob. gap",
+    "class_1_balk_step": "C1 balking step",
+    "class_2_balk_step": "C2 balking step",
+    "class_1_balk_threshold": "C1 balking threshold",
+    "class_2_balk_threshold": "C2 balking threshold",
+    "class_1_no_show_step": "C1 no-show step",
+    "class_2_no_show_step": "C2 no-show step",
+    "class_1_no_show_threshold": "C1 no-show threshold",
+    "class_2_no_show_threshold": "C2 no-show threshold",
+    "class_1_cancel_prob": "C1 cancellation prob.",
+    "class_2_cancel_prob": "C2 cancellation prob.",
 }
 
 def run_result(config, seed):
@@ -1323,6 +1319,112 @@ def draw_metric_driver_figure(filename, title, panels):
         draw_metric_driver_panel(ax=ax, **panel)
 
     fig.savefig(OUT_DIR / filename, dpi=190, bbox_inches="tight")
+    plt.close(fig)
+
+
+def draw_class_gap_drivers_figure(
+    balk_step_df,
+    balk_threshold_df,
+    no_show_step_df,
+    no_show_threshold_df,
+    cancel_df,
+    baseline_balk_step,
+    baseline_balk_threshold,
+    baseline_no_show_step,
+    baseline_no_show_threshold,
+    baseline_cancel_prob,
+):
+    """
+    For each behavioral parameter, show the access gap (class 1 – class 2
+    served rate) separately when Class 1 varies vs when Class 2 varies,
+    with the other class held at baseline. No cross-behavior combined features.
+    """
+    panels = [
+        {
+            "df": cancel_df,
+            "c1_col": "class_1_cancel_prob",
+            "c2_col": "class_2_cancel_prob",
+            "baseline": baseline_cancel_prob,
+            "xlabel": "cancellation probability",
+            "title": "Cancellation probability",
+        },
+        {
+            "df": balk_step_df,
+            "c1_col": "class_1_step",
+            "c2_col": "class_2_step",
+            "baseline": baseline_balk_step,
+            "xlabel": "balking high-delay probability",
+            "title": "Balking step",
+        },
+        {
+            "df": balk_threshold_df,
+            "c1_col": "class_1_threshold",
+            "c2_col": "class_2_threshold",
+            "baseline": baseline_balk_threshold,
+            "xlabel": "balking threshold (days)",
+            "title": "Balking threshold",
+        },
+        {
+            "df": no_show_step_df,
+            "c1_col": "class_1_step",
+            "c2_col": "class_2_step",
+            "baseline": baseline_no_show_step,
+            "xlabel": "no-show high-delay probability",
+            "title": "No-show step",
+        },
+        {
+            "df": no_show_threshold_df,
+            "c1_col": "class_1_threshold",
+            "c2_col": "class_2_threshold",
+            "baseline": baseline_no_show_threshold,
+            "xlabel": "no-show threshold (days)",
+            "title": "No-show threshold",
+        },
+    ]
+
+    ncols = 3
+    nrows = 2
+    fig, axes = plt.subplots(nrows, ncols, figsize=(13, 7.5), constrained_layout=True)
+    fig.suptitle(
+        "Class access gap: effect of each parameter varying for one class\n"
+        "(solid = Class 1 varies, Class 2 fixed; dashed = Class 2 varies, Class 1 fixed)",
+        fontsize=11,
+    )
+
+    for idx, panel in enumerate(panels):
+        ax = axes.ravel()[idx]
+        df = panel["df"]
+        c1_col, c2_col = panel["c1_col"], panel["c2_col"]
+        baseline = panel["baseline"]
+
+        # Class 1 varies (Class 2 fixed at baseline)
+        c1_slice, _ = slice_with_fixed(df, c1_col, c2_col, c2_col, baseline)
+        c1_slice = c1_slice.sort_values(c1_col)
+        ax.plot(c1_slice[c1_col], c1_slice["access_advantage_class_1"],
+                color=CLASS_1_COLOR, linewidth=1.8, marker="o", markersize=4,
+                label="Class 1 varies")
+
+        # Class 2 varies (Class 1 fixed at baseline)
+        c2_slice, _ = slice_with_fixed(df, c2_col, c1_col, c1_col, baseline)
+        c2_slice = c2_slice.sort_values(c2_col)
+        ax.plot(c2_slice[c2_col], c2_slice["access_advantage_class_1"],
+                color=CLASS_2_COLOR, linewidth=1.8, marker="o", markersize=4,
+                linestyle="--", label="Class 2 varies")
+
+        ax.axhline(0, color=BASELINE_COLOR, linewidth=0.9)
+        ax.axvline(baseline, color=BASELINE_COLOR, linewidth=0.9, linestyle="--")
+        ax.set_title(panel["title"], fontsize=10)
+        ax.set_xlabel(panel["xlabel"], fontsize=9)
+        ax.set_ylabel("class 1 − class 2 served rate", fontsize=9)
+        ax.legend(frameon=False, fontsize=8)
+        ax.grid(True, alpha=0.25)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    # Hide unused cell
+    axes.ravel()[-1].set_visible(False)
+
+    fig.savefig(OUT_DIR / "metric_class_gap_drivers.png", dpi=190, bbox_inches="tight")
     plt.close(fig)
 
 

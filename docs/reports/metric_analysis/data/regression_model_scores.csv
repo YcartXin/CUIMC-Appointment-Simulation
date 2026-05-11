@@ -1,5 +1,5 @@
 target,target_label,full_sample_r2,test_r2,significant_coefficients_05_hc3
-average_utilization,Average utilization,0.6929715916355664,0.5940021421127113,7
-overall_percent_serviced,Overall percent serviced,0.8019552169570227,0.726195816457845,6
-mean_offered_booking_delay,Mean offered delay,0.721339361389768,0.5554627040340648,5
-access_advantage_class_1,Class 1 access advantage,0.6404004102653875,0.6950977819035284,6
+average_utilization,Average utilization,0.6754574010940844,0.5449982025163123,8
+overall_percent_serviced,Overall percent serviced,0.7994011007225166,0.7189299852176384,6
+mean_offered_booking_delay,Mean offered delay,0.7182443907559971,0.5546115772258542,7
+access_advantage_class_1,Class 1 access advantage,0.6392455092581366,0.7076745347161466,11
