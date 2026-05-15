@@ -244,6 +244,102 @@ def set_arrival_mix(config, lambda_total, class_1_share):
         },
     )
 
+def accepted_delay_distribution(config, seeds):
+    """
+    Return accepted booking counts and shares by class and tau.
+
+    The output has one row per class and tau value.
+    Counts are averaged across seeds.
+    Shares are calculated within class.
+    """
+
+    rows = []
+
+    for seed in seeds:
+        result = run_result(config, seed)
+
+        for class_id, metrics in result.class_metrics.items():
+            total_accepted = sum(metrics.accepted_delay_counts.values())
+
+            for tau in range(config.horizon_days):
+                count = metrics.accepted_delay_counts.get(tau, 0)
+
+                rows.append(
+                    {
+                        "seed": seed,
+                        "class_id": class_id,
+                        "tau": tau,
+                        "accepted_count": count,
+                        "total_accepted": total_accepted,
+                        "accepted_share": (
+                            count / total_accepted
+                            if total_accepted > 0
+                            else 0.0
+                        ),
+                    }
+                )
+
+    df = pd.DataFrame(rows)
+
+    summary = (
+        df.groupby(["class_id", "tau"], as_index=False)
+        .agg(
+            accepted_count=("accepted_count", "mean"),
+            accepted_share=("accepted_share", "mean"),
+        )
+    )
+
+    return summary
+
+def draw_accepted_delay_distribution():
+    """
+    Plot the distribution of accepted bookings by original booking delay tau.
+    """
+
+    df = accepted_delay_distribution(
+        config=BASE_CONFIG,
+        seeds=BASELINE_SUMMARY_SEEDS,
+    )
+
+    df.to_csv(DATA_DIR / "accepted_delay_distribution.csv", index=False)
+
+    fig, ax = plt.subplots(figsize=(9, 5), constrained_layout=True)
+
+    for idx, class_id in enumerate(sorted(df["class_id"].unique())):
+        sub = df[df["class_id"] == class_id].sort_values("tau")
+
+        plot_driver_line(
+            ax,
+            sub["tau"],
+            sub["accepted_share"],
+            label=f"Class {class_id}",
+            driver="balking",
+            index=idx,
+        )
+
+    ax.axvline(
+        BASE_CONFIG.classes[1].no_show_prob.threshold,
+        color=BASELINE_COLOR,
+        linestyle="--",
+        linewidth=1.2,
+        label="no-show threshold",
+    )
+
+    ax.set_title("Accepted Booking Delay Distribution")
+    ax.set_xlabel("Original booking delay, tau")
+    ax.set_ylabel("share of accepted bookings")
+    ax.set_xticks(range(BASE_CONFIG.horizon_days))
+    ax.set_ylim(bottom=0)
+    ax.legend(frameon=False)
+
+    fig.savefig(
+        OUT_DIR / "accepted_delay_distribution.png",
+        dpi=190,
+        bbox_inches="tight",
+    )
+    plt.close(fig)
+
+    return df
 
 def set_class_arrival(config, target_class, lambda_per_day):
     return update_classes(config, {target_class: {"lambda_per_day": float(lambda_per_day)}})
@@ -1742,6 +1838,7 @@ def main():
     plt.style.use("default")
 
     baseline_df = draw_baseline_summary()
+    draw_accepted_delay_distribution()
 
     baseline_balk_step = BASE_CONFIG.classes[1].balk_prob.high - BASE_CONFIG.classes[1].balk_prob.low
     baseline_balk_threshold = BASE_CONFIG.classes[1].balk_prob.threshold

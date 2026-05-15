@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 
@@ -119,6 +119,9 @@ class ClassMetrics:
 
     # Sum of delays only for patients who accepted/booked an offered slot
     total_booking_delay: float = 0.0
+
+    # Count of accepted/booked patients by original booking delay tau
+    accepted_delay_counts: Dict[int, int] = field(default_factory=dict)
 
     # Sum of delays for all patients who received an offer including balked
     total_offered_booking_delay: float = 0.0

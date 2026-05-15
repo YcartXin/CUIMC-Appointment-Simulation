@@ -19,6 +19,7 @@
     "python": "3.13.9"
   },
   "generated_artifacts": [
+    "docs/reports/metric_analysis/data/accepted_delay_distribution.csv",
     "docs/reports/metric_analysis/data/balking_class1_step_slice.csv",
     "docs/reports/metric_analysis/data/balking_class1_threshold_slice.csv",
     "docs/reports/metric_analysis/data/baseline_summary.csv",
@@ -26,6 +27,7 @@
     "docs/reports/metric_analysis/data/regression_model_scores.csv",
     "docs/reports/metric_analysis/data/regression_simulation_data.csv",
     "docs/reports/metric_analysis/data/regression_standardized_coefficients.csv",
+    "docs/reports/metric_analysis/figures/accepted_delay_distribution.png",
     "docs/reports/metric_analysis/figures/arrival_mix_behavior_panels.png",
     "docs/reports/metric_analysis/figures/arrival_mix_benefit_heatmaps.png",
     "docs/reports/metric_analysis/figures/arrival_mix_interaction_heatmap.png",
@@ -86,7 +88,7 @@
     "docs/reports/metric_analysis/figures/regression_significant_standardized_coefficients.png"
   ],
   "git": {
-    "commit": "0322efc936056689d3255cc2f81deda0c5504ba2",
+    "commit": "16974a376982d640a99d9c6110a640f69518d3ad",
     "dirty": true
   },
   "grids": {

@@ -167,9 +167,24 @@ count because the slot did not become a completed visit.
 #### Sensitivity Readout
 
 ![Average utilization drivers](figures/metric_utilization_drivers.png)
+No-show probability graph: No show clearly impacts average utilization. As class
+1 has higher no-show probability, class 2 stays constant because they do not get
+to take up no-show slots.
 
-No-show behavior is the clearest direct driver. Demand pressure is more subtle:
+No-show threshold graph: Slot share for class 1 gradually rises and has a
+noticeable rise when the threshold is set to11. This suggests that there are
+may class 1 patients scheduled for day 11 as later supported by Accepted Booking
+Delay Distribution.
+
+Overall, no-show behavior is the clearest direct driver. Demand pressure is more subtle:
 utilization can stay high even when access is poor.
+
+#### Accepted Booking Delay Distribution
+
+![](figures/accepted_delay_distribution.png)
+
+This figure shows the distribution of accepted bookings by original booking delay. It is useful for checking whether accepted appointments are concentrated around specific delay values, such as `tau = 11`, which can explain jumps in no-show-threshold sensitivity plots.
+
 
 ![No-show step interaction](figures/no_show_step_interaction_heatmap.png)
 
