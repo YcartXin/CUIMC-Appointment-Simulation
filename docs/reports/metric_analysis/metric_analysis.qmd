@@ -176,6 +176,11 @@ noticeable rise when the threshold is set to11. This suggests that there are
 may class 1 patients scheduled for day 11 as later supported by Accepted Booking
 Delay Distribution.
 
+Cancellation probability graph: higher cancellation probability for class 1
+slightly increases average utilization. This is because cancellations shorten
+the booking delay and sometimes allow the slot to be before the no-show threshold.
+
+
 Overall, no-show behavior is the clearest direct driver. Demand pressure is more subtle:
 utilization can stay high even when access is poor.
 
@@ -187,8 +192,15 @@ This figure shows the distribution of accepted bookings by original booking dela
 
 
 ![No-show step interaction](figures/no_show_step_interaction_heatmap.png)
+The right graph shows that class 1 has a -0.15 difference between class 1 and 2
+when class 1 has 1 no-show probability, and vice versa with 0.15 difference.
+
 
 ![No-show threshold interaction](figures/no_show_threshold_interaction_heatmap.png)
+In the right graph, we see that the top right corner indicates that both classes
+behave very similarly with high no-show threshold. This is because when the
+threshold is high, the differentiating no-show days is very limited.
+
 
 ### Overall Served Rate
 
