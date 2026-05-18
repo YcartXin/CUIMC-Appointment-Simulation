@@ -1,0 +1,283 @@
+% ============================================================
+%  FCFS Simulation: Plausible Two-Class Parameterization
+%  Supplementary comparison note
+% ============================================================
+
+\documentclass[11pt]{article}
+
+\usepackage[margin=0.9in]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage[table]{xcolor}
+
+\graphicspath{{figures/}{../../../figures/assets/}}
+\newcommand{\classServedRateGapFigure}{class_served_rate_gap.png}
+\sloppy
+
+\newcommand{\mainfigure}[3]{%
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.82\textwidth]{#1}
+    \caption{#2}
+    \label{#3}
+\end{figure}%
+}
+
+\title{FCFS Appointment Simulation under a Plausible Two-Class Parameterization\\[0.4em]
+\large Supplementary comparison with the stress-test baseline}
+\author{Alexandre Sepulveda de Dietrich\\[0.3em]
+\small Under the supervision of Prof.\ Carri Chan}
+\date{May 2026}
+
+\begin{document}
+\maketitle
+
+\begin{center}
+  \includegraphics[height=1.15cm]{cuimc}\hspace{2.2cm}
+  \includegraphics[height=1.00cm]{CBS_simple}
+\end{center}
+\vspace{0.4cm}
+
+\begin{abstract}
+\noindent
+The main analysis note used a deliberate stress-test configuration
+($\lambda=100$ arrivals per day against $S=32$ slots, demand-to-capacity ratio
+$3.1\mathord{:}1$) to expose how the simulation metrics behave under severe
+capacity constraints. This supplementary note repeats the core comparison under
+a more plausible, though still stylized, two-class parameterization: an
+MRI-like diagnostic class and a behavioral-health follow-up class. The
+comparison setting has $24$ daily arrivals, $20$ slots, a $28$-day booking
+horizon, and class-specific behavioral parameters from the model formulation
+note. Thirty independent seeds are used throughout.
+
+The aggregate output improves sharply when demand pressure is reduced.
+Average utilization rises to $0.934$ and overall served rate rises to $0.789$,
+compared with $0.842$ and $0.269$ in the stress-test baseline. The more
+important new result is the emergence of a large class-level access gap:
+Class~1 served rate is $0.881$, while Class~2 served rate is $0.661$. Under the
+current pooled FCFS formulation, this gap is mechanically consistent with
+asymmetric behavioral parameters rather than explicit class priority. Class~1
+has a higher delay tolerance, lower baseline no-show probability, and lower
+cancellation hazard; Class~2 is disadvantaged along all three stages of the
+access pipeline. Thus, the stress-test note explains the aggregate mechanics,
+while this comparison shows that aggregate improvement can still conceal
+substantial class-level divergence.
+\end{abstract}
+
+%% ============================================================
+\section{Parameter Configuration}
+%% ============================================================
+
+Tables~\ref{tab:system-params} and~\ref{tab:behavioral-params} compare the two
+configurations. The first table isolates the system-level load reduction. The
+second table makes the class asymmetry visible directly: the stress-test
+baseline is symmetric by construction, while the comparison parameterization
+makes Class~1 more tolerant of delay and less exposed to cancellation or
+no-show than Class~2.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.15}
+\small
+\begin{tabularx}{0.86\textwidth}{>{\raggedright\arraybackslash}Xcc}
+\toprule
+Parameter & Stress-test baseline & Comparison parameterization \\
+\midrule
+Total arrivals $\lambda$ per day & 100 & 24 \\
+Class~1 arrivals $\lambda_1$ per day & 50 & 14 \\
+Class~2 arrivals $\lambda_2$ per day & 50 & 10 \\
+Slots per day $S$ & 32 & 20 \\
+Demand/supply ratio & 3.1 & 1.2 \\
+Booking horizon $H$ in days & 14 & 28 \\
+Burn-in / cooldown in days & 30 / 10 & 60 / 30 \\
+\bottomrule
+\end{tabularx}
+\caption{System-level configuration comparison. The comparison parameterization
+reduces load from severe oversubscription to mild oversubscription while using a
+longer booking horizon.}
+\label{tab:system-params}
+\end{table}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.15}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccc}
+\toprule
+Parameter & Stress C1 & Stress C2 & Comparison C1 & Comparison C2 \\
+\midrule
+Balking threshold in days & 9 & 9 & 21 & 14 \\
+Low-delay balking probability $b^{\text{low}}$ & 0.00 & 0.00 & 0.02 & 0.04 \\
+High-delay balking probability $b^{\text{high}}$ & 0.50 & 0.50 & 0.55 & 0.72 \\
+No-show threshold in days & 6 & 6 & 21 & 14 \\
+Low-delay no-show probability $\xi^{\text{low}}$ & 0.00 & 0.00 & 0.01 & 0.15 \\
+High-delay no-show probability $\xi^{\text{high}}$ & 0.30 & 0.30 & 0.31 & 0.51 \\
+Daily cancellation probability $\phi$ & 0.10 & 0.10 & 0.01 & 0.02 \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Class-specific behavioral parameters. The stress-test baseline is
+symmetric across classes. The comparison parameterization is asymmetric: Class~1
+has greater delay tolerance and lower post-booking loss risk than Class~2.}
+\label{tab:behavioral-params}
+\end{table}
+
+%% ============================================================
+\section{Outcome Comparison}
+%% ============================================================
+
+Tables~\ref{tab:aggregate-outcomes} and~\ref{tab:class-outcomes} report the
+main outputs for both configurations, each averaged over 30 independent seeds.
+The aggregate table shows the effect of lower demand pressure. The horizontal
+class-level comparison then shows the result that is hidden by aggregate
+metrics alone.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.15}
+\small
+\begin{tabularx}{0.78\textwidth}{>{\raggedright\arraybackslash}Xcc}
+\toprule
+Metric & Stress-test baseline & Comparison parameterization \\
+\midrule
+Average utilization & 0.8418 & 0.9341 \\
+Overall served rate & 0.2692 & 0.7890 \\
+Mean offered wait in days & 9.30 & 10.87 \\
+Mean accepted wait in days & 8.35 & 10.85 \\
+Offered minus accepted wait in days & 0.95 & 0.02 \\
+\midrule
+Served share & 0.269 & 0.789 \\
+Balked share & 0.356 & 0.033 \\
+Canceled share & 0.323 & 0.123 \\
+No-show share & 0.052 & 0.056 \\
+No-offer share & 0.000 & 0.000 \\
+Unresolved share & $<0.001$ & 0.000 \\
+\bottomrule
+\end{tabularx}
+\caption{Aggregate outcomes and arrival outcome shares under both
+configurations, averaged over 30 independent seeds. The stress-test figures are
+from the controlled no-balking diagnostic run using the same 30-seed protocol.}
+\label{tab:aggregate-outcomes}
+\end{table}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.15}
+\small
+\begin{tabular}{lcccc}
+\toprule
+Metric & Stress C1 & Stress C2 & Comparison C1 & Comparison C2 \\
+\midrule
+Served rate & 0.269 & 0.269 & 0.881 & 0.661 \\
+\bottomrule
+\end{tabular}
+\caption{Class-level served rates. The stress-test baseline is symmetric, while
+the comparison parameterization produces a Class~1 minus Class~2 served-rate gap
+of $0.220$.}
+\label{tab:class-outcomes}
+\end{table}
+
+%% ============================================================
+\section{What Changes and What Does Not}
+%% ============================================================
+
+\paragraph{Aggregate utilization and served rate.}
+Both improve substantially. Utilization rises from $0.842$ to $0.934$; served
+rate rises from $0.269$ to $0.789$. The primary driver is the lower demand
+pressure combined with much lower cancellation hazards. With
+$\phi=0.01$--$0.02$ per day instead of $0.10$ per day, far fewer booked slots
+are vacated before service. For a mean delay near $10.9$ days, the probability
+of avoiding cancellation is approximately $0.99^{10.9}\approx0.90$ for Class~1
+and $0.98^{10.9}\approx0.80$ for Class~2, compared with
+$0.9^{8.35}\approx0.42$ in the stress-test baseline. The served-rate gain is
+also mechanically consistent with the lower demand-to-capacity ratio: the
+nominal capacity ceiling is $20/24=0.833$, and the simulated served rate
+($0.789$) is close to that bound after cancellations, no-shows, and balking.
+
+\paragraph{Balking collapses; the offered/accepted gap nearly vanishes.}
+In the stress-test baseline, mean offered wait is $9.30$ days, near the 9-day
+balking threshold, which produces a $35.6\%$ balked share and a $0.95$-day gap
+between offered and accepted wait. In the comparison parameterization, mean
+offered wait is $10.87$ days, below the Class~1 threshold of 21 days and below
+the Class~2 threshold of 14 days. Only $3.3\%$ of arrivals balk. Because few
+high-delay patients are removed from the accepted sample, offered and accepted
+wait are nearly identical ($0.02$ days apart). In this lower-load regime, the
+selection problem in mean accepted wait is much smaller than in the stress-test
+baseline.
+
+\paragraph{No-show share is similar; the mechanism is different.}
+No-show shares are similar ($5.2\%$ versus $5.6\%$ of arrivals), but for
+different reasons. In the stress-test baseline, many accepted delays exceed the
+6-day no-show threshold, so many booked patients face the high-delay no-show
+probability $\xi^{\text{high}}=0.30$. In the comparison parameterization, the
+21-day Class~1 threshold means that most accepted Class~1 bookings face only
+$\xi^{\text{low}}_1=0.01$. The aggregate no-show share is instead pulled up by
+Class~2, whose $\xi^{\text{low}}_2=0.15$ applies even for short-wait offers.
+Under the current formulation, this makes Class~2 a persistent source of
+booked-slot loss even when delays are moderate.
+
+\paragraph{A large class access gap emerges.}
+The most important new finding is the $22$-percentage-point class served-rate
+gap shown in Table~\ref{tab:class-outcomes} and Figure~\ref{fig:class-served-gap}:
+Class~1 served rate is $0.881$, while Class~2 served rate is $0.661$. This is
+far larger than the near-zero gap at the symmetric stress-test baseline. The
+horizontal class-level comparison makes this visible directly.
+
+\mainfigure{\classServedRateGapFigure}{%
+Class-level served rates under the comparison parameterization, with the
+symmetric stress-test baseline shown for reference. Aggregate served rate
+improves relative to the stress-test baseline, but access is uneven across
+classes. Under pooled FCFS, this gap is mechanically consistent with asymmetric
+behavioral parameters rather than explicit class priority.
+}{fig:class-served-gap}
+
+The gap is mechanically consistent with three compounding Class~1 advantages:
+higher delay tolerance (balking threshold 21 rather than 14 days), lower
+baseline no-show probability ($0.01$ rather than $0.15$), and lower daily
+cancellation probability ($0.01$ rather than $0.02$). Under pooled FCFS, these
+advantages act through the shared booking pool. Class~1 accepts more long-delay
+offers, keeps more booked appointments, and loses fewer visits before service.
+Class~2 is disadvantaged along the same stages. The output therefore suggests a
+shared-capacity spillover rather than explicit class priority.
+
+This finding is not recoverable from aggregate metrics alone. Average
+utilization ($0.934$) and overall served rate ($0.789$) both look high. The
+class gap only appears when class-level served rates are reported separately.
+
+\paragraph{No-offer remains zero; the qualitative horizon dynamics hold.}
+As in the stress-test baseline, no-offer is zero. This does not mean that the
+system is unconstrained; it means that, under the current formulation,
+cancellations and daily slot rollover are sufficient to prevent full horizon
+saturation in the observed runs. This should be read together with the served
+rate, cancellation share, and class-level served rates rather than interpreted
+as evidence of unconstrained access.
+
+%% ============================================================
+\section{Summary}
+%% ============================================================
+
+The stress-test note showed that low served rate can be mechanically consistent
+with high utilization when demand strongly exceeds capacity. This supplementary
+comparison shows what changes under a lower-load, asymmetric two-class
+parameterization. Aggregate outcomes improve: utilization rises to $0.934$ and
+overall served rate rises to $0.789$. The loss-channel mix also changes:
+balking falls sharply, cancellation losses are lower, and no-offer remains zero.
+
+The critical remaining issue is class-level access. Under the current pooled
+FCFS formulation, Class~1 reaches a served rate of $0.881$, while Class~2
+reaches only $0.661$. This gap is mechanically consistent with asymmetric
+behavioral parameters: Class~1 is more willing to accept delayed offers, less
+likely to cancel, and less likely to no-show at low delays. The comparison
+therefore does not contradict the stress-test note. It extends it: improving
+aggregate performance does not necessarily remove class-level divergence when
+patient classes differ in behavioral risk.
+
+\end{document}

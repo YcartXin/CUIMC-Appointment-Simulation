@@ -25,6 +25,14 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from analysis.plot_style import (
+    ARRIVAL_COLOR,
+    BALKING_COLOR,
+    BASELINE_COLOR,
+    NO_SHOW_COLOR,
+    UTILIZATION_COLOR,
+)
+
 REPO_DIR = Path(__file__).resolve().parents[1]
 if str(REPO_DIR) not in sys.path:
     sys.path.insert(0, str(REPO_DIR))
@@ -208,19 +216,19 @@ def main():
                  "(b_low = 0, all other parameters at baseline)", fontsize=12)
 
     SERIES = [
-        ("average_utilization",       "avg utilization",     axes[0, 0]),
-        ("overall_percent_serviced",   "overall served rate", axes[0, 1]),
-        ("no_show_rate",               "no-show share",       axes[1, 0]),
-        ("balked_rate",                "balked share",        axes[1, 1]),
+        ("average_utilization",      "avg utilization",     axes[0, 0], UTILIZATION_COLOR),
+        ("overall_percent_serviced", "overall served rate", axes[0, 1], ARRIVAL_COLOR),
+        ("no_show_rate",             "no-show share",       axes[1, 0], NO_SHOW_COLOR),
+        ("balked_rate",              "balked share",        axes[1, 1], BALKING_COLOR),
     ]
 
     x = sweep_df["b_high"]
-    for col, ylabel, ax in SERIES:
-        y     = sweep_df[f"{col}_mean"]
-        yerr  = 1.96 * sweep_df[f"{col}_se"]
-        ax.plot(x, y, marker="o", markersize=4, linewidth=1.6, color="#1f77b4")
-        ax.fill_between(x, y - yerr, y + yerr, alpha=0.15, color="#1f77b4")
-        ax.axvline(BASELINE_B_HIGH, color="#7f7f7f", linewidth=0.9,
+    for col, ylabel, ax, color in SERIES:
+        y    = sweep_df[f"{col}_mean"]
+        yerr = 1.96 * sweep_df[f"{col}_se"]
+        ax.plot(x, y, marker="o", markersize=4, linewidth=1.6, color=color)
+        ax.fill_between(x, y - yerr, y + yerr, alpha=0.15, color=color)
+        ax.axvline(BASELINE_B_HIGH, color=BASELINE_COLOR, linewidth=0.9,
                    linestyle="--", label=f"baseline b_high={BASELINE_B_HIGH}")
         ax.set_xlabel("b_high (high-delay balking probability)")
         ax.set_ylabel(ylabel)

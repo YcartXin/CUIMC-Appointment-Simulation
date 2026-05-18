@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c ' *)",
+      "Bash(pdflatex -interaction=nonstopmode fcfs_realistic_comparison.tex)",
+      "Bash(sed -i '' 's|{\\\\.\\\\.\\\\/\\\\.\\\\.\\\\/\\\\.\\\\.\\\\/\\\\.\\\\.\\\\/\\\\.\\\\.\\\\//figures/|{../../../../../../figures/|g' /Users/alexandresepulvedadedietrich/CUIMC-Appointment-Simulation/docs/reports/metric_analysis/research_style/final/note/fcfs_research_note_final.tex)",
+      "Bash(sed -i '' 's|{\\\\.\\\\.\\\\/\\\\.\\\\.\\\\/\\\\.\\\\.\\\\/\\\\.\\\\.\\\\/\\\\.\\\\.\\\\//outputs/|{../../../../../../outputs/|g' /Users/alexandresepulvedadedietrich/CUIMC-Appointment-Simulation/docs/reports/metric_analysis/research_style/final/note/fcfs_research_note_final.tex)"
+    ]
+  }
+}
