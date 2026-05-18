@@ -9,137 +9,91 @@ format:
 toc-depth: 3
 ---
 
-This is the canonical source for the metric-focused study. Rendered HTML, PDF,
-Markdown, and TeX outputs should be treated as generated artifacts derived from
-this QMD.
+## Introduction
 
-The report is organized by metric. Each metric section starts with simple
-one-driver plots where Class 1 varies and Class 2 stays fixed at baseline, then
-moves to interaction heatmaps or regression evidence.
+This report is the canonical source for the metric-focused simulation study. It evaluates how selected input assumptions affect clinic performance under the FCFS appointment-booking model. The report is organized by metric, so each section asks which parameters matter most for a particular outcome, such as utilization, served rate, offered wait, or class advantage.
 
-The baseline treats Class 1 and Class 2 symmetrically: same arrival rate,
-cancellation probability, balking rule, no-show rule, and value. Symmetric
-heatmaps mostly show absolute parameter effects. Class advantage appears when
-the class assumptions differ.
+The sensitivity analysis is a model-based stress test, not an empirical causal estimate. All experiments use the same FCFS simulation engine and measurement definitions. Across experiments, only selected scenario parameters and random seeds vary.
 
-## Sensitivity Analysis Methodology
+## Baseline Setting
 
-The sensitivity analysis asks how the simulated metrics move when selected
-input assumptions change around the baseline. It is a model-based stress test,
-not an empirical causal estimate. All runs use the same FCFS engine and
-measurement semantics; only the scenario parameters and random seeds vary.
+The baseline is `configs/baseline.yaml`. It uses two symmetric patient classes:
 
-The baseline is `configs/baseline.yaml`: two symmetric classes, 32 slots per
-day, a 14-day booking horizon, 50 arrivals per class per day, cancellation
-probability 0.10, balking threshold 9 with high-delay balking probability 0.50,
-and no-show threshold 6 with high-delay no-show probability 0.30. The low
-balking and no-show probabilities are 0.00. For behavior rules, `step` means
-`high - low`, so the baseline balking step is 0.50 and the baseline no-show step
-is 0.30.
+- 32 slots per day
+- 14-day booking horizon
+- 50 arrivals per class per day
+- cancellation probability of 0.10
+- balking threshold of 9
+- high-delay balking probability of 0.50
+- no-show threshold of 6
+- high-delay no-show probability of 0.30
+- low balking and no-show probabilities of 0.00
+- equal value of 1.00 for both classes
 
-Each sensitivity block answers four questions: what changes, what it changes
-around, what stays fixed, and what hypothesis the plot is meant to test.
+Because the two classes are symmetric at baseline, differences between classes appear only when an experiment changes one class’s assumptions relative to the other. Symmetric heatmaps therefore mainly show absolute system effects, while class-asymmetric experiments show class advantage.
+
+## Sensitivity Design
+
+Each sensitivity block varies one family of assumptions around the baseline. Each block is designed to answer four questions:
+
+1. What parameter changes?
+2. What baseline value is it varied around?
+3. What stays fixed?
+4. What hypothesis does the plot test?
+
+The analysis includes five main parameter families: arrival load and mix, balking behavior, no-show behavior, cancellation probability, and common threshold-jump rules.
+
+## Sensitivity Blocks
 
 ### Arrival Load and Mix
 
-Class-specific arrival slices change one class's
-`lambda_per_day` around the baseline value of 50 arrivals per day. The slice
-range is 25 to 75 arrivals per day, or 0.5 to 1.5 times baseline, while the
-other class and all behavior rules stay fixed. Arrival-mix heatmaps change total
-daily arrivals from 50 to 150, or 0.5 to 1.5 times the baseline total of 100,
-and change Class 1's share from 0.1 to 0.9. FCFS stress curves use a wider total
-arrival range of 30 to 170, or 0.3 to 1.7 times baseline, at the baseline 50/50
-mix. These runs test the demand-pressure hypothesis: as arrivals rise against
-fixed capacity, served rate should fall and offered wait should rise, while
-utilization may stay high.
+Arrival-load experiments test demand pressure. Class-specific arrival slices vary one class’s `lambda_per_day` from 25 to 75 while holding the other class and all behavioral rules fixed. Arrival-mix heatmaps vary total daily arrivals from 50 to 150 and Class 1’s share from 0.1 to 0.9. FCFS stress curves use a wider total-arrival range of 30 to 170 at the baseline 50/50 class mix.
 
-### Balking Step
+These runs test whether higher demand against fixed capacity lowers served rate and raises offered wait, even when utilization remains high.
 
-The balking-step grids change the high-delay rejection
-probability increase `high - low`. The baseline is 0.50, and the grid ranges
-from 0.00 to 1.00 in 21 evenly spaced values. In one-driver slices, Class 1
-changes while Class 2 stays at 0.50. In two-class heatmaps, Class 1 and Class 2
-move independently over the same range. These runs test whether stronger
-high-delay rejection lowers access for the affected class and whether lower
-accepted wait can be a selection effect caused by long-delay patients leaving.
+### Balking Behavior
 
-### Balking Threshold
+Balking-step experiments vary the high-delay rejection increase, defined as `high - low`. The baseline balking step is 0.50, and the grid ranges from 0.00 to 1.00. One-driver slices vary Class 1 while Class 2 stays at baseline. Two-class heatmaps vary both classes independently.
 
-The balking-threshold grids change the offered delay at
-which high balking begins. The baseline is 9 days, and the grid uses all
-possible thresholds in the 14-day horizon, `0, 1, ..., 13`. Threshold 13 means
-the high balking probability never applies to offered delays inside the horizon.
-These runs test whether greater waiting tolerance increases the affected class's
-served rate, and whether that added tolerance also keeps more patients in the
-system long enough to raise offered wait.
+Balking-threshold experiments vary the offered delay at which high balking begins. The baseline threshold is 9, and the grid uses thresholds 0 through 13. Since the horizon is 14 days, threshold 13 means high balking never applies within the booking horizon.
 
-### No-Show Step
+These runs test whether stronger or earlier balking reduces access for the affected class and whether lower accepted wait can reflect selection rather than improved access.
 
-The no-show-step grids change the high-delay no-show
-probability increase. The baseline is 0.30, and the grid ranges from 0.00 to
-1.00 in 21 evenly spaced values. One-driver slices vary Class 1 while Class 2
-stays at baseline; heatmaps vary both classes. These runs test whether higher
-delay-related no-show risk reduces completed visits, lowers utilization, and
-moves the served-rate gap against the class with higher no-show risk.
+### No-Show Behavior
 
-### No-Show Threshold
+No-show-step experiments vary the high-delay no-show increase. The baseline no-show step is 0.30, and the grid ranges from 0.00 to 1.00. No-show-threshold experiments vary the accepted delay at which high no-show risk begins, using thresholds 0 through 13.
 
-The no-show-threshold grids change the accepted delay at
-which high no-show risk begins. The baseline is 6 days, and the range is
-`0, 1, ..., 13`. These runs test whether postponing high no-show risk improves
-completed-service outcomes and whether earlier high no-show risk primarily
-shows up as lower utilization, lower access, or a class gap.
+These runs test whether higher no-show risk reduces completed visits, lowers utilization, and creates served-rate gaps against the class with higher no-show risk.
 
 ### Cancellation Probability
 
-The cancellation grids change each class's
-start-of-day future-appointment cancellation probability around the baseline
-0.10. The range is 0.00 to 0.30 in 21 evenly spaced values. These runs test
-whether after-booking losses reduce completed service for the affected class and
-whether cancellations can shorten offered wait by freeing future capacity while
-still worsening access.
+Cancellation experiments vary each class’s future-appointment cancellation probability from 0.00 to 0.30 around the baseline value of 0.10.
 
-### Common Threshold-Jump Grids
+These runs test whether after-booking losses reduce completed service for the affected class and whether cancellations shorten offered wait by freeing future capacity while still worsening access.
 
-The threshold-jump figures vary a shared
-threshold and shared jump level for both classes together. The jump level ranges
-from 0.00 to 1.00, while thresholds range from `0` to `13`. These are not class
-advantage tests; they test how the shape of a symmetric threshold rule changes
-aggregate utilization, access, and offered wait.
+### Common Threshold-Jump Rules
 
-### Balking Deep Dives
+Common threshold-jump grids vary a shared threshold and shared jump level for both classes. These are not class-advantage tests. They show how the shape of a symmetric behavioral rule changes aggregate utilization, access, and offered wait.
 
-The Class 1 high-balking probability sweep changes only
-Class 1's high balking probability over `0.0, 0.1, ..., 0.9`, centered against
-the baseline value 0.50. The Class 1 balking-threshold sweep changes only Class
-1's threshold over `3, 4, ..., 13`, centered against the baseline threshold 9.
-Class 2 and all non-balking assumptions stay fixed. Each point uses 100 seeds.
-These runs test the selection hypothesis directly: accepted wait can decrease
-because long-delay Class 1 patients reject appointments, even when Class 1
-access gets worse.
+## Balking Deep Dives
 
-### Regression Screen
+Two focused Class 1 balking sweeps are included. The high-balking sweep changes only Class 1’s high balking probability from 0.0 to 0.9. The threshold sweep changes only Class 1’s balking threshold from 3 to 13. Class 2 and all non-balking assumptions remain fixed.
 
-The randomized regression screen samples 240 parameter
-settings with random seed `9137`. For each setting, the simulation is run with
-seeds `4101` and `4102`, and the two results are averaged. Sampled inputs are
-total arrivals from 0.4 to 1.7 times baseline, Class 1 arrival share from 0.1 to
-0.9, class-specific balking steps, no-show steps, balking thresholds, no-show
-thresholds, and cancellation probabilities. Features are converted into average
-levels and Class 1 minus Class 2 gaps. This screen tests whether the main visual
-conclusions still appear when many assumptions vary at once. Significance is
-handled with `statsmodels` OLS using HC3 robust standard errors; the regression
-figure and summary table keep coefficients with robust p-values below 0.05.
+Each point in these two deep dives uses 100 seeds. These runs test the selection hypothesis directly: accepted wait can fall because long-delay Class 1 patients reject appointments, even when Class 1 access worsens.
 
-The generated report figures come from `scripts/generate_metric_analysis_figures.py`.
-The main two-class grids use a fixed seed (`2027`) for each grid point so changes
-across a plot are attributable to parameter changes rather than changing random
-streams. The scenario comparison averages seeds `2027`, `2028`, and `2029`.
-The FCFS capacity-stress curves also average those three seeds.
+## Regression Screen
+
+The randomized regression screen tests whether the main visual conclusions persist when many assumptions vary at once. It samples 240 parameter settings. For each setting, the simulation is run with two seeds, and the results are averaged.
+
+The sampled inputs include total arrivals, Class 1 arrival share, class-specific balking steps, no-show steps, balking thresholds, no-show thresholds, and cancellation probabilities. Features are converted into average levels and Class 1-minus-Class 2 gaps. The regression uses OLS with HC3 robust standard errors and keeps coefficients with robust p-values below 0.05.
+
+## Reproducibility Notes
+
+The main two-class heatmaps use a fixed seed for each grid point and are intended as broad sensitivity maps. Baseline summary results are averaged over 30 seeds. One-way arrival and FCFS stress curves are averaged over 20 seeds. The Class 1 balking deep dives use 100 seeds per parameter value and report confidence intervals.
 
 ## Reading Guide and Baseline
 
-### Baseline and Scenario Summary
+### Baseline Summary
 
 | Metric | Meaning | Main drivers |
 |---|---|---|
@@ -156,15 +110,13 @@ Baseline summary:
 | Scenario | Utilization | Overall served | Accepted wait | Offered wait | Class gap | Delay gap |
 |---|---:|---:|---:|---:|---:|---:|
 | Baseline | 0.839 | 0.269 | 8.35 | 9.30 | 0.001 | 0.003 |
-| Scenario 2 | 1.000 | 0.395 | 4.29 | 5.06 | -0.008 | 0.005 |
 
 `Class gap` is `access_advantage_class_1`. Positive values mean Class 1 has the
 higher served rate. `Delay gap` is `delay_advantage_class_1`. Positive values
 mean Class 1 has the lower offered wait because the metric is Class 2 offered
 wait minus Class 1 offered wait.
 
-Scenario 2 changes several assumptions at once, so treat it as a comparison
-point rather than a one-parameter causal test.
+
 
 ### Figure Reading Guide
 
@@ -215,9 +167,24 @@ count because the slot did not become a completed visit.
 #### Sensitivity Readout
 
 ![Average utilization drivers](figures/metric_utilization_drivers.png)
+No-show probability graph: No show clearly impacts average utilization. As class
+1 has higher no-show probability, class 2 stays constant because they do not get
+to take up no-show slots.
 
-No-show behavior is the clearest direct driver. Demand pressure is more subtle:
+No-show threshold graph: Slot share for class 1 gradually rises and has a
+noticeable rise when the threshold is set to11. This suggests that there are
+may class 1 patients scheduled for day 11 as later supported by Accepted Booking
+Delay Distribution.
+
+Overall, no-show behavior is the clearest direct driver. Demand pressure is more subtle:
 utilization can stay high even when access is poor.
+
+#### Accepted Booking Delay Distribution
+
+![](figures/accepted_delay_distribution.png)
+
+This figure shows the distribution of accepted bookings by original booking delay. It is useful for checking whether accepted appointments are concentrated around specific delay values, such as `tau = 11`, which can explain jumps in no-show-threshold sensitivity plots.
+
 
 ![No-show step interaction](figures/no_show_step_interaction_heatmap.png)
 

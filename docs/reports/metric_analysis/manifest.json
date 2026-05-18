@@ -1,31 +1,33 @@
 {
   "command": [
-    "python",
-    "scripts/generate_metric_analysis_figures.py"
+    "python.exe",
+    "c:\\\\Users\\\\yangy\\\\OneDrive - University of Toronto\\\\Desktop\\\\Xin\\\\Columbia\\\\CBS Yob\\\\Git Clone\\\\CUIMC-Appointment-Simulation\\\\scripts\\\\generate_metric_analysis_figures.py"
   ],
   "config_hashes": {
-    "configs/baseline.yaml": "d006c678d0b3aaa28160b00e6feb541d50de03b41a107e4a447da05dd90f9eff",
-    "configs/scenario_2.yaml": "952e6d1078d3014b75dd7696ba034650b18cba3cf4e69d57834ef5ab3ae37a09"
+    "configs/baseline.yaml": "1b2bb48e9d50f21425060ec3575cfeca118334725528662a3eb671229ae7b9a8"
   },
   "environment": {
     "packages": {
       "jupyter": "1.1.1",
-      "matplotlib": "3.10.0",
-      "numpy": "1.26.4",
-      "pandas": "2.2.3",
-      "pyyaml": "6.0.2",
-      "statsmodels": "0.14.4"
+      "matplotlib": "3.10.6",
+      "numpy": "2.3.5",
+      "pandas": "2.3.3",
+      "pyyaml": "6.0.3",
+      "statsmodels": "0.14.5"
     },
-    "platform": "macOS-26.3.1-arm64-arm-64bit-Mach-O",
-    "python": "3.13.5"
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.13.9"
   },
   "generated_artifacts": [
+    "docs/reports/metric_analysis/data/accepted_delay_distribution.csv",
     "docs/reports/metric_analysis/data/balking_class1_step_slice.csv",
     "docs/reports/metric_analysis/data/balking_class1_threshold_slice.csv",
+    "docs/reports/metric_analysis/data/baseline_summary.csv",
     "docs/reports/metric_analysis/data/fcfs_capacity_stress_results.csv",
     "docs/reports/metric_analysis/data/regression_model_scores.csv",
     "docs/reports/metric_analysis/data/regression_simulation_data.csv",
     "docs/reports/metric_analysis/data/regression_standardized_coefficients.csv",
+    "docs/reports/metric_analysis/figures/accepted_delay_distribution.png",
     "docs/reports/metric_analysis/figures/arrival_mix_behavior_panels.png",
     "docs/reports/metric_analysis/figures/arrival_mix_benefit_heatmaps.png",
     "docs/reports/metric_analysis/figures/arrival_mix_interaction_heatmap.png",
@@ -83,11 +85,10 @@
     "docs/reports/metric_analysis/figures/no_show_threshold_slice_access.png",
     "docs/reports/metric_analysis/figures/no_show_threshold_slice_utilization.png",
     "docs/reports/metric_analysis/figures/no_show_threshold_slice_wait.png",
-    "docs/reports/metric_analysis/figures/regression_significant_standardized_coefficients.png",
-    "docs/reports/metric_analysis/figures/scenario_metric_comparison.png"
+    "docs/reports/metric_analysis/figures/regression_significant_standardized_coefficients.png"
   ],
   "git": {
-    "commit": "6aa48fbba28e856585df823fa0b9e2f5cbcfca9c",
+    "commit": "16974a376982d640a99d9c6110a640f69518d3ad",
     "dirty": true
   },
   "grids": {
@@ -250,7 +251,7 @@
     "regression_coefficients": 48,
     "regression_scores": 4,
     "regression_simulation_data": 240,
-    "scenario_comparison": 2
+    "scenario_comparison": 1
   },
   "seeds": {
     "fine_seed": 2027,
@@ -260,9 +261,36 @@
       4102
     ],
     "scenario_seeds": [
-      2027,
-      2028,
-      2029
+      3001,
+      3002,
+      3003,
+      3004,
+      3005,
+      3006,
+      3007,
+      3008,
+      3009,
+      3010,
+      3011,
+      3012,
+      3013,
+      3014,
+      3015,
+      3016,
+      3017,
+      3018,
+      3019,
+      3020,
+      3021,
+      3022,
+      3023,
+      3024,
+      3025,
+      3026,
+      3027,
+      3028,
+      3029,
+      3030
     ]
   }
 }

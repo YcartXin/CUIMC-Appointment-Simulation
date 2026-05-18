@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Tuple, Union
 import numpy as np
 
-from simulation.model import (
+from .model import (
     Booking,
     ClassMetrics,
     SimulationConfig,
@@ -182,6 +182,9 @@ class ClinicAppointmentSimulation:
             if track_patients:
                 metrics.booked += 1
                 metrics.total_booking_delay += tau
+                metrics.accepted_delay_counts[tau] = (
+                    metrics.accepted_delay_counts.get(tau, 0) + 1
+                )
 
     # -------------------------
     # Daily service logic

@@ -62,10 +62,19 @@ for directory in (OUT_DIR, DATA_DIR):
     directory.mkdir(parents=True, exist_ok=True)
 
 BASE_CONFIG = load_config(REPO_DIR / "configs" / "baseline.yaml")
-SCENARIO_2_CONFIG = load_config(REPO_DIR / "configs" / "scenario_2.yaml")
 
 FINE_SEED = 2027
-SCENARIO_SEEDS = [2027, 2028, 2029]
+
+# Single-seed setting for large exploratory heatmaps.
+HEATMAP_SEEDS = [FINE_SEED]
+
+BASELINE_SUMMARY_SEEDS = list(range(3001, 3031))  # 30 runs
+
+ONE_WAY_SEEDS = list(range(5001, 5021))  # 20 runs
+
+FCFS_STRESS_SEEDS = list(range(6001, 6021))  # 20 runs
+
+SCENARIO_SEEDS = BASELINE_SUMMARY_SEEDS
 
 STEP_GRID = np.linspace(0.0, 1.0, 21)
 PROB_GRID = np.linspace(0.0, 0.30, 21)
@@ -131,6 +140,16 @@ def mean_metrics(config, seeds):
     rows = [result_metrics(config, seed) for seed in seeds]
     return pd.DataFrame(rows).mean(numeric_only=True).to_dict()
 
+def result_metrics_with_outcomes(config, seed=FINE_SEED):
+    result = run_result(config, seed)
+    return {
+        **result_metrics_from_result(result),
+        **outcome_rates_from_result(result),
+    }
+
+def mean_metrics_with_outcomes(config, seeds):
+    rows = [result_metrics_with_outcomes(config, seed) for seed in seeds]
+    return pd.DataFrame(rows).mean(numeric_only=True).to_dict()
 
 def make_step_rule(old_rule, threshold=None, step=None):
     threshold = old_rule.threshold if threshold is None else int(threshold)
@@ -225,6 +244,102 @@ def set_arrival_mix(config, lambda_total, class_1_share):
         },
     )
 
+def accepted_delay_distribution(config, seeds):
+    """
+    Return accepted booking counts and shares by class and tau.
+
+    The output has one row per class and tau value.
+    Counts are averaged across seeds.
+    Shares are calculated within class.
+    """
+
+    rows = []
+
+    for seed in seeds:
+        result = run_result(config, seed)
+
+        for class_id, metrics in result.class_metrics.items():
+            total_accepted = sum(metrics.accepted_delay_counts.values())
+
+            for tau in range(config.horizon_days):
+                count = metrics.accepted_delay_counts.get(tau, 0)
+
+                rows.append(
+                    {
+                        "seed": seed,
+                        "class_id": class_id,
+                        "tau": tau,
+                        "accepted_count": count,
+                        "total_accepted": total_accepted,
+                        "accepted_share": (
+                            count / total_accepted
+                            if total_accepted > 0
+                            else 0.0
+                        ),
+                    }
+                )
+
+    df = pd.DataFrame(rows)
+
+    summary = (
+        df.groupby(["class_id", "tau"], as_index=False)
+        .agg(
+            accepted_count=("accepted_count", "mean"),
+            accepted_share=("accepted_share", "mean"),
+        )
+    )
+
+    return summary
+
+def draw_accepted_delay_distribution():
+    """
+    Plot the distribution of accepted bookings by original booking delay tau.
+    """
+
+    df = accepted_delay_distribution(
+        config=BASE_CONFIG,
+        seeds=BASELINE_SUMMARY_SEEDS,
+    )
+
+    df.to_csv(DATA_DIR / "accepted_delay_distribution.csv", index=False)
+
+    fig, ax = plt.subplots(figsize=(9, 5), constrained_layout=True)
+
+    for idx, class_id in enumerate(sorted(df["class_id"].unique())):
+        sub = df[df["class_id"] == class_id].sort_values("tau")
+
+        plot_driver_line(
+            ax,
+            sub["tau"],
+            sub["accepted_share"],
+            label=f"Class {class_id}",
+            driver="balking",
+            index=idx,
+        )
+
+    ax.axvline(
+        BASE_CONFIG.classes[1].no_show_prob.threshold,
+        color=BASELINE_COLOR,
+        linestyle="--",
+        linewidth=1.2,
+        label="no-show threshold",
+    )
+
+    ax.set_title("Accepted Booking Delay Distribution")
+    ax.set_xlabel("Original booking delay, tau")
+    ax.set_ylabel("share of accepted bookings")
+    ax.set_xticks(range(BASE_CONFIG.horizon_days))
+    ax.set_ylim(bottom=0)
+    ax.legend(frameon=False)
+
+    fig.savefig(
+        OUT_DIR / "accepted_delay_distribution.png",
+        dpi=190,
+        bbox_inches="tight",
+    )
+    plt.close(fig)
+
+    return df
 
 def set_class_arrival(config, target_class, lambda_per_day):
     return update_classes(config, {target_class: {"lambda_per_day": float(lambda_per_day)}})
@@ -266,11 +381,15 @@ def set_regression_parameters(config, params):
     )
 
 
-def grid_records(x_values, y_values, x_name, y_name, config_builder):
+def grid_records(x_values, y_values, x_name, y_name, config_builder, seeds=None):
     rows = []
     for x_value, y_value in product(x_values, y_values):
         config = config_builder(x_value, y_value)
-        rows.append({x_name: x_value, y_name: y_value, **result_metrics(config)})
+        if seeds is None:
+            metrics = result_metrics(config)
+        else:
+            metrics = mean_metrics(config, seeds)
+        rows.append({x_name: x_value, y_name: y_value, **metrics})
     return pd.DataFrame(rows)
 
 
@@ -807,41 +926,16 @@ def draw_threshold_jump_panel(df, x_name, y_name, xlabel, ylabel, filename, titl
     plt.close(fig)
 
 
-def draw_scenario_comparison():
-    rows = []
-    for name, config in [("Baseline", BASE_CONFIG), ("Scenario 2", SCENARIO_2_CONFIG)]:
-        rows.append({"scenario": name, **mean_metrics(config, SCENARIO_SEEDS)})
+def draw_baseline_summary():
+    row = {
+        "scenario": "Baseline",
+        "n_seeds": len(BASELINE_SUMMARY_SEEDS),
+        **mean_metrics(BASE_CONFIG, BASELINE_SUMMARY_SEEDS),
+    }
 
-    df = pd.DataFrame(rows)
-    fig, axes = plt.subplots(1, 3, figsize=(14, 4), constrained_layout=True)
-    df.set_index("scenario")[["average_utilization", "overall_percent_serviced"]].plot(
-        kind="bar",
-        ax=axes[0],
-        rot=0,
-        color=[UTILIZATION_COLOR, ACCESS_COLOR],
-    )
-    axes[0].set_title("Aggregate rates")
-    axes[0].set_ylabel("rate")
-    axes[0].set_ylim(0, 1.05)
-    df.set_index("scenario")[["mean_accepted_booking_delay", "mean_offered_booking_delay"]].plot(
-        kind="bar",
-        ax=axes[1],
-        rot=0,
-        color=[ACCEPTED_WAIT_COLOR, WAIT_COLOR],
-    )
-    axes[1].set_title("Booking-delay metrics")
-    axes[1].set_ylabel("days")
-    df.set_index("scenario")[["access_advantage_class_1", "delay_advantage_class_1"]].plot(
-        kind="bar",
-        ax=axes[2],
-        rot=0,
-        color=[CLASS_1_COLOR, CLASS_2_COLOR],
-    )
-    axes[2].axhline(0, color=BASELINE_COLOR, linewidth=0.8)
-    axes[2].set_title("Class 1 advantage")
-    axes[2].set_ylabel("difference")
-    fig.savefig(OUT_DIR / "scenario_metric_comparison.png", dpi=190, bbox_inches="tight")
-    plt.close(fig)
+    df = pd.DataFrame([row])
+    df.to_csv(DATA_DIR / "baseline_summary.csv", index=False)
+
     return df
 
 
@@ -899,7 +993,7 @@ def draw_class_arrival_lines():
         for multiplier in CLASS_ARRIVAL_MULTIPLIERS:
             lambda_per_day = base_lambda * multiplier
             config = set_class_arrival(BASE_CONFIG, target_class, lambda_per_day)
-            metrics = result_metrics(config)
+            metrics = mean_metrics(config, ONE_WAY_SEEDS)
             rows.append(
                 {
                     "target_class": target_class,
@@ -944,18 +1038,15 @@ def draw_fcfs_capacity_stress():
     for multiplier in FCFS_STRESS_MULTIPLIERS:
         lambda_total = lambda_total_base * multiplier
         config = set_arrival_mix(BASE_CONFIG, lambda_total, class_1_share)
-        seed_rows = []
-        for seed in SCENARIO_SEEDS:
-            result = run_result(config, seed)
-            seed_rows.append(
-                {
-                    "arrival_multiplier": multiplier,
-                    "lambda_total": lambda_total,
-                    **result_metrics_from_result(result),
-                    **outcome_rates_from_result(result),
-                }
-            )
-        rows.append(pd.DataFrame(seed_rows).mean(numeric_only=True).to_dict())
+        metrics = mean_metrics_with_outcomes(config, FCFS_STRESS_SEEDS)
+
+        rows.append(
+            {
+                "arrival_multiplier": multiplier,
+                "lambda_total": lambda_total,
+                **metrics,
+            }
+        )
 
     df = pd.DataFrame(rows)
     df.to_csv(DATA_DIR / "fcfs_capacity_stress_results.csv", index=False)
@@ -2047,7 +2138,6 @@ def write_manifest(row_counts, run_started_at):
         "git": git_metadata(),
         "config_hashes": {
             "configs/baseline.yaml": file_sha256(REPO_DIR / "configs" / "baseline.yaml"),
-            "configs/scenario_2.yaml": file_sha256(REPO_DIR / "configs" / "scenario_2.yaml"),
         },
         "environment": {
             "python": platform.python_version(),
@@ -2090,7 +2180,9 @@ def main():
     run_started_at = time.time()
     plt.style.use("default")
 
-    scenario_df = draw_scenario_comparison()
+    baseline_df = draw_baseline_summary()
+    draw_accepted_delay_distribution()
+
     baseline_balk_step = BASE_CONFIG.classes[1].balk_prob.high - BASE_CONFIG.classes[1].balk_prob.low
     baseline_balk_threshold = BASE_CONFIG.classes[1].balk_prob.threshold
     baseline_no_show_step = BASE_CONFIG.classes[1].no_show_prob.high - BASE_CONFIG.classes[1].no_show_prob.low
@@ -2497,7 +2589,7 @@ def main():
     regression_data, regression_coef_df, regression_score_df = run_regression_screening()
     write_manifest(
         {
-            "scenario_comparison": len(scenario_df),
+            "scenario_comparison": len(baseline_df),
             "balking_step_grid": len(balk_step_df),
             "balking_threshold_grid": len(balk_threshold_df),
             "balking_threshold_jump_grid": len(balk_threshold_jump_df),
@@ -2519,7 +2611,7 @@ def main():
 
     print("\nScenario comparison")
     print(
-        scenario_df[
+        baseline_df[
             [
                 "scenario",
                 "average_utilization",
