@@ -351,7 +351,7 @@ def create_figures(
         class_metric="slot_utilization",
         aggregate_metric="average_utilization",
         title="Average Utilization and Class Slot Shares",
-        ylabel="Share of available slots",
+        ylabel="Completed visits as share of total slots",
         output_path=FIGURE_DIR / "average_utilization_aggregate.png",
     )
 
