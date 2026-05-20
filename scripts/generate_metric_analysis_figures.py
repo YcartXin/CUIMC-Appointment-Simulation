@@ -93,16 +93,16 @@ REGRESSION_MAX_COEFFICIENTS_PER_TARGET = 8
 REGRESSION_FEATURES = [
     "lambda_total",
     "class_1_share",
-    "balk_step_mean",
-    "balk_step_gap_c1_minus_c2",
-    "balk_threshold_mean",
-    "balk_threshold_gap_c1_minus_c2",
-    "no_show_step_mean",
-    "no_show_step_gap_c1_minus_c2",
-    "no_show_threshold_mean",
-    "no_show_threshold_gap_c1_minus_c2",
-    "cancel_prob_mean",
-    "cancel_prob_gap_c1_minus_c2",
+    "class_1_balk_step",
+    "class_2_balk_step",
+    "class_1_balk_threshold",
+    "class_2_balk_threshold",
+    "class_1_no_show_step",
+    "class_2_no_show_step",
+    "class_1_no_show_threshold",
+    "class_2_no_show_threshold",
+    "class_1_cancel_prob",
+    "class_2_cancel_prob",
 ]
 
 REGRESSION_TARGETS = {
@@ -115,16 +115,16 @@ REGRESSION_TARGETS = {
 FEATURE_LABELS = {
     "lambda_total": "total arrival rate",
     "class_1_share": "class 1 arrival share",
-    "balk_step_mean": "avg balking step",
-    "balk_step_gap_c1_minus_c2": "balking step gap",
-    "balk_threshold_mean": "avg balking threshold",
-    "balk_threshold_gap_c1_minus_c2": "balking threshold gap",
-    "no_show_step_mean": "avg no-show step",
-    "no_show_step_gap_c1_minus_c2": "no-show step gap",
-    "no_show_threshold_mean": "avg no-show threshold",
-    "no_show_threshold_gap_c1_minus_c2": "no-show threshold gap",
-    "cancel_prob_mean": "avg cancellation prob.",
-    "cancel_prob_gap_c1_minus_c2": "cancellation prob. gap",
+    "class_1_balk_step": "C1 balking step",
+    "class_2_balk_step": "C2 balking step",
+    "class_1_balk_threshold": "C1 balking threshold",
+    "class_2_balk_threshold": "C2 balking threshold",
+    "class_1_no_show_step": "C1 no-show step",
+    "class_2_no_show_step": "C2 no-show step",
+    "class_1_no_show_threshold": "C1 no-show threshold",
+    "class_2_no_show_threshold": "C2 no-show threshold",
+    "class_1_cancel_prob": "C1 cancellation prob.",
+    "class_2_cancel_prob": "C2 cancellation prob.",
 }
 
 def run_result(config, seed):
@@ -1149,6 +1149,233 @@ def draw_fcfs_capacity_stress():
     return df
 
 
+def draw_no_balk_delay_thresholds(fcfs_stress_df):
+    df = fcfs_stress_df[fcfs_stress_df["lambda_total"] <= 110].sort_values("lambda_total").copy()
+    balk_threshold = BASE_CONFIG.classes[1].balk_prob.threshold
+    no_show_threshold = BASE_CONFIG.classes[1].no_show_prob.threshold
+    balk_onset = 60
+
+    fig, ax = plt.subplots(figsize=(8, 4.5), constrained_layout=True)
+
+    x_min = df["lambda_total"].min() - 5
+    x_max = df["lambda_total"].max() + 5
+
+    ax.axvspan(x_min, balk_onset - 0.5, color=ARRIVAL_COLOR, alpha=0.06, zorder=0)
+    ax.axvspan(balk_onset - 0.5, x_max, color=BALKING_COLOR, alpha=0.06, zorder=0)
+    ax.text(42, balk_threshold + 0.55, "no balking", ha="center", fontsize=8,
+            color=ARRIVAL_COLOR, alpha=0.8)
+    ax.text(85, balk_threshold + 0.55, "balking", ha="center", fontsize=8,
+            color=BALKING_COLOR, alpha=0.8)
+
+    ax.plot(df["lambda_total"], df["mean_offered_booking_delay"],
+            color=WAIT_COLOR, linewidth=1.8, linestyle="--", marker="o", markersize=5,
+            label="mean offered delay", zorder=4)
+    ax.plot(df["lambda_total"], df["mean_accepted_booking_delay"],
+            color=ACCEPTED_WAIT_COLOR, linewidth=1.8, marker="o", markersize=5,
+            label="mean accepted delay", zorder=5)
+
+    ax.axhline(no_show_threshold, color=NO_SHOW_COLOR, linestyle=":", linewidth=1.6,
+               label=f"no-show threshold ({no_show_threshold} d)", zorder=3)
+    ax.axhline(balk_threshold, color=BALKING_COLOR, linestyle=":", linewidth=1.6,
+               label=f"balking threshold ({balk_threshold} d)", zorder=3)
+
+    ax.set_xticks(df["lambda_total"].tolist())
+    ax.set_xticklabels([str(round(v)) for v in df["lambda_total"]])
+    ax.set_xlim(x_min, x_max)
+    style_line_axis(ax, "total arrivals per day (λ)", "days", y_range=(0, balk_threshold + 2.5))
+    ax.legend(frameon=False, fontsize=9, loc="lower right")
+    ax.set_title("Mean booking delay vs. behavioral thresholds")
+
+    fig.savefig(OUT_DIR / "no_balk_delay_thresholds.png", dpi=190, bbox_inches="tight")
+    plt.close(fig)
+
+
+def draw_balk_noshow_step_heatmap():
+    baseline_balk = BASE_CONFIG.classes[1].balk_prob.high - BASE_CONFIG.classes[1].balk_prob.low
+    baseline_noshow = BASE_CONFIG.classes[1].no_show_prob.high - BASE_CONFIG.classes[1].no_show_prob.low
+    step_values = np.linspace(0.0, 1.0, 11)
+    cache_path = DATA_DIR / "balk_noshow_step_grid.csv"
+
+    if cache_path.exists():
+        df = pd.read_csv(cache_path)
+    else:
+        rows = []
+        for b, n in product(step_values, step_values):
+            config = set_no_show_steps(set_balk_steps(BASE_CONFIG, b, b), n, n)
+            result = run_result(config, FINE_SEED)
+            rows.append({
+                "balk_step": b,
+                "noshow_step": n,
+                **result_metrics_from_result(result),
+                **outcome_rates_from_result(result),
+            })
+        df = pd.DataFrame(rows)
+        df.to_csv(cache_path, index=False)
+
+    table_util = pivot(df, "balk_step", "noshow_step", "average_utilization")
+    table_ns   = pivot(df, "balk_step", "noshow_step", "no_show_rate")
+
+    balk_pos   = nearest_position(table_util.columns, baseline_balk)
+    noshow_pos = nearest_position(table_util.index, baseline_noshow)
+    n = len(step_values)
+
+    fig = plt.figure(figsize=(13, 5), constrained_layout=True)
+    gs = fig.add_gridspec(2, 2, width_ratios=[1.35, 1], hspace=0.45)
+    ax_heat  = fig.add_subplot(gs[:, 0])
+    ax_balk  = fig.add_subplot(gs[0, 1])
+    ax_noshow_proj = fig.add_subplot(gs[1, 1])
+
+    # --- Heatmap ---
+    im = heatmap_panel(
+        ax_heat, table_util,
+        "Utilization: balking step vs. no-show step",
+        "balking step (high-delay prob.)", "no-show step (high-delay prob.)",
+        cmap=UTILIZATION_CMAP, vmin=0.0, vmax=1.0,
+    )
+    fig.colorbar(im, ax=ax_heat, shrink=0.85, label="avg utilization")
+    ax_heat.axhline(noshow_pos, color="white", linewidth=2.2, linestyle="--")
+    ax_heat.axhline(noshow_pos, color=NO_SHOW_COLOR, linewidth=1.2, linestyle="--",
+                    label=f"no-show step = {baseline_noshow:.2f} (right panel)")
+    ax_heat.axvline(balk_pos, color="white", linewidth=2.2, linestyle=":")
+    ax_heat.axvline(balk_pos, color=BALKING_COLOR, linewidth=1.2, linestyle=":",
+                    label=f"balking step = {baseline_balk:.2f} (right panel)")
+    ax_heat.plot([0, n - 1], [0, n - 1], color="white", linewidth=2.2, linestyle="-")
+    ax_heat.plot([0, n - 1], [0, n - 1], color=BASELINE_COLOR, linewidth=1.2,
+                 linestyle="-", label="balk = no-show (diagonal)")
+    ax_heat.legend(fontsize=7.5, frameon=False, loc="upper left")
+
+    # --- Right top: fix no_show_step, vary balk_step ---
+    slice_balk = df[np.isclose(df["noshow_step"], step_values[noshow_pos])].sort_values("balk_step")
+    ax_balk.plot(slice_balk["balk_step"], slice_balk["average_utilization"],
+                 color=UTILIZATION_COLOR, linewidth=1.8, marker="o", markersize=4,
+                 label="utilization")
+    ax_balk.plot(slice_balk["balk_step"], slice_balk["no_show_rate"],
+                 color=NO_SHOW_COLOR, linewidth=1.4, linestyle="--", marker="o", markersize=4,
+                 label="no-show rate")
+    ax_balk.axvline(baseline_noshow, color=BASELINE_COLOR, linewidth=0.9, linestyle="--",
+                    label=f"balk = noshow ({baseline_noshow:.2f})")
+    style_line_axis(ax_balk, "balking step", "rate")
+    ax_balk.set_title(f"Fix no-show step = {step_values[noshow_pos]:.1f}, vary balking step",
+                      fontsize=9)
+    ax_balk.legend(frameon=False, fontsize=8)
+
+    # --- Right bottom: fix balk_step, vary no_show_step ---
+    slice_noshow = df[np.isclose(df["balk_step"], step_values[balk_pos])].sort_values("noshow_step")
+    ax_noshow_proj.plot(slice_noshow["noshow_step"], slice_noshow["average_utilization"],
+                        color=UTILIZATION_COLOR, linewidth=1.8, marker="o", markersize=4,
+                        label="utilization")
+    ax_noshow_proj.plot(slice_noshow["noshow_step"], slice_noshow["no_show_rate"],
+                        color=NO_SHOW_COLOR, linewidth=1.4, linestyle="--", marker="o", markersize=4,
+                        label="no-show rate")
+    ax_noshow_proj.axvline(baseline_balk, color=BASELINE_COLOR, linewidth=0.9, linestyle=":",
+                           label=f"balk = noshow ({baseline_balk:.2f})")
+    style_line_axis(ax_noshow_proj, "no-show step", "rate")
+    ax_noshow_proj.set_title(f"Fix balking step = {step_values[balk_pos]:.1f}, vary no-show step",
+                             fontsize=9)
+    ax_noshow_proj.legend(frameon=False, fontsize=8)
+
+    fig.savefig(OUT_DIR / "balk_noshow_step_utilization.png", dpi=190, bbox_inches="tight")
+    plt.close(fig)
+    return df
+
+
+def draw_balk_noshow_threshold_heatmap():
+    baseline_balk = BASE_CONFIG.classes[1].balk_prob.threshold
+    baseline_noshow = BASE_CONFIG.classes[1].no_show_prob.threshold
+    threshold_values = list(range(BASE_CONFIG.horizon_days))   # 0..13
+    cache_path = DATA_DIR / "balk_noshow_threshold_grid.csv"
+
+    if cache_path.exists():
+        df = pd.read_csv(cache_path)
+    else:
+        rows = []
+        for b, n in product(threshold_values, threshold_values):
+            config = set_no_show_thresholds(set_balk_thresholds(BASE_CONFIG, b, b), n, n)
+            result = run_result(config, FINE_SEED)
+            rows.append({
+                "balk_threshold": b,
+                "noshow_threshold": n,
+                **result_metrics_from_result(result),
+                **outcome_rates_from_result(result),
+            })
+        df = pd.DataFrame(rows)
+        df.to_csv(cache_path, index=False)
+
+    table_util = pivot(df, "balk_threshold", "noshow_threshold", "average_utilization")
+    table_ns   = pivot(df, "balk_threshold", "noshow_threshold", "no_show_rate")
+
+    balk_pos   = nearest_position(table_util.columns, baseline_balk)
+    noshow_pos = nearest_position(table_util.index, baseline_noshow)
+    n = len(threshold_values)
+
+    fig = plt.figure(figsize=(13, 5), constrained_layout=True)
+    gs = fig.add_gridspec(2, 2, width_ratios=[1.35, 1], hspace=0.45)
+    ax_heat        = fig.add_subplot(gs[:, 0])
+    ax_balk        = fig.add_subplot(gs[0, 1])
+    ax_noshow_proj = fig.add_subplot(gs[1, 1])
+
+    # --- Heatmap ---
+    im = heatmap_panel(
+        ax_heat, table_util,
+        "Utilization: balking threshold vs. no-show threshold",
+        "balking threshold (days)", "no-show threshold (days)",
+        cmap=UTILIZATION_CMAP, vmin=0.0, vmax=1.0,
+    )
+    fig.colorbar(im, ax=ax_heat, shrink=0.85, label="avg utilization")
+    ax_heat.axhline(noshow_pos, color="white", linewidth=2.2, linestyle="--")
+    ax_heat.axhline(noshow_pos, color=NO_SHOW_COLOR, linewidth=1.2, linestyle="--",
+                    label=f"no-show threshold = {baseline_noshow} d (right panel)")
+    ax_heat.axvline(balk_pos, color="white", linewidth=2.2, linestyle=":")
+    ax_heat.axvline(balk_pos, color=BALKING_COLOR, linewidth=1.2, linestyle=":",
+                    label=f"balking threshold = {baseline_balk} d (right panel)")
+    ax_heat.plot([0, n - 1], [0, n - 1], color="white", linewidth=2.2, linestyle="-")
+    ax_heat.plot([0, n - 1], [0, n - 1], color=BASELINE_COLOR, linewidth=1.2,
+                 linestyle="-", label="balk = no-show (diagonal)")
+    # Mark baseline point
+    ax_heat.scatter([balk_pos], [noshow_pos], color="white", s=60, zorder=6)
+    ax_heat.scatter([balk_pos], [noshow_pos], color=BASELINE_COLOR, s=30,
+                    zorder=7, label=f"baseline ({baseline_balk} d, {baseline_noshow} d)")
+    ax_heat.legend(fontsize=7.5, frameon=False, loc="upper left")
+
+    # --- Right top: fix noshow_threshold, vary balk_threshold ---
+    slice_balk = df[df["noshow_threshold"] == baseline_noshow].sort_values("balk_threshold")
+    ax_balk.plot(slice_balk["balk_threshold"], slice_balk["average_utilization"],
+                 color=UTILIZATION_COLOR, linewidth=1.8, marker="o", markersize=4,
+                 label="utilization")
+    ax_balk.plot(slice_balk["balk_threshold"], slice_balk["no_show_rate"],
+                 color=NO_SHOW_COLOR, linewidth=1.4, linestyle="--", marker="o", markersize=4,
+                 label="no-show rate")
+    ax_balk.axvline(baseline_noshow, color=BASELINE_COLOR, linewidth=0.9, linestyle="--",
+                    label=f"balk = no-show ({baseline_noshow} d)")
+    ax_balk.axvline(baseline_balk, color=BALKING_COLOR, linewidth=0.9, linestyle=":",
+                    label=f"baseline balk ({baseline_balk} d)")
+    style_line_axis(ax_balk, "balking threshold (days)", "rate")
+    ax_balk.set_title(f"Fix no-show threshold = {baseline_noshow} d, vary balking threshold",
+                      fontsize=9)
+    ax_balk.legend(frameon=False, fontsize=8)
+
+    # --- Right bottom: fix balk_threshold, vary noshow_threshold ---
+    slice_noshow = df[df["balk_threshold"] == baseline_balk].sort_values("noshow_threshold")
+    ax_noshow_proj.plot(slice_noshow["noshow_threshold"], slice_noshow["average_utilization"],
+                        color=UTILIZATION_COLOR, linewidth=1.8, marker="o", markersize=4,
+                        label="utilization")
+    ax_noshow_proj.plot(slice_noshow["noshow_threshold"], slice_noshow["no_show_rate"],
+                        color=NO_SHOW_COLOR, linewidth=1.4, linestyle="--", marker="o", markersize=4,
+                        label="no-show rate")
+    ax_noshow_proj.axvline(baseline_balk, color=BASELINE_COLOR, linewidth=0.9, linestyle="--",
+                           label=f"balk = no-show ({baseline_balk} d)")
+    ax_noshow_proj.axvline(baseline_noshow, color=NO_SHOW_COLOR, linewidth=0.9, linestyle=":",
+                           label=f"baseline no-show ({baseline_noshow} d)")
+    style_line_axis(ax_noshow_proj, "no-show threshold (days)", "rate")
+    ax_noshow_proj.set_title(f"Fix balking threshold = {baseline_balk} d, vary no-show threshold",
+                             fontsize=9)
+    ax_noshow_proj.legend(frameon=False, fontsize=8)
+
+    fig.savefig(OUT_DIR / "balk_noshow_threshold_utilization.png", dpi=190, bbox_inches="tight")
+    plt.close(fig)
+    return df
+
+
 def draw_metric_driver_panel(
     ax,
     data,
@@ -1183,6 +1410,112 @@ def draw_metric_driver_figure(filename, title, panels):
         draw_metric_driver_panel(ax=ax, **panel)
 
     fig.savefig(OUT_DIR / filename, dpi=190, bbox_inches="tight")
+    plt.close(fig)
+
+
+def draw_class_gap_drivers_figure(
+    balk_step_df,
+    balk_threshold_df,
+    no_show_step_df,
+    no_show_threshold_df,
+    cancel_df,
+    baseline_balk_step,
+    baseline_balk_threshold,
+    baseline_no_show_step,
+    baseline_no_show_threshold,
+    baseline_cancel_prob,
+):
+    """
+    For each behavioral parameter, show the access gap (class 1 – class 2
+    served rate) separately when Class 1 varies vs when Class 2 varies,
+    with the other class held at baseline. No cross-behavior combined features.
+    """
+    panels = [
+        {
+            "df": cancel_df,
+            "c1_col": "class_1_cancel_prob",
+            "c2_col": "class_2_cancel_prob",
+            "baseline": baseline_cancel_prob,
+            "xlabel": "cancellation probability",
+            "title": "Cancellation probability",
+        },
+        {
+            "df": balk_step_df,
+            "c1_col": "class_1_step",
+            "c2_col": "class_2_step",
+            "baseline": baseline_balk_step,
+            "xlabel": "balking high-delay probability",
+            "title": "Balking step",
+        },
+        {
+            "df": balk_threshold_df,
+            "c1_col": "class_1_threshold",
+            "c2_col": "class_2_threshold",
+            "baseline": baseline_balk_threshold,
+            "xlabel": "balking threshold (days)",
+            "title": "Balking threshold",
+        },
+        {
+            "df": no_show_step_df,
+            "c1_col": "class_1_step",
+            "c2_col": "class_2_step",
+            "baseline": baseline_no_show_step,
+            "xlabel": "no-show high-delay probability",
+            "title": "No-show step",
+        },
+        {
+            "df": no_show_threshold_df,
+            "c1_col": "class_1_threshold",
+            "c2_col": "class_2_threshold",
+            "baseline": baseline_no_show_threshold,
+            "xlabel": "no-show threshold (days)",
+            "title": "No-show threshold",
+        },
+    ]
+
+    ncols = 3
+    nrows = 2
+    fig, axes = plt.subplots(nrows, ncols, figsize=(13, 7.5), constrained_layout=True)
+    fig.suptitle(
+        "Class access gap: effect of each parameter varying for one class\n"
+        "(solid = Class 1 varies, Class 2 fixed; dashed = Class 2 varies, Class 1 fixed)",
+        fontsize=11,
+    )
+
+    for idx, panel in enumerate(panels):
+        ax = axes.ravel()[idx]
+        df = panel["df"]
+        c1_col, c2_col = panel["c1_col"], panel["c2_col"]
+        baseline = panel["baseline"]
+
+        # Class 1 varies (Class 2 fixed at baseline)
+        c1_slice, _ = slice_with_fixed(df, c1_col, c2_col, c2_col, baseline)
+        c1_slice = c1_slice.sort_values(c1_col)
+        ax.plot(c1_slice[c1_col], c1_slice["access_advantage_class_1"],
+                color=CLASS_1_COLOR, linewidth=1.8, marker="o", markersize=4,
+                label="Class 1 varies")
+
+        # Class 2 varies (Class 1 fixed at baseline)
+        c2_slice, _ = slice_with_fixed(df, c2_col, c1_col, c1_col, baseline)
+        c2_slice = c2_slice.sort_values(c2_col)
+        ax.plot(c2_slice[c2_col], c2_slice["access_advantage_class_1"],
+                color=CLASS_2_COLOR, linewidth=1.8, marker="o", markersize=4,
+                linestyle="--", label="Class 2 varies")
+
+        ax.axhline(0, color=BASELINE_COLOR, linewidth=0.9)
+        ax.axvline(baseline, color=BASELINE_COLOR, linewidth=0.9, linestyle="--")
+        ax.set_title(panel["title"], fontsize=10)
+        ax.set_xlabel(panel["xlabel"], fontsize=9)
+        ax.set_ylabel("class 1 − class 2 served rate", fontsize=9)
+        ax.legend(frameon=False, fontsize=8)
+        ax.grid(True, alpha=0.25)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    # Hide unused cell
+    axes.ravel()[-1].set_visible(False)
+
+    fig.savefig(OUT_DIR / "metric_class_gap_drivers.png", dpi=190, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -1497,6 +1830,16 @@ def add_regression_features(df):
         c2 = df[f"class_2_{prefix}"]
         df[f"{prefix}_mean"] = (c1 + c2) / 2.0
         df[f"{prefix}_gap_c1_minus_c2"] = c1 - c2
+    balk = df["balk_step_mean"]
+    noshow = df["no_show_step_mean"]
+    df["balk_noshow_step_level"] = (balk + noshow) / 2.0
+    df["balk_minus_noshow_step"] = balk - noshow
+    df["sign_balk_minus_noshow_step"] = np.sign(df["balk_minus_noshow_step"])
+    bt = df["balk_threshold_mean"]
+    nt = df["no_show_threshold_mean"]
+    df["balk_noshow_threshold_level"] = (bt + nt) / 2.0
+    df["balk_minus_noshow_threshold"] = bt - nt
+    df["sign_balk_minus_noshow_threshold"] = np.sign(df["balk_minus_noshow_threshold"])
     return df
 
 
@@ -2227,6 +2570,9 @@ def main():
     arrival_df = draw_arrival_mix()
     class_arrival_df = draw_class_arrival_lines()
     fcfs_stress_df = draw_fcfs_capacity_stress()
+    draw_no_balk_delay_thresholds(fcfs_stress_df)
+    draw_balk_noshow_step_heatmap()
+    draw_balk_noshow_threshold_heatmap()
     draw_metric_driver_figures(
         class_arrival_df,
         balk_step_df,
