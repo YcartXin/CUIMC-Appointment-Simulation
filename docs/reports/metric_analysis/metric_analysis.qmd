@@ -176,6 +176,11 @@ noticeable rise when the threshold is set to11. This suggests that there are
 may class 1 patients scheduled for day 11 as later supported by Accepted Booking
 Delay Distribution.
 
+Cancellation probability graph: higher cancellation probability for class 1
+slightly increases average utilization. This is because cancellations shorten
+the booking delay and sometimes allow the slot to be before the no-show threshold.
+
+
 Overall, no-show behavior is the clearest direct driver. Demand pressure is more subtle:
 utilization can stay high even when access is poor.
 
@@ -187,8 +192,15 @@ This figure shows the distribution of accepted bookings by original booking dela
 
 
 ![No-show step interaction](figures/no_show_step_interaction_heatmap.png)
+The right graph shows that class 1 has a -0.15 difference between class 1 and 2
+when class 1 has 1 no-show probability, and vice versa with 0.15 difference.
+
 
 ![No-show threshold interaction](figures/no_show_threshold_interaction_heatmap.png)
+In the right graph, we see that the top right corner indicates that both classes
+behave very similarly with high no-show threshold. This is because when the
+threshold is high, the differentiating no-show days is very limited.
+
 
 ### Overall Served Rate
 
@@ -300,6 +312,10 @@ accepted sample.
 Offered delay is the broader congestion measure because it includes both
 accepted and balked patients. Once enough long-delay Class 1 patients reject
 offers, congestion falls and both classes can receive shorter offered delays.
+It is the same for class 1 & 2 because balking does not effect the offered delay.
+With a small balking rate, the mean offered booking rises slightly because the
+later slots are offered more repeatedly.
+
 
 ![Class 1 high balking served rate](../../../outputs/class1_balking/figures/percent_serviced_by_class.png)
 
@@ -308,8 +324,9 @@ rises, Class 1 access falls while Class 2 access rises.
 
 ![Class 1 high balking rate](../../../outputs/class1_balking/figures/balking_rate_by_class.png)
 
-The balking-rate plot confirms that this is a behavioral rejection mechanism,
-not just a capacity effect.
+The balking-rate plot confirms that the balking rate rises the fastest in the
+beginning. Class 2 balking rate increases at first because class 1 balk far
+slots which class 2 is also likely to balk on.
 
 ### Class 1 Balking Threshold
 
@@ -326,7 +343,9 @@ completed capacity.
 ![Class 1 balking threshold accepted delay](../../../outputs/class1_balking_threshold/figures/mean_accepted_delay_by_class.png)
 
 Class 1 accepted delay generally rises as the threshold increases because Class
-1 tolerates longer waits before high balking applies.
+1 tolerates longer waits before high balking applies. There is a steep drop at
+13 because it turns off balking for the simulation.
+
 
 ![Class 1 balking threshold offered delay](../../../outputs/class1_balking_threshold/figures/mean_offered_delay_by_class.png)
 
