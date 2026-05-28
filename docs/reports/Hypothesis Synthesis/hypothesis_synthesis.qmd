@@ -1,0 +1,225 @@
+---
+title: "Hypothesis Synthesis: Class Properties and Simulation Metrics"
+format:
+  html:
+    embed-resources: true
+---
+
+## Purpose
+
+This document synthesizes the main hypotheses tested in the FCFS clinic appointment simulation. The focus is on how class-specific properties affect access, utilization, delay, balking, and class advantage.
+
+Each hypothesis is labelled as `Supported`, `Partially supported`, or `Not supported` based on the available simulation evidence. Sweeps are done with all other baseline assumptions fixed, with each step repeated across 100 seeds.
+
+
+## Summary Table
+
+<style>
+.hypothesis-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.hypothesis-table th,
+.hypothesis-table td {
+  border: 1px solid #ddd;`
+  padding: 8px;
+  vertical-align: top;
+}
+
+.hypothesis-table th {
+  background-color: #f5f5f5;
+}
+
+.hypothesis-table .id-col {
+  width: 6%;
+  white-space: nowrap;
+}
+
+.hypothesis-table .hypothesis-col {
+  width: 42%;
+}
+
+.hypothesis-table .mechanism-col {
+  width: 30%;
+}
+
+.hypothesis-table .evidence-col {
+  width: 14%;
+}
+
+.hypothesis-table .conclusion-col {wwwwwwwwwww
+  width: 8%;
+  white-space: nowrap;
+}
+</style>
+
+<table class="hypothesis-table">
+  <thead>
+    <tr>
+      <th class="id-col">ID</th>
+      <th class="hypothesis-col">Hypothesis</th>
+      <th class="mechanism-col">Mechanism</th>
+      <th class="evidence-col">Evidence</th>
+      <th class="conclusion-col">Conclusion</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>H1</td>
+      <td>A class with higher cancellation probability shortens offered delay for everyone but lowers its own served rate.</td>
+      <td>Future cancellations reopen capacity that can be rebooked by new arrivals, potentially shortening offered delay while reducing the canceling class's completed-service rate.</td>
+      <td><a href="#h1-cancellation-evidence">Cancellation sweep graphs</a></td>
+      <td>Supported</td>
+    </tr>
+    <tr>
+      <td>H2</td>
+      <td>No-show events are pure loss: they reduce utilization without improving any other metric.</td>
+      <td>No-show slots are not rebooked, so higher no-show risk reduces completed visits rather than improving offered delay, balking, or access.</td>
+      <td><a href="#h2-no-show-evidence">No-show sweep graphs</a></td>
+      <td>Supported</td>
+    </tr>
+    <tr>
+      <td>H3</td>
+      <td>
+        Main hypothesis: Higher balking step decreases accepted delay but decreases served rate.
+        <br><br>
+        <span class="subhypothesis">
+          Subhypothesis: At low-to-moderate Class 1 balking probabilities, Class 2's accepted delay rises because the additional slots Class 2 gains are further out in the schedule.
+        </span>
+      </td>
+      <td>
+        Higher Class 1 balking removes more long-delay Class 1 patients from the accepted sample, lowering Class 1 accepted delay by selection.
+      </td>
+      <td><a href="#h3-balking-step-evidence">Balking step sweep graphs</a></td>
+      <td>Supported</td>
+    </tr>
+    <tr>
+      <td>H4</td>
+      <td>When losses concentrate at balking, utilization is preserved. When losses concentrate at no-show, utilization drops. Served rate decreases in both cases.</td>
+      <td>WIP</td>
+      <td>Class 1 balking deep dives.</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>H5</td>
+      <td>WIP</td>
+      <td>Canceled future appointments reopen capacity that can be rebooked by new arrivals, sometimes at shorter delays and lower no-show risk.</td>
+      <td>Cancellation probability plots.</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>H6</td>
+      <td>WIP</td>
+      <td>A class with more arrivals may occupy more absolute slots, but it also has more arrivals in the denominator. Under FCFS, this mainly increases competition for fixed capacity.</td>
+      <td>Class-specific arrival slices.</td>
+      <td>Inconclusive</td>
+    </tr>
+    <tr>
+      <td>H7</td>
+      <td>WIP</td>
+      <td>Symmetric changes mostly affect aggregate outcomes. Class advantage emerges when one class has more favorable cancellation, balking, or no-show behavior.</td>
+      <td>Class-gap heatmaps; regression screen.</td>
+      <td>Yes</td>
+    </tr>
+  </tbody>
+</table>
+
+
+## H1 Evidence: Class 1 Cancellation Sweep {#h1-cancellation-evidence}
+
+This sweep varies only Class 1's cancellation probability while holding Class 2 at the baseline cancellation probability of 0.10.
+
+The hypothesis is supported if higher Class 1 cancellation probability lowers offered delay, lowers Class 1's own served rate, and leaves aggregate utilization flat or higher.
+
+### Mean Offered Booking Delay
+
+![Mean offered booking delay by class](../../../outputs/class1_cancellation/figures/mean_offered_delay_by_class.png)
+
+This figure tests whether higher Class 1 cancellation probability shortens offered delay. All three lines overlap because cancellation does not affect offered booking.
+
+### Served Rate
+
+![Served rate by class](../../../outputs/class1_cancellation/figures/percent_serviced_by_class.png)
+
+This figure tests whether higher Class 1 cancellation probability lowers Class 1's own served rate. A cancellation may improve calendar flexibility while still harming the class whose appointments are being canceled.
+
+### Average Utilization and Class Slot Shares
+
+![Average utilization and class slot shares](../../../outputs/class1_cancellation/figures/average_utilization_aggregate.png)
+
+This figure tests whether future cancellations are recycled into completed visits. If aggregate utilization stays flat or rises, then cancellations are not simply wasting capacity; they are reopening future slots that can be rebooked.
+
+[Back to summary table](#summary-table)
+
+## H2 Evidence: Class 1 No-Show Sweep {#h2-no-show-evidence}
+
+This sweep varies only Class 1's high-delay no-show probability while holding Class 2 at baseline.
+
+The hypothesis is supported if higher Class 1 no-show probability reduces completed visits and utilization without producing a meaningful improvement in offered delay or balking behavior.
+
+### Average Utilization and Class Slot Shares
+
+![Average utilization and class slot shares](../../../outputs/class1_no_show/figures/average_utilization_aggregate.png)
+
+As Class 1's high no-show probability rises, Class 1 contributes fewer completed visits. Because no-show slots are not rebooked, those losses directly reduce completed slots which create parallel lines.
+
+### Served Rate
+
+![Served rate by class](../../../outputs/class1_no_show/figures/percent_serviced_by_class.png)
+
+This figure shows that higher no-show risk lowers Class 1's served rate.
+
+### Mean Offered Booking Delay
+
+![Mean offered booking delay by class](../../../outputs/class1_no_show/figures/mean_offered_delay_by_class.png)
+
+This figure tests whether higher no-show risk improves delay. A flat offered-delay curve supports the view that no-shows are mainly a completion loss rather than a congestion-relief mechanism.
+
+### Balking Rate
+
+![Balking rate by class](../../../outputs/class1_no_show/figures/balking_rate_by_class.png)
+
+This figure shows the no-show increase is not producing an offsetting benefit through fewer rejected offers.
+
+### H2 Conclusion
+
+H2 is supported if the no-show sweep shows lower utilization and lower Class 1 served rate, while offered delay and balking rate do not improve in a meaningful offsetting way.
+
+[Back to summary table](#summary-table)
+
+## H3 Evidence: Class 1 Balking Step Sweep {#h3-balking-step-evidence}
+
+This sweep varies only Class 1's high-delay balking probability while holding Class 2 at baseline.
+
+The main hypothesis is supported if higher Class 1 balking probability lowers Class 1 accepted booking delay but also lowers Class 1 served rate.
+
+The subhypothesis is that at low-to-moderate Class 1 balking probabilities, roughly 0.0 to 0.3, Class 2's accepted delay can rise because the additional appointment opportunities Class 2 gains are still farther out in the booking horizon.
+
+### Mean Accepted Booking Delay
+
+![Mean accepted booking delay by class](../../../outputs/class1_balking/figures/mean_accepted_delay_by_class.png)
+
+It shows that as more long-delay Class 1 patients reject offers, the remaining accepted Class 1 appointments are concentrated at shorter delays.
+
+For Class 2, the initial rise in accepted delay is consistent with the subhypothesis. At low-to-moderate Class 1 balking probabilities, Class 2 gains access to slots that were previously unavailable, but those slots are still relatively far out in the schedule.
+
+### Served Rate
+
+![Served rate by class](../../../outputs/class1_balking/figures/percent_serviced_by_class.png)
+
+This figure tests whether the lower accepted delay comes at the cost of lower access. Because Class 1's served rate falls as its balking probability rises, the decrease in accepted delay is not a pure improvement. It partly reflects selection: long-delay patients leave the system instead of being served.
+
+### Mean Offered Booking Delay
+
+![Mean offered booking delay by class](../../../outputs/class1_balking/figures/mean_offered_delay_by_class.png)
+
+This figure supports the subhypothesis by showing the delay environment faced by patients who receive offers, including those who later balk. 
+
+### H3 Conclusion
+
+H3 is supported if Class 1 accepted delay decreases while Class 1 served rate also decreases. This pattern means higher balking can make the accepted-delay metric look better even while access worsens.
+
+The subhypothesis is supported if Class 2's accepted delay rises at low-to-moderate Class 1 balking probabilities while offered delay remains high. This suggests that Class 2 initially gains access to additional slots, but those slots are still concentrated farther out in the booking horizon.
+
+[Back to summary table](#summary-table)

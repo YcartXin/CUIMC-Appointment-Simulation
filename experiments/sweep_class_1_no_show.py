@@ -10,6 +10,8 @@ outputs/class1_no_show/summary/class_summary.csv
 outputs/class1_no_show/summary/aggregate_summary.csv
 outputs/class1_no_show/figures/percent_serviced_by_class.png
 outputs/class1_no_show/figures/average_utilization_aggregate.png
+outputs/class1_no_show/figures/mean_offered_delay_by_class.png
+outputs/class1_no_show/figures/balking_rate_by_class.png
 """
 from __future__ import annotations
 
@@ -77,7 +79,8 @@ def summarize(df: pd.DataFrame, group_cols: list[str], metric: str) -> pd.DataFr
 
 def create_class_summary(class_results: pd.DataFrame) -> pd.DataFrame:
     metrics = ["percent_serviced", "slot_utilization", "no_show", "served",
-               "mean_accepted_booking_delay", "mean_offered_booking_delay"]
+               "mean_accepted_booking_delay", "mean_offered_booking_delay",
+               "balking_rate"]
     return pd.concat(
         [summarize(class_results, ["class1_xi_high", "class_id"], m) for m in metrics],
         ignore_index=True,
@@ -86,7 +89,8 @@ def create_class_summary(class_results: pd.DataFrame) -> pd.DataFrame:
 
 def create_aggregate_summary(agg_results: pd.DataFrame) -> pd.DataFrame:
     metrics = ["average_utilization", "overall_percent_serviced",
-               "mean_accepted_booking_delay", "mean_offered_booking_delay"]
+               "mean_accepted_booking_delay", "mean_offered_booking_delay",
+               "overall_balking_rate"]
     return pd.concat(
         [summarize(agg_results, ["class1_xi_high"], m) for m in metrics],
         ignore_index=True,
@@ -134,6 +138,18 @@ def create_figures(class_summary, agg_summary):
         "slot_utilization", "average_utilization",
         "Average Utilization and Class Slot Shares", "Share of available slots",
         FIGURE_DIR / "average_utilization_aggregate.png",
+    )
+    plot_overall_and_class(
+        class_summary, agg_summary,
+        "mean_offered_booking_delay", "mean_offered_booking_delay",
+        "Mean Offered Booking Delay", "Mean offered booking delay (days)",
+        FIGURE_DIR / "mean_offered_delay_by_class.png",
+    )
+    plot_overall_and_class(
+        class_summary, agg_summary,
+        "balking_rate", "overall_balking_rate",
+        "Balking Rate Among Offered Patients", "Balked / offered",
+        FIGURE_DIR / "balking_rate_by_class.png",
     )
 
 
