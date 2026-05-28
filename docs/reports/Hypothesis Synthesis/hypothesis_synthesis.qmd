@@ -96,12 +96,15 @@ Each hypothesis is labelled as `Supported`, `Partially supported`, or `Not suppo
     </tr>
     <tr>
       <td>H4</td>
-      <td>When losses concentrate at balking, utilization is preserved. When losses concentrate at no-show, utilization drops. Served rate decreases in both cases.</td>
-      <td>WIP</td>
-      <td>Class 1 balking deep dives.</td>
-      <td>Yes</td>
+      <td>
+        When losses concentrate at balking, utilization is preserved. When losses concentrate at no-show, utilization drops. Served rate decreases in both cases.
+      </td>
+      <td>
+        Rejected offers from balking can be reallocated to other patients under high demand. No-shows are not rebooked, so they directly reduce completed visits. The served-rate claim is clearest for the affected class, not for the aggregate system.
+      </td>
+      <td><a href="#h4-balking-vs-no-show-evidence">Balking vs. no-show loss graphs</a></td>
+      <td>Partially supported</td>
     </tr>
-    <tr>
       <td>H5</td>
       <td>WIP</td>
       <td>Canceled future appointments reopen capacity that can be rebooked by new arrivals, sometimes at shorter delays and lower no-show risk.</td>
@@ -221,5 +224,42 @@ This figure supports the subhypothesis by showing the delay environment faced by
 H3 is supported if Class 1 accepted delay decreases while Class 1 served rate also decreases. This pattern means higher balking can make the accepted-delay metric look better even while access worsens.
 
 The subhypothesis is supported if Class 2's accepted delay rises at low-to-moderate Class 1 balking probabilities while offered delay remains high. This suggests that Class 2 initially gains access to additional slots, but those slots are still concentrated farther out in the booking horizon.
+
+[Back to summary table](#summary-table)
+
+## H4 Evidence: Balking Losses vs. No-Show Losses {#h4-balking-vs-no-show-evidence}
+
+
+The hypothesis is supported if the Class 1 balking sweep shows relatively stable aggregate utilization despite declining Class 1 served rate, while the Class 1 no-show sweep shows declining aggregate utilization and declining Class 1 served rate.
+
+### Balking Sweep: Average Utilization and Class Slot Shares
+
+![Class 1 balking utilization](../../../outputs/class1_balking/figures/average_utilization_aggregate.png)
+
+This figure tests whether utilization is preserved when losses occur through balking. Since balking happens before booking, rejected long-delay offers can be taken by other patients. Under the baseline's high-demand setting, this means aggregate utilization remain relatively stable as Class 1 gives up more appointment opportunities.
+
+### Balking Sweep: Served Rate
+
+![Class 1 balking served rate](../../../outputs/class1_balking/figures/percent_serviced_by_class.png)
+
+This figure tests whether the affected class still loses access under higher balking. As Class 1's high-delay balking probability rises, Class 1's served rate falls. Aaggregate utilization can remain stable while Class 1 access worsens, because Class 2 absorbs some of the released capacity.
+
+### No-Show Sweep: Average Utilization and Class Slot Shares
+
+![Class 1 no-show utilization](../../../outputs/class1_no_show/figures/average_utilization_aggregate.png)
+
+This figure tests the no-show side of the hypothesis. Because no-show slots are not rebooked, higher Class 1 no-show probability should reduce completed visits and lower aggregate utilization.
+
+### No-Show Sweep: Served Rate
+
+![Class 1 no-show served rate](../../../outputs/class1_no_show/figures/percent_serviced_by_class.png)
+
+This figure tests whether no-show losses also reduce the affected class's served rate. As Class 1's high-delay no-show probability rises, more booked Class 1 appointments fail to become completed visits, lowering Class 1's served rate.
+
+### H4 Conclusion
+
+H4 is partially supported. The utilization portion is supported: losses through balking preserve aggregate utilization because rejected offers can be reallocated, while losses through no-shows reduce utilization because no-show slots are lost on the service day.
+
+The served-rate portion requires qualification. In the balking sweep, Class 1's served rate falls as Class 1 balking rises, but the overall served rate stays nearly flat because Class 2 absorbs much of the released capacity. In the no-show sweep, Class 1's served rate falls and aggregate utilization also declines. Therefore, the hypothesis is supported for the affected class, but not for aggregate served rate under balking.
 
 [Back to summary table](#summary-table)
