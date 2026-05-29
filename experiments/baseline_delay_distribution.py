@@ -1,23 +1,21 @@
 """
-Baseline accepted-delay distribution.
+Accepted-delay distributions under different Class 1 balking thresholds.
 
-Runs the baseline configuration across 100 seeds and aggregates
-accepted_delay_counts from ClassMetrics to produce a histogram of
-booking delays (tau) by class.
-
-This figure serves as evidence for H5 by showing where the high-mass
-delay region is. When a balking threshold crosses this region, many
-patients' balking decisions change at once, producing the nonlinear
-jumps observed in the balking-threshold sweep.
+This script produces:
+1. Baseline accepted-delay distribution
+2. Accepted-delay distribution when Class 1 balking threshold = 10
 
 Outputs
 -------
-outputs/class1_balking_threshold/figures/accepted_delay_distribution.png
+outputs/class1_balking_threshold/figures/accepted_delay_distribution_baseline.png
+outputs/class1_balking_threshold/figures/accepted_delay_distribution_threshold10.png
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
+from dataclasses import replace
 
 import matplotlib
 matplotlib.use("Agg")
@@ -44,24 +42,49 @@ FIGURE_DIR = REPO_DIR / "outputs" / "class1_balking_threshold" / "figures"
 SEEDS = range(1, 101)
 
 # ============================================================
-# Run baseline and collect delay counts
+# Helpers
 # ============================================================
 
-def collect_delay_distributions(seeds):
+def with_class1_balking_threshold(config, new_threshold: int):
     """
-    Run the baseline simulation across multiple seeds and aggregate
+    Return a copy of config with only Class 1's balking threshold changed.
+    """
+    class1 = config.classes[1]
+    new_balk_rule = replace(class1.balk_prob, threshold=new_threshold)
+    new_class1 = replace(class1, balk_prob=new_balk_rule)
+
+    new_classes = dict(config.classes)
+    new_classes[1] = new_class1
+
+    return replace(config, classes=new_classes)
+
+
+def collect_delay_distributions(seeds, threshold_override=None):
+    """
+    Run the simulation across multiple seeds and aggregate
     accepted_delay_counts per class.
 
-    Returns:
-        dict mapping class_id -> {tau: total_count}
+    Parameters
+    ----------
+    seeds : iterable
+        Seeds to run.
+    threshold_override : int or None
+        If provided, override Class 1's balking threshold.
+
+    Returns
+    -------
+    dict
+        class_id -> {tau: total_count}
     """
     base_config = load_config(CONFIG_PATH)
-    class_ids = sorted(base_config.classes.keys())
 
+    if threshold_override is not None:
+        base_config = with_class1_balking_threshold(base_config, threshold_override)
+
+    class_ids = sorted(base_config.classes.keys())
     aggregated = {cid: {} for cid in class_ids}
 
     for seed in seeds:
-        from dataclasses import replace
         config = replace(base_config, seed=int(seed))
 
         sim = ClinicAppointmentSimulation(config)
@@ -75,13 +98,11 @@ def collect_delay_distributions(seeds):
     return aggregated
 
 
-def plot_delay_distribution(aggregated, output_path):
+def plot_delay_distribution(aggregated, output_path, threshold_value, title_suffix):
     """
     Plot a stacked bar histogram of accepted booking delays by class.
     """
-    all_taus = sorted(
-        set().union(*(d.keys() for d in aggregated.values()))
-    )
+    all_taus = sorted(set().union(*(d.keys() for d in aggregated.values())))
 
     fig, ax = plt.subplots(figsize=(8, 5))
 
@@ -104,27 +125,21 @@ def plot_delay_distribution(aggregated, output_path):
         )
         bottom += counts
 
-    # Mark the baseline balking threshold
-    baseline_threshold = 9
     ax.axvline(
-        x=baseline_threshold,
+        x=threshold_value,
         color="black",
         linestyle="--",
         linewidth=1.2,
-        alpha=0.6,
-        label=f"Baseline balking threshold ({baseline_threshold})",
+        alpha=0.7,
+        label=f"Class 1 balking threshold = {threshold_value}",
     )
 
-    ax.set_title("Accepted Booking Delay Distribution (Baseline)")
+    ax.set_title(f"Accepted Booking Delay Distribution ({title_suffix})")
     ax.set_xlabel("Booking delay τ (days)")
     ax.set_ylabel("Total accepted bookings (100 seeds)")
     ax.set_xticks(all_taus)
     ax.grid(True, alpha=0.3, axis="y")
-    ax.legend(
-        frameon=False,
-        loc="center left",
-        bbox_to_anchor=(1.02, 0.5),
-    )
+    ax.legend(frameon=False, loc="center left", bbox_to_anchor=(1.02, 0.5))
 
     fig.tight_layout()
     fig.savefig(output_path, dpi=300, bbox_inches="tight")
@@ -139,19 +154,30 @@ def plot_delay_distribution(aggregated, output_path):
 def main():
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
 
-    print("Collecting accepted delay distributions across 100 seeds...")
-    aggregated = collect_delay_distributions(SEEDS)
-
-    for cid, counts in sorted(aggregated.items()):
-        total = sum(counts.values())
-        print(f"  Class {cid}: {total:,} total accepted bookings")
-        for tau in sorted(counts.keys()):
-            pct = 100 * counts[tau] / total
-            print(f"    τ={tau:2d}: {counts[tau]:>7,}  ({pct:5.1f}%)")
+    # ----------------------------
+    # 1. Baseline
+    # ----------------------------
+    print("Collecting baseline accepted-delay distributions across 100 seeds...")
+    baseline_aggregated = collect_delay_distributions(SEEDS, threshold_override=None)
 
     plot_delay_distribution(
-        aggregated,
-        FIGURE_DIR / "accepted_delay_distribution.png",
+        baseline_aggregated,
+        FIGURE_DIR / "accepted_delay_distribution_baseline.png",
+        threshold_value=9,
+        title_suffix="Baseline",
+    )
+
+    # ----------------------------
+    # 2. Threshold = 10
+    # ----------------------------
+    print("Collecting threshold=10 accepted-delay distributions across 100 seeds...")
+    threshold10_aggregated = collect_delay_distributions(SEEDS, threshold_override=10)
+
+    plot_delay_distribution(
+        threshold10_aggregated,
+        FIGURE_DIR / "accepted_delay_distribution_threshold10.png",
+        threshold_value=10,
+        title_suffix="Class 1 threshold = 10",
     )
 
     print("\nDone.")

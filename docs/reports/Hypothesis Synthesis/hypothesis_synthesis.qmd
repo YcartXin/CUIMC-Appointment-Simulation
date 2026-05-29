@@ -113,22 +113,8 @@ Each hypothesis is labelled as `Supported`, `Partially supported`, or `Not suppo
       <td>
         When many offers occur near a delay such as <code>tau ≈ 11</code>, moving the threshold across that bucket changes the balking decision for many patients at once. Raising the threshold lowers balking and can increase accepted delay and served rate for the affected class.
       </td>
-      <td><a href="#h5-balking-threshold-evidence">Balking threshold evidence</a></td>
-      <td>Supported</td>
-    </tr>
-    <tr>
-      <td>H6</td>
-      <td>WIP</td>
-      <td>A class with more arrivals may occupy more absolute slots, but it also has more arrivals in the denominator. Under FCFS, this mainly increases competition for fixed capacity.</td>
-      <td>Class-specific arrival slices.</td>
-      <td>Inconclusive</td>
-    </tr>
-    <tr>
-      <td>H7</td>
-      <td>WIP</td>
-      <td>Symmetric changes mostly affect aggregate outcomes. Class advantage emerges when one class has more favorable cancellation, balking, or no-show behavior.</td>
-      <td>Class-gap heatmaps; regression screen.</td>
-      <td>Yes</td>
+      <td><a href="#h8-balking-threshold-evidence">Balking threshold evidence</a></td>
+      <td>Partially Supported</td>
     </tr>
   </tbody>
 </table>
@@ -269,42 +255,57 @@ The served-rate portion requires qualification. In the balking sweep, Class 1's 
 
 [Back to summary table](#summary-table)
 
-## H5 Evidence: Balking Threshold Crossing a High-Mass Delay Region {#h5-balking-threshold-evidence}
+## H8 Evidence: Balking Threshold Crossing a High-Mass Delay Region {#h8-balking-threshold-evidence}
 
-This hypothesis tests whether balking-threshold effects are smooth or nonlinear. The key idea is that a threshold change matters most when it crosses a booking-delay bucket where many accepted appointments are concentrated.
+This hypothesis tests whether balking-threshold effects are smooth or nonlinear. The key idea is that threshold changes matter more when they cross delay regions where many patients are being offered or accepting appointments.
 
-The hypothesis is supported if the accepted-delay distribution shows a high-mass region around a specific delay, and the balking-threshold sweep shows larger metric changes when the threshold crosses that region.
+The hypothesis is partially supported. The evidence shows that threshold changes have stronger effects in the late part of the booking horizon, but it does not isolate `tau ≈ 11` as the unique point where the largest jump occurs.
 
-### Accepted Booking Delay Distribution
+### Baseline Accepted Booking Delay Distribution
 
-![Accepted booking delay distribution](../../../outputs/class1_balking_threshold/figures/accepted_delay_distribution.png)
+![Baseline accepted booking delay distribution](../../../outputs/class1_balking_threshold/figures/accepted_delay_distribution_baseline.png)
 
-This figure identifies where accepted bookings are concentrated in the baseline system. The concentration around `tau ≈ 11` shows that many booked patients originally accepted appointments about 11 days out.
+This figure shows where accepted bookings are concentrated under the baseline balking threshold. The mass around later booking delays, including `tau ≈ 11`, suggests that threshold changes in this region can affect many patients.
 
-This matters because the balking rule is threshold-based. Moving the threshold across a high-mass delay bucket reclassifies many patients at once from high balking probability to low balking probability, or vice versa. Therefore, a one-day threshold change near `tau ≈ 11` can have a larger effect than a one-day threshold change in a low-mass region.
+However, this figure is only a baseline diagnostic. It does not show the accepted-delay distribution under every threshold value in the sweep. Once the balking threshold changes, Class 1 accepts and rejects different offers, which changes the future booking calendar and can shift the accepted-delay distribution.
+
+### Accepted Booking Delay Distribution at Threshold 10
+
+![Accepted booking delay distribution at threshold 10](../../../outputs/class1_balking_threshold/figures/accepted_delay_distribution_threshold10.png)
+
+This figure checks whether the accepted-delay distribution remains the same after the Class 1 balking threshold changes. If the mass around `tau ≈ 11` changes, then the baseline histogram should not be treated as a fixed explanation for the threshold-sweep jumps.
+
+This matters because the threshold sweep reruns the whole simulation at each threshold. It does not simply reclassify one fixed baseline group. Each threshold changes the booking calendar, which changes which delays later patients are offered and which delays appear in the accepted sample.
 
 ### Balking Rate
 
 ![Balking rate by class](../../../outputs/class1_balking_threshold/figures/balking_rate_by_class.png)
 
-This figure tests the direct behavioral effect. If Class 1's balking threshold crosses a delay where many offers occur, the realized Class 1 balking rate should change disproportionately. The effect is nonlinear because the threshold does not change individual patients gradually; it changes the treatment of an entire delay bucket.
+This figure tests the direct behavioral effect of the threshold change. Class 1's balking rate decreases as the threshold rises because fewer offered delays fall into the high-balking region.
+
+The graph supports the claim that threshold effects are nonlinear in the late-horizon region. However, the largest change is not uniquely tied to crossing `tau ≈ 11`. This weakens the stronger version of the hypothesis that a single popular booking day mechanically produces the largest jump.
 
 ### Mean Accepted Booking Delay
 
 ![Mean accepted booking delay by class](../../../outputs/class1_balking_threshold/figures/mean_accepted_delay_by_class.png)
 
-This figure tests whether crossing the high-mass delay region changes the accepted patient sample. When the threshold rises past a common booking delay, more long-delay Class 1 offers are accepted. This can sharply increase Class 1's mean accepted booking delay because many patients who were previously likely to reject those offers now remain in the accepted sample.
+This figure shows how the accepted patient sample changes as the threshold rises. When Class 1 becomes willing to accept longer-delay offers, more long-delay patients remain in the accepted sample, raising Class 1's mean accepted booking delay.
+
+The changes are consistent with nonlinear threshold behavior, but they do not show that the jump at `tau ≈ 11` is uniquely larger than nearby threshold changes.
 
 ### Served Rate
 
 ![Served rate by class](../../../outputs/class1_balking_threshold/figures/percent_serviced_by_class.png)
 
-This figure tests whether the threshold crossing affects access, not just delay composition. If more long-delay Class 1 patients accept appointments when the threshold rises, Class 1's served rate should increase. The corresponding Class 2 movement shows whether the change also reallocates access between classes.
+This figure tests whether the threshold effect reaches access outcomes, not only delay composition. As Class 1's threshold rises, Class 1 becomes more willing to accept long-delay appointments, which can increase its served rate and shift access away from Class 2.
 
-### H5 Conclusion
+The served-rate evidence supports the broader idea that threshold changes affect class outcomes, but it does not isolate `tau ≈ 11` as the only decisive crossing point.
 
-H5 is supported if the largest metric changes occur near the delay values where accepted bookings are concentrated. The accepted-delay distribution shows where the system has the most booking mass, while the threshold sweep shows how balking rate, accepted delay, and served rate respond when the threshold crosses that region.
+### H8 Conclusion
 
-The key interpretation is that balking-threshold effects are distribution-dependent. A threshold change is most consequential when it reclassifies a delay bucket containing many patients.
+H8 is partially supported. The evidence supports the broader claim that balking-threshold effects are nonlinear when the threshold moves through the late-horizon booking region. The accepted-delay histograms show that the system has substantial booking mass in this region, and the threshold-sweep graphs show nonlinear changes in balking rate, accepted delay, and served rate.
+
+However, the evidence does not fully support the narrower claim that crossing `tau ≈ 11` specifically produces the largest jump. The baseline accepted-delay distribution changes when the threshold changes, and the largest metric changes may occur at nearby late-horizon thresholds. Therefore, the hypothesis is best interpreted as evidence of late-horizon nonlinear threshold effects, not as proof that `tau ≈ 11` is uniquely decisive.
 
 [Back to summary table](#summary-table)
+

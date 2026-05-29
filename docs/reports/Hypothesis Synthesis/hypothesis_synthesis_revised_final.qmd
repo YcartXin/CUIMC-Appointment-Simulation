@@ -82,8 +82,9 @@ img {
     </tr>
     <tr>
       <td>H2</td>
-      <td>No-shows are unrebookable service-day losses, but their utilization effect is regime-dependent.</td>
-      <td>No-show slots are not rebooked under the current implementation. However, the aggregate utilization effect becomes material only when demand creates enough bookings beyond the no-show-risk threshold, or when low-delay no-show probability is nonzero.</td>
+      <td>No-shows are unrebookable service-day losses, but their utilization impact depends on delay exposure.
+</td>
+      <td>A no-show consumes a booked slot that is not rebooked on the service day. Therefore, conditional on occurring, no-shows directly reduce completed visits. However, the aggregate utilization effect becomes material only when demand pressure creates enough bookings beyond the no-show-risk threshold, or when low-delay no-show probability is nonzero.</td>
       <td><a href="#h2-no-show-evidence">No-show sweep graphs</a></td>
       <td>Qualified</td>
     </tr>
@@ -115,8 +116,44 @@ img {
       <td><a href="#h6-driver-ranking-and-local-attribution">Driver-ranking evidence</a></td>
       <td>Qualified</td>
     </tr>
+    <tr>
+      <td>H7</td>
+      <td>
+        For balking, class differences mainly come from relative differences between class balking behavior, while absolute balking levels mainly affect delay composition.
+      </td>
+      <td>
+        Balking occurs before booking is finalized. If both classes have the same balking rule, class gaps should remain small even when the absolute balking level changes. Class advantage appears when one class rejects long-delay offers more often than the other.
+      </td>
+      <td><a href="#h7-balking-gap-vs-level-evidence">Balking gap vs. level evidence</a></td>
+      <td>Supported</td>
+    </tr>
+    <tr>
+      <td>H8</td>
+      <td>
+        For no-show behavior, absolute no-show levels mainly affect aggregate utilization, while relative differences between classes mainly affect class access advantage.
+      </td>
+      <td>
+        No-shows occur after booking and are not rebooked. If both classes have high no-show risk, completed slot use falls for the whole system. If one class has higher no-show risk than the other, that class loses completed visits relative to the other class.
+      </td>
+      <td><a href="#h8-no-show-level-vs-gap-evidence">No-show level vs. class difference evidence</a></td>
+      <td>Supported</td>
+    </tr>
+    <tr>
+      <td>H9</td>
+      <td>
+        Balking-threshold changes have nonlinear effects when they cross a high-mass booking-delay region.
+      </td>
+      <td>
+        When many offers occur near a delay such as <code>tau ≈ 11</code>, moving the threshold across that bucket changes the balking decision for many patients at once. Raising the threshold lowers balking and can increase accepted delay and served rate for the affected class.
+      </td>
+      <td><a href="#h9-balking-threshold-evidence">Balking threshold evidence</a></td>
+      <td>Partially Supported</td>
+    </tr>
   </tbody>
 </table>
+
+
+
 
 ## H1 Evidence: Class 1 Cancellation Sweep {#h1-cancellation-evidence}
 
@@ -271,3 +308,117 @@ Booking horizon acts as a design modifier: in the realistic parameterization, it
 ## Conclusion
 
 This synthesis sharpens the interpretation along three dimensions. First, the denominator matters: utilization, served rate, offered wait, accepted wait, and no-offer share answer different questions. Second, timing matters: balking, cancellation, and no-show occur at different points in the booking process and therefore have different capacity consequences. Third, regime matters: no-show effects and class-gap driver rankings depend on demand pressure, threshold placement, and parameterization.
+
+
+## H7 Evidence: Balking Level vs. Class Difference {#h7-balking-gap-vs-level-evidence}
+
+This hypothesis asks whether class differences in outcomes are driven more by the absolute level of balking or by the difference between Class 1 and Class 2 balking behavior.
+
+The hypothesis is supported if class gaps remain small when Class 1 and Class 2 have similar balking steps, but become larger when one class has a higher balking step than the other.
+
+### Balking Step: Class 1 Access Advantage
+
+![Balking step class advantage](../metric_analysis/figures/balking_step_benefit_heatmaps.png)
+
+The main evidence is the Class 1 access-advantage panel. The diagonal band is close to neutral, meaning that when Class 1 and Class 2 have similar balking steps, neither class has a large served-rate advantage. Away from the diagonal, the class gap becomes stronger. When Class 1's balking step is higher than Class 2's, Class 1 loses access relative to Class 2. When Class 2's balking step is higher, Class 1 gains access relative to Class 2.
+
+This pattern suggests that class advantage is driven mainly by the relative difference between the two classes' balking behavior, not simply by the absolute level of balking in the system.
+
+### H7 Conclusion
+
+H7 is supported. The class-advantage pattern is clearest off the diagonal, where the two classes have different balking steps. Along the diagonal, where both classes have similar balking behavior, class gaps remain small even when the absolute balking level changes.
+
+This means that symmetric balking changes mostly affect the shared booking environment, while unequal balking behavior shifts access between classes.
+
+[Back to summary table](#summary-table)
+
+
+## H8 Evidence: No-Show Level vs. Class Difference {#h8-no-show-level-vs-gap-evidence}
+
+This hypothesis asks whether no-show outcomes are driven more by the absolute no-show level or by the difference between Class 1 and Class 2 no-show behavior.
+
+The key distinction is:
+
+- absolute level: both classes have similarly high or low no-show risk;
+- relative difference: one class has higher no-show risk than the other.
+
+The hypothesis is supported if aggregate utilization changes when both classes' no-show levels rise together, while class access advantage changes most strongly when one class has higher no-show risk than the other.
+
+### No-Show Step: Aggregate Utilization and Class Advantage
+
+![No-show step benefit heatmaps](../metric_analysis/figures/no_show_step_benefit_heatmaps.png)
+
+This figure provides the main evidence for H8. The utilization panel should be read as the absolute-level effect: when no-show risk is high for both classes, more booked appointments fail to become completed visits, so aggregate utilization falls.
+
+The class-advantage panel should be read as the relative-difference effect. Along the diagonal, where Class 1 and Class 2 have similar no-show steps, class advantage should remain close to neutral even if the absolute no-show level changes. Away from the diagonal, class advantage becomes stronger because one class loses more completed visits than the other.
+
+### No-Show Step: Class Gap
+
+![No-show step class gap heatmap](../metric_analysis/figures/no_show_step_interaction_heatmap.png)
+
+This figure isolates the class-gap interpretation. If Class 1 has a higher no-show step than Class 2, Class 1 should have a lower served rate relative to Class 2. If Class 2 has a higher no-show step, the direction should reverse.
+
+This supports the claim that class differences are driven by relative differences in no-show behavior, not simply by the absolute level of no-shows in the system.
+
+### H8 Conclusion
+
+H8 is supported. Absolute no-show levels matter most for aggregate utilization because no-show slots are lost on the service day and cannot be rebooked. Relative no-show differences matter most for class access advantage because the class with higher no-show risk loses more completed visits relative to the other class.
+
+In short, the average no-show level explains the system-level loss, while the no-show gap explains which class is disadvantaged.
+
+[Back to summary table](#summary-table)
+
+
+## H9 Evidence: Balking Threshold Crossing a High-Mass Delay Region {#h9-balking-threshold-evidence}
+
+This hypothesis tests whether balking-threshold effects are smooth or nonlinear. The key idea is that threshold changes matter more when they cross delay regions where many patients are being offered or accepting appointments.
+
+The hypothesis is partially supported. The evidence shows that threshold changes have stronger effects in the late part of the booking horizon, but it does not isolate `tau ≈ 11` as the unique point where the largest jump occurs.
+
+### Baseline Accepted Booking Delay Distribution
+
+![Baseline accepted booking delay distribution](../../../outputs/class1_balking_threshold/figures/accepted_delay_distribution_baseline.png)
+
+This figure shows where accepted bookings are concentrated under the baseline balking threshold. The mass around later booking delays, including `tau ≈ 11`, suggests that threshold changes in this region can affect many patients.
+
+However, this figure is only a baseline diagnostic. It does not show the accepted-delay distribution under every threshold value in the sweep. Once the balking threshold changes, Class 1 accepts and rejects different offers, which changes the future booking calendar and can shift the accepted-delay distribution.
+
+### Accepted Booking Delay Distribution at Threshold 10
+
+![Accepted booking delay distribution at threshold 10](../../../outputs/class1_balking_threshold/figures/accepted_delay_distribution_threshold10.png)
+
+This figure checks whether the accepted-delay distribution remains the same after the Class 1 balking threshold changes. If the mass around `tau ≈ 11` changes, then the baseline histogram should not be treated as a fixed explanation for the threshold-sweep jumps.
+
+This matters because the threshold sweep reruns the whole simulation at each threshold. It does not simply reclassify one fixed baseline group. Each threshold changes the booking calendar, which changes which delays later patients are offered and which delays appear in the accepted sample.
+
+### Balking Rate
+
+![Balking rate by class](../../../outputs/class1_balking_threshold/figures/balking_rate_by_class.png)
+
+This figure tests the direct behavioral effect of the threshold change. Class 1's balking rate decreases as the threshold rises because fewer offered delays fall into the high-balking region.
+
+The graph supports the claim that threshold effects are nonlinear in the late-horizon region. However, the largest change is not uniquely tied to crossing `tau ≈ 11`. This weakens the stronger version of the hypothesis that a single popular booking day mechanically produces the largest jump.
+
+### Mean Accepted Booking Delay
+
+![Mean accepted booking delay by class](../../../outputs/class1_balking_threshold/figures/mean_accepted_delay_by_class.png)
+
+This figure shows how the accepted patient sample changes as the threshold rises. When Class 1 becomes willing to accept longer-delay offers, more long-delay patients remain in the accepted sample, raising Class 1's mean accepted booking delay.
+
+The changes are consistent with nonlinear threshold behavior, but they do not show that the jump at `tau ≈ 11` is uniquely larger than nearby threshold changes.
+
+### Served Rate
+
+![Served rate by class](../../../outputs/class1_balking_threshold/figures/percent_serviced_by_class.png)
+
+This figure tests whether the threshold effect reaches access outcomes, not only delay composition. As Class 1's threshold rises, Class 1 becomes more willing to accept long-delay appointments, which can increase its served rate and shift access away from Class 2.
+
+The served-rate evidence supports the broader idea that threshold changes affect class outcomes, but it does not isolate `tau ≈ 11` as the only decisive crossing point.
+
+### H9 Conclusion
+
+H9 is partially supported. The evidence supports the broader claim that balking-threshold effects are nonlinear when the threshold moves through the late-horizon booking region. The accepted-delay histograms show that the system has substantial booking mass in this region, and the threshold-sweep graphs show nonlinear changes in balking rate, accepted delay, and served rate.
+
+However, the evidence does not fully support the narrower claim that crossing `tau ≈ 11` specifically produces the largest jump. The baseline accepted-delay distribution changes when the threshold changes, and the largest metric changes may occur at nearby late-horizon thresholds. Therefore, the hypothesis is best interpreted as evidence of late-horizon nonlinear threshold effects, not as proof that `tau ≈ 11` is uniquely decisive.
+
+[Back to summary table](#summary-table)
