@@ -1,0 +1,116 @@
+% ============================================================
+%  FCFS Simulation: Conclusions Deck
+%  5-slide meeting summary
+%  May 2026
+% ============================================================
+
+\documentclass[18pt,aspectratio=169]{beamer}
+
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{microtype}
+\usepackage{enumitem}
+
+% ---- theme --------------------------------------------------
+\usetheme{default}
+\usecolortheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{headline}{}
+
+% slide number bottom-right only
+\setbeamertemplate{footline}{%
+  \hfill
+  \usebeamerfont{footline}\insertframenumber\hspace{1.4em}
+  \vspace{0.7em}
+}
+
+% ---- colors -------------------------------------------------
+\definecolor{hblue}{RGB}{20,60,140}
+
+\setbeamercolor{frametitle}{fg=hblue}
+\setbeamerfont{frametitle}{size=\large,series=\bfseries}
+
+\setbeamercolor{itemize item}{fg=hblue}
+\setbeamercolor{itemize subitem}{fg=hblue}
+\setbeamerfont{itemize/enumerate body}{size=\large}
+
+% rule under frametitle
+\addtobeamertemplate{frametitle}{}{%
+  \vspace{-4pt}%
+  {\color{hblue!50}\rule{\linewidth}{0.5pt}}%
+  \vspace{2pt}%
+}
+
+% ---- itemize spacing ----------------------------------------
+\setlength{\leftmargini}{1.4em}
+\setlength{\itemsep}{0.9em}
+
+% ============================================================
+\begin{document}
+% ============================================================
+
+% ------ Slide 1: Main message --------------------------------
+\begin{frame}
+  \frametitle{Utilization alone is not an access summary.}
+  \vspace{0.6em}
+  \begin{itemize}
+    \setlength{\itemsep}{0.9em}
+    \item Utilization measures completed visits per \textbf{slot}.
+    \item Served rate measures completed visits per \textbf{arrival}.
+    \item Minimum reporting set: served rate, utilization, offered wait,
+          no-offer share, outcome decomposition, class-level served rates.
+  \end{itemize}
+\end{frame}
+
+% ------ Slide 2: Capacity pressure ---------------------------
+\begin{frame}
+  \frametitle{Under high demand, high utilization can coexist with poor access.}
+  \vspace{0.6em}
+  \begin{itemize}
+    \setlength{\itemsep}{0.9em}
+    \item Stress-test baseline: $\lambda = 100$ arrivals/day, $S = 32$ slots/day.
+    \item Utilization $\approx 0.841$;\enspace served rate $\approx 0.269$.
+    \item The baseline is useful for mechanism diagnosis, not as a calibrated
+          clinic estimate.
+  \end{itemize}
+\end{frame}
+
+% ------ Slide 3: Balking -------------------------------------
+\begin{frame}
+  \frametitle{Balking reallocates access; it does not recover aggregate capacity.}
+  \vspace{0.6em}
+  \begin{itemize}
+    \setlength{\itemsep}{0.9em}
+    \item Higher balking reduces own-class served rate.
+    \item Through pooled FCFS, the other class can gain access.
+    \item Removing balking shifts losses toward no-offer and cancellation.
+  \end{itemize}
+\end{frame}
+
+% ------ Slide 4: Cancellation and no-show --------------------
+\begin{frame}
+  \frametitle{Cancellation can be reabsorbed; no-show capacity is lost.}
+  \vspace{0.6em}
+  \begin{itemize}
+    \setlength{\itemsep}{0.9em}
+    \item Cancellation releases future slots that other patients may fill.
+    \item No-show slots are not rebooked.
+    \item No-show behavior is the most direct behavioral driver of utilization.
+  \end{itemize}
+\end{frame}
+
+% ------ Slide 5: Class-level and next decision ---------------
+\begin{frame}
+  \frametitle{Aggregate metrics can hide class-level access gaps.}
+  \vspace{0.6em}
+  \begin{itemize}
+    \setlength{\itemsep}{0.9em}
+    \item Symmetric parameters imply near-zero expected class gap.
+    \item Asymmetric behavior creates class gaps under pooled FCFS.
+    \item \textit{Meeting decision:} stress-test baseline for mechanism
+          diagnosis, or calibrated realistic scenario for operational
+          interpretation.
+  \end{itemize}
+\end{frame}
+
+\end{document}
