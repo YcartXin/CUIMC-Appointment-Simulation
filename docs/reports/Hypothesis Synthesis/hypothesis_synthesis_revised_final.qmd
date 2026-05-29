@@ -421,4 +421,6 @@ H9 is partially supported. The evidence supports the broader claim that balking-
 
 However, the evidence does not fully support the narrower claim that crossing `tau ≈ 11` specifically produces the largest jump. The baseline accepted-delay distribution changes when the threshold changes, and the largest metric changes may occur at nearby late-horizon thresholds. Therefore, the hypothesis is best interpreted as evidence of late-horizon nonlinear threshold effects, not as proof that `tau ≈ 11` is uniquely decisive.
 
+![Research note main panel](../metric_analysis/figures/research_note_main_panel.png)
+
 [Back to summary table](#summary-table)
