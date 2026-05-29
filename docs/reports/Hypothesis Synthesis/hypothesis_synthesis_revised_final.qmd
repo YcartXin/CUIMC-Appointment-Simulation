@@ -1,0 +1,273 @@
+---
+title: "Hypothesis Synthesis: Class Properties and Simulation Metrics"
+format:
+  html:
+    embed-resources: true
+---
+
+## Purpose
+
+This document synthesizes the main hypotheses tested in the FCFS clinic appointment simulation. The focus is on how class-specific properties affect access, utilization, delay, balking, and class advantage.
+
+Each hypothesis is assigned a concise verdict: `Supported`, `Supported (condition)`, `Qualified`, or `Not supported`. `Qualified` means the mechanism is present, but the broad version of the claim would be misleading without specifying the relevant denominator, timing, or regime. Sweeps are done with all other baseline assumptions fixed, with each step repeated across 100 seeds.
+
+## Metric Interpretation
+
+Under oversubscription, utilization is not an access metric by itself: served rate is the primary aggregate access metric. Offered wait must be reported with no-offer share because patients who receive no offer have no wait observation, while accepted wait is selected by balking. These metrics should therefore be read together rather than treated as interchangeable summaries.
+
+## Summary Table
+
+<style>
+.hypothesis-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.hypothesis-table th,
+.hypothesis-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  vertical-align: top;
+}
+
+.hypothesis-table th {
+  background-color: #f5f5f5;
+}
+
+.hypothesis-table .id-col {
+  width: 6%;
+  white-space: nowrap;
+}
+
+.hypothesis-table .hypothesis-col {
+  width: 42%;
+}
+
+.hypothesis-table .mechanism-col {
+  width: 30%;
+}
+
+.hypothesis-table .evidence-col {
+  width: 14%;
+}
+
+.hypothesis-table .conclusion-col {
+  width: 8%;
+  white-space: nowrap;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+</style>
+
+<table class="hypothesis-table">
+  <thead>
+    <tr>
+      <th class="id-col">ID</th>
+      <th class="hypothesis-col">Hypothesis</th>
+      <th class="mechanism-col">Mechanism</th>
+      <th class="evidence-col">Evidence</th>
+      <th class="conclusion-col">Conclusion</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>H1</td>
+      <td>A class with higher cancellation probability can shorten offered delay under high demand, but lowers its own served rate.</td>
+      <td>Future cancellations reopen capacity that can be rebooked by later arrivals. Under high demand, this can shorten offered delay and benefit the other class, while the canceling class loses completed visits.</td>
+      <td><a href="#h1-cancellation-evidence">Cancellation sweep graphs</a></td>
+      <td>Supported (high-demand rebooking regime)</td>
+    </tr>
+    <tr>
+      <td>H2</td>
+      <td>No-shows are unrebookable service-day losses, but their utilization effect is regime-dependent.</td>
+      <td>No-show slots are not rebooked under the current implementation. However, the aggregate utilization effect becomes material only when demand creates enough bookings beyond the no-show-risk threshold, or when low-delay no-show probability is nonzero.</td>
+      <td><a href="#h2-no-show-evidence">No-show sweep graphs</a></td>
+      <td>Qualified</td>
+    </tr>
+    <tr>
+      <td>H3</td>
+      <td>Higher balking decreases affected-class served rate and lowers accepted delay by selection.</td>
+      <td>Higher balking removes long-delay patients from the accepted sample. This improves accepted-wait statistics but reduces access for the affected class. Aggregate served rate may remain near baseline if the other class absorbs released capacity.</td>
+      <td><a href="#h3-balking-step-evidence">Balking step sweep graphs</a></td>
+      <td>Qualified</td>
+    </tr>
+    <tr>
+      <td>H4</td>
+      <td>The timing of loss determines its capacity consequence.</td>
+      <td>Balking occurs before booking and consumes no slot. Cancellation releases a future slot that can be rebooked. No-show occurs on the service day and cannot be rebooked. This explains why utilization is preserved under balking, redistributed under cancellation, and reduced under no-show.</td>
+      <td><a href="#h4-balking-vs-no-show-evidence">Balking vs. no-show loss graphs</a></td>
+      <td>Supported</td>
+    </tr>
+    <tr>
+      <td>H5</td>
+      <td>Under symmetric behavior, pooled day-level FCFS does not create a meaningful per-arrival class access gap from class labels or arrival share alone.</td>
+      <td>The queue randomly permutes daily arrivals and applies the same FCFS rule to both classes. Class gaps require behavioral asymmetry or interactions, not class labels alone.</td>
+      <td><a href="#h5-symmetric-fcfs-and-arrival-share">Arrival-share evidence</a></td>
+      <td>Supported (symmetric behavior)</td>
+    </tr>
+    <tr>
+      <td>H6</td>
+      <td>Class-gap driver rankings are regime-specific.</td>
+      <td>Broad regression screens rank standardized associations across sampled configurations, while local attribution decomposes one realistic scenario. These are different questions, so the driver ranking need not be identical.</td>
+      <td><a href="#h6-driver-ranking-and-local-attribution">Driver-ranking evidence</a></td>
+      <td>Qualified</td>
+    </tr>
+  </tbody>
+</table>
+
+## H1 Evidence: Class 1 Cancellation Sweep {#h1-cancellation-evidence}
+
+This sweep varies only Class 1's cancellation probability while holding Class 2 at the baseline cancellation probability of 0.10.
+
+The hypothesis is supported if higher Class 1 cancellation probability lowers offered delay under high demand, lowers Class 1's own served rate, and reallocates some completed visits to Class 2.
+
+### Mean Offered Booking Delay
+
+![Mean offered booking delay by class](../../../outputs/class1_cancellation/figures/mean_offered_delay_by_class.png)
+
+This figure tests whether higher Class 1 cancellation probability shortens offered delay. In the sweep, mean offered delay falls from about 11.84 days to about 7.47 days as Class 1 cancellation probability rises from 0.00 to 0.30. This is consistent with future cancellations reopening slots that the pooled FCFS queue can offer to later arrivals under high demand.
+
+### Served Rate
+
+![Served rate by class](../../../outputs/class1_cancellation/figures/percent_serviced_by_class.png)
+
+This figure tests whether higher Class 1 cancellation probability lowers Class 1's own served rate. Class 1 served rate falls from about 0.344 to about 0.175, while Class 2 served rate rises from about 0.135 to about 0.395. A cancellation can improve calendar flexibility for the pool while still harming the class whose appointments are being canceled.
+
+### Average Utilization and Class Slot Shares
+
+![Average utilization and class slot shares](../../../outputs/class1_cancellation/figures/average_utilization_aggregate.png)
+
+This figure tests whether future cancellations are recycled into completed visits. If aggregate utilization stays flat or rises, then cancellations are not simply wasting capacity under this stress-test regime; they are reopening future slots that can be rebooked.
+
+### H1 Conclusion
+
+H1 is supported. The evidence supports a high-demand reallocation mechanism: the canceling class loses access, and other patients may gain nearer slots. The overclaim to avoid is that cancellations are good for clinic access as a general recommendation.
+
+[Back to summary table](#summary-table)
+
+## H2 Evidence: Class 1 No-Show Sweep {#h2-no-show-evidence}
+
+This sweep varies only Class 1's high-delay no-show probability while holding Class 2 at baseline.
+
+The hypothesis is supported if higher Class 1 no-show probability reduces completed visits when no-shows occur, while the size of the utilization effect depends on whether the regime creates enough no-show-risk exposure.
+
+### Average Utilization and Class Slot Shares
+
+![Average utilization and class slot shares](../../../outputs/class1_no_show/figures/average_utilization_aggregate.png)
+
+As Class 1's high no-show probability rises, Class 1 contributes fewer completed visits. Because no-show slots are not rebooked under the current implementation, those losses directly reduce completed slots. In the stress-test no-show sweep, utilization falls from about 0.920 to about 0.681.
+
+### Served Rate
+
+![Served rate by class](../../../outputs/class1_no_show/figures/percent_serviced_by_class.png)
+
+This figure shows that higher no-show risk lowers Class 1's served rate. The loss is direct because a booked appointment reaches the service day but does not become a completed visit.
+
+### Mean Offered Booking Delay
+
+![Mean offered booking delay by class](../../../outputs/class1_no_show/figures/mean_offered_delay_by_class.png)
+
+This figure tests whether higher no-show risk improves delay. A flat offered-delay curve supports the view that no-shows are mainly a completion loss rather than a congestion-relief mechanism.
+
+### Balking Rate
+
+![Balking rate by class](../../../outputs/class1_no_show/figures/balking_rate_by_class.png)
+
+This figure shows the no-show increase is not producing an offsetting benefit through fewer rejected offers.
+
+### H2 Conclusion
+
+H2 is supported. No-shows are unrebookable service-day losses under the current implementation, but the utilization effect is regime-dependent. In the realistic demand/no-show grid at lambda/S = 1.2, doubling no-show intensity changes utilization only from about 0.935 to about 0.934. The overclaim to avoid is that no-show risk has the same aggregate effect in every demand regime; threshold ordering and demand gating belong inside this hypothesis.
+
+[Back to summary table](#summary-table)
+
+## H3 Evidence: Class 1 Balking Step Sweep {#h3-balking-step-evidence}
+
+This sweep varies only Class 1's high-delay balking probability while holding Class 2 at baseline.
+
+The main hypothesis is supported if higher Class 1 balking probability lowers Class 1 accepted booking delay but also lowers Class 1 served rate.
+
+### Mean Accepted Booking Delay
+
+![Mean accepted booking delay by class](../../../outputs/class1_balking/figures/mean_accepted_delay_by_class.png)
+
+As more long-delay Class 1 patients reject offers, the remaining accepted Class 1 appointments are concentrated at shorter delays. Across the Class 1 high-balking sweep, Class 1 accepted delay falls from about 9.95 days to about 6.71 days.
+
+For Class 2, the initial rise in accepted delay is consistent with the subhypothesis. At low-to-moderate Class 1 balking probabilities, Class 2 gains access to slots that were previously unavailable, but those slots are still relatively far out in the schedule.
+
+### Served Rate
+
+![Served rate by class](../../../outputs/class1_balking/figures/percent_serviced_by_class.png)
+
+This figure tests whether the lower accepted delay comes at the cost of lower access. Class 1 served rate falls from about 0.297 to about 0.237 as its high-delay balking probability rises from 0.00 to 0.90. Class 2 served rate rises from about 0.240 to about 0.301, so aggregate served rate remains near 0.269 under the stress-test baseline.
+
+### Mean Offered Booking Delay
+
+![Mean offered booking delay by class](../../../outputs/class1_balking/figures/mean_offered_delay_by_class.png)
+
+This figure supports the selection interpretation by showing the delay environment faced by patients who receive offers, including those who later balk.
+
+### H3 Conclusion
+
+H3 is supported. Higher balking can make accepted delay look better because long-delay patients leave the accepted sample, while the affected class's served rate worsens. The overclaim to avoid is that aggregate served rate necessarily falls; under the stress-test baseline, the other class can absorb released capacity.
+
+[Back to summary table](#summary-table)
+
+## H4 Evidence: Balking vs. No-Show Loss {#h4-balking-vs-no-show-evidence}
+
+The comparison is best interpreted as a timing mechanism. Balking happens before booking and consumes no slot. Cancellation releases future booked slots before the service day and can be rebooked. No-show occurs on the service day and cannot be rebooked.
+
+The hypothesis is supported if the Class 1 balking sweep shows relatively stable aggregate utilization despite declining Class 1 served rate, while the Class 1 no-show sweep shows declining aggregate utilization and declining Class 1 served rate.
+
+### Balking Sweep: Average Utilization and Class Slot Shares
+
+![Class 1 balking utilization](../../../outputs/class1_balking/figures/average_utilization_aggregate.png)
+
+This figure tests whether utilization is preserved when losses occur through balking. Since balking happens before booking, rejected long-delay offers can be taken by other patients. Under the stress-test baseline, aggregate utilization remains relatively stable as Class 1 gives up more appointment opportunities.
+
+### Balking Sweep: Served Rate
+
+![Class 1 balking served rate](../../../outputs/class1_balking/figures/percent_serviced_by_class.png)
+
+This figure tests whether the affected class still loses access under higher balking. As Class 1's high-delay balking probability rises, Class 1's served rate falls. Aggregate utilization can remain stable while Class 1 access worsens, because Class 2 absorbs some of the released capacity.
+
+### No-Show Sweep: Average Utilization and Class Slot Shares
+
+![Class 1 no-show utilization](../../../outputs/class1_no_show/figures/average_utilization_aggregate.png)
+
+This figure tests the no-show side of the hypothesis. Because no-show slots are not rebooked, higher Class 1 no-show probability reduces completed visits and lowers aggregate utilization within the stress-test sweep.
+
+### No-Show Sweep: Served Rate
+
+![Class 1 no-show served rate](../../../outputs/class1_no_show/figures/percent_serviced_by_class.png)
+
+This figure tests whether no-show losses also reduce the affected class's served rate. As Class 1's high-delay no-show probability rises, more booked Class 1 appointments fail to become completed visits, lowering Class 1's served rate.
+
+### H4 Conclusion
+
+H4 is supported. The evidence supports the timing distinction: balking is pre-booking, cancellation is future-slot release, and no-show is service-day loss. This interpretation applies under the current implementation; the overclaim to avoid is treating all loss channels as if they had the same capacity consequence.
+
+[Back to summary table](#summary-table)
+
+## H5 Evidence: Symmetric FCFS and Arrival Share {#h5-symmetric-fcfs-and-arrival-share}
+
+The controlled symmetric arrival-share experiment shows that varying Class 1's share does not create a meaningful per-arrival class access gap when behavioral parameters are symmetric. The gap stays around -0.002 to +0.002 as Class 1 share varies from 0.30 to 0.70. This supports the interpretation that pooled FCFS is neutral under symmetric behavior, and that observed class gaps require behavioral asymmetry or interaction effects.
+
+[Back to summary table](#summary-table)
+
+## H6 Evidence: Driver Ranking and Local Attribution {#h6-driver-ranking-and-local-attribution}
+
+The broad regression screen and the realistic attribution experiment answer different questions. The regression screen ranks associations across a sampled design space, while the attribution experiment decomposes one realistic scenario. In the local attribution output, the full gap is about 0.213, with about 0.120 from no-show asymmetry, 0.073 from cancellation, and 0.019 from balking threshold. The relevant conclusion is therefore not that one driver universally dominates, but that class-gap driver rankings are regime-specific.
+
+Booking horizon acts as a design modifier: in the realistic parameterization, it can amplify the class gap until roughly a three-week horizon, after which the effect plateaus.
+
+[Back to summary table](#summary-table)
+
+**Interpretation Across Mechanisms.** Cancellation is best read as high-demand reallocation, no-show loss as regime-dependent service-day loss, balking as accepted-wait selection plus class reallocation, and arrival share alone as insufficient to create a class access gap under symmetric behavior.
+
+## Conclusion
+
+This synthesis sharpens the interpretation along three dimensions. First, the denominator matters: utilization, served rate, offered wait, accepted wait, and no-offer share answer different questions. Second, timing matters: balking, cancellation, and no-show occur at different points in the booking process and therefore have different capacity consequences. Third, regime matters: no-show effects and class-gap driver rankings depend on demand pressure, threshold placement, and parameterization.

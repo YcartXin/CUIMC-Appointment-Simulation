@@ -1,5 +1,5 @@
 ---
-title: "Hypothesis Synthesis: Class Properties and Simulation Metrics (Revised)"
+title: "Hypothesis Synthesis: Class Properties and Simulation Metrics"
 format:
   html:
     embed-resources: true
