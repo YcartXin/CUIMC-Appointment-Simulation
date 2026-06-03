@@ -70,6 +70,9 @@ class SimulationConfig:
     cooldown_days: int
     classes: Dict[int, PatientClassParams]
     seed: Optional[int] = None
+    reserved_class_id: Optional[int] = None
+    reserved_slots_per_day: int = 0
+    release_reserved_slots: bool = False
 
     def __post_init__(self) -> None:
         if self.slots_per_day <= 0:
@@ -84,6 +87,15 @@ class SimulationConfig:
             raise ValueError("cooldown_days must be nonnegative.")
         if not self.classes:
             raise ValueError("At least one patient class is required.")
+        if self.reserved_slots_per_day < 0:
+            raise ValueError("reserved_slots_per_day must be nonnegative.")
+        if self.reserved_slots_per_day > self.slots_per_day:
+            raise ValueError("reserved_slots_per_day cannot exceed slots_per_day.")
+        if self.reserved_slots_per_day > 0:
+            if self.reserved_class_id is None:
+                raise ValueError("reserved_class_id is required when slots are reserved.")
+            if self.reserved_class_id not in self.classes:
+                raise ValueError("reserved_class_id must identify a configured class.")
 
 
 # ==========================
@@ -102,6 +114,7 @@ class Booking:
     patient_class: int
     booking_delay: int
     tracked: bool
+    reserved_slot: bool = False
 
 
 @dataclass
