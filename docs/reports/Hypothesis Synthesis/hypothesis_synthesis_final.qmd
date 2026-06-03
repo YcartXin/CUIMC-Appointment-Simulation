@@ -84,7 +84,7 @@ img {
       <td>H2</td>
       <td>No-shows are unrebookable service-day losses, but their utilization impact depends on delay exposure.
 </td>
-      <td>A no-show consumes a booked slot that is not rebooked on the service day. Therefore, conditional on occurring, no-shows directly reduce completed visits. However, the aggregate utilization effect becomes material only when demand pressure creates enough bookings beyond the no-show-risk threshold, or when low-delay no-show probability is nonzero.</td>
+      <td>A no-show consumes a booked slot that is not rebooked on the service day. Therefore, no-shows directly reduce completed visits. However, the aggregate utilization effect becomes material only beyond the no-show-risk threshold, or when low-delay no-show probability is nonzero.</td>
       <td><a href="#h2-no-show-evidence">No-show sweep graphs</a></td>
       <td>Qualified</td>
     </tr>
@@ -97,7 +97,7 @@ img {
     </tr>
     <tr>
       <td>H4</td>
-      <td>The timing of loss determines its capacity consequence.</td>
+      <td>When losses concentrate at balking, utilization is preserved. When losses concentrate at no-show, utilization drops. Served rate decreases in both cases.</td>
       <td>Balking occurs before booking and consumes no slot. Cancellation releases a future slot that can be rebooked. No-show occurs on the service day and cannot be rebooked. This explains why utilization is preserved under balking, redistributed under cancellation, and reduced under no-show.</td>
       <td><a href="#h4-balking-vs-no-show-evidence">Balking vs. no-show loss graphs</a></td>
       <td>Supported</td>
