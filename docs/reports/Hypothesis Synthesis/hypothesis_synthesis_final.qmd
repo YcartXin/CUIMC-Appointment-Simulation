@@ -107,82 +107,81 @@ img {
     </tr>
     <tr>
       <td>H5</td>
-      <td>Under symmetric behavior, pooled day-level FCFS does not create a meaningful per-arrival class access gap from class labels or arrival share alone.</td>
-      <td>The queue randomly permutes daily arrivals and applies the same FCFS rule to both classes. Class gaps require behavioral asymmetry or interactions, not class labels alone.</td>
-      <td><a href="#h5-symmetric-fcfs-and-arrival-share">Arrival-share evidence</a></td>
-      <td>Supported (symmetric behavior)</td>
-    </tr>
-    <tr>
-      <td>H6</td>
-      <td>Class-gap driver rankings are regime-specific.</td>
-      <td>Broad regression screens rank standardized associations across sampled configurations, while local attribution decomposes one realistic scenario. These are different questions, so the driver ranking need not be identical.</td>
-      <td><a href="#h6-driver-ranking-and-local-attribution">Driver-ranking evidence</a></td>
+      <td>
+        Class-gap driver rankings are regime-specific.
+      </td>
+      <td>
+        Broad regression screens rank standardized associations across sampled configurations, while local attribution decomposes one realistic scenario. These are different questions, so the driver ranking need not be identical.
+      </td>
+      <td><a href="#h5-driver-ranking-and-local-attribution">Driver-ranking evidence</a></td>
       <td>Qualified</td>
     </tr>
     <tr>
-      <td>H7</td>
+      <td>H6</td>
       <td>
         For balking, class differences mainly come from relative differences between class balking behavior, while absolute balking levels mainly affect delay composition.
       </td>
       <td>
         Balking occurs before booking is finalized. If both classes have the same balking rule, class gaps should remain small even when the absolute balking level changes. Class advantage appears when one class rejects long-delay offers more often than the other.
       </td>
-      <td><a href="#h7-balking-gap-vs-level-evidence">Balking gap vs. level evidence</a></td>
+      <td><a href="#h6-balking-gap-vs-level-evidence">Balking gap vs. level evidence</a></td>
       <td>Supported</td>
     </tr>
     <tr>
-      <td>H8</td>
+      <td>H7</td>
       <td>
         For no-show behavior, absolute no-show levels mainly affect aggregate utilization, while relative differences between classes mainly affect class access advantage.
       </td>
       <td>
         No-shows occur after booking and are not rebooked. If both classes have high no-show risk, completed slot use falls for the whole system. If one class has higher no-show risk than the other, that class loses completed visits relative to the other class.
       </td>
-      <td><a href="#h8-no-show-level-vs-gap-evidence">No-show level vs. class difference evidence</a></td>
+      <td><a href="#h7-no-show-level-vs-gap-evidence">No-show level vs. class difference evidence</a></td>
       <td>Supported</td>
+    </tr>
+    <tr>
+      <td>H8</td>
+      <td>
+        Balking-threshold changes can produce nonlinear effects because they reclassify whole booking-delay buckets.
+      </td>
+      <td>
+        A one-day threshold change does not affect patients gradually. It moves an entire delay bucket from high balking risk to low balking risk, or vice versa. The effect is largest when the affected bucket contains many offers or lies near the end of the booking horizon.
+      </td>
+      <td><a href="#h8-balking-threshold-evidence">Balking threshold evidence</a></td>
+      <td>Partially supported</td>
     </tr>
     <tr>
       <td>H9</td>
       <td>
-        Balking-threshold changes have nonlinear effects when they cross a high-mass booking-delay region.
+        No-shows are unrebookable service-day losses, but their utilization impact depends on delay exposure.
       </td>
       <td>
-        When many offers occur near a delay such as <code>tau ≈ 11</code>, moving the threshold across that bucket changes the balking decision for many patients at once. Raising the threshold lowers balking and can increase accepted delay and served rate for the affected class.
+        A no-show consumes a booked slot that is not rebooked on the service day. Therefore, no-shows directly reduce completed visits. However, the aggregate utilization effect becomes material only beyond the no-show-risk threshold, or when low-delay no-show probability is nonzero.
       </td>
-      <td><a href="#h9-balking-threshold-evidence">Balking threshold evidence</a></td>
-      <td>Partially Supported</td>
+      <td><a href="#h9-no-show-evidence">No-show sweep graphs</a></td>
+      <td>Qualified</td>
     </tr>
     <tr>
       <td>H10</td>
-      <td>No-shows are unrebookable service-day losses, but their utilization impact depends on delay exposure.
-</td>
-      <td>A no-show consumes a booked slot that is not rebooked on the service day. Therefore, no-shows directly reduce completed visits. However, the aggregate utilization effect becomes material only beyond the no-show-risk threshold, or when low-delay no-show probability is nonzero.</td>
-      <td><a href="#h10-no-show-evidence">No-show sweep graphs</a></td>
-      <td>Qualified</td>
+      <td>
+        A between-class difference in pre-threshold balking rate produces a larger served-rate gap than the same magnitude difference in post-threshold rate.
+      </td>
+      <td>
+        With the between-class gap magnitude and Class 2 step size held constant, placing the gap below the threshold affects a larger share of the patient pool than placing the gap above the threshold.
+      </td>
+      <td><a href="#h10-pre-vs-post-threshold-evidence">Pre-threshold vs. post-threshold evidence</a></td>
+      <td>Supported</td>
     </tr>
-<tr>
-  <td>H11</td>
-  <td>
-    A between-class difference in pre-threshold balking rate produces a larger served-rate gap than the same magnitude difference in post-threshold rate.
-  </td>
-  <td>
-    With the between-class gap magnitude (0.30) and Class 2 step size (0.20) held constant, placing the gap below the threshold produces a served-rate gap of 0.065 versus 0.038 when placed above. Pre-threshold affect a larger share of the patient pool.
-  </td>
-  <td><a href="#h11-pre-vs-post-threshold-evidence">Pre vs. post threshold evidence</a></td>
-  <td>Supported</td>
-</tr>
-<tr>
-  <td>H12</td>
-  <td>
-    A class's served rate is more sensitive to its post-threshold balking level than to its within-class step size.
-  </td>
-  <td>
-    With one factor fixed and the other varied across matched ranges, the post-threshold level produces a served-rate swing of 0.083 versus 0.048 for step size — approximately 1.7 times more sensitivity. The post-threshold rate governs the high-mass delay region (τ ≈ 10–12) where most bookings concentrate.
-  </td>
-  <td><a href="#h12-step-vs-level-evidence">Step vs. level evidence</a></td>
-  <td>Supported</td>
-</tr>
-
+    <tr>
+      <td>H11</td>
+      <td>
+        A class's served rate is more sensitive to its post-threshold balking level than to its within-class step size.
+      </td>
+      <td>
+        The post-threshold balking level governs the high-mass delay region where many bookings concentrate. By comparison, the within-class step size can change without producing the same effect on the absolute rejection rate for long-delay offers.
+      </td>
+      <td><a href="#h11-step-vs-level-evidence">Step size vs. post-threshold level evidence</a></td>
+      <td>Supported</td>
+    </tr>
   </tbody>
 </table>
 
@@ -206,11 +205,6 @@ This figure tests whether higher Class 1 cancellation probability shortens offer
 
 This figure tests whether higher Class 1 cancellation probability lowers Class 1's own served rate. Class 1 served rate falls from about 0.344 to about 0.175, while Class 2 served rate rises from about 0.135 to about 0.395. A cancellation can improve calendar flexibility for the pool while still harming the class whose appointments are being canceled.
 
-### Average Utilization and Class Slot Shares
-
-![Average utilization and class slot shares](../../../outputs/class1_cancellation/figures/average_utilization_aggregate.png)
-
-This figure tests whether future cancellations are recycled into completed visits. If aggregate utilization stays flat or rises, then cancellations are not simply wasting capacity under this stress-test regime; they are reopening future slots that can be rebooked.
 
 ### H1 Conclusion
 
@@ -278,17 +272,11 @@ H4 is supported. The evidence supports the timing distinction: balking is pre-bo
 
 [Back to summary table](#summary-table)
 
-## H5 Evidence: Symmetric FCFS and Arrival Share {#h5-symmetric-fcfs-and-arrival-share}
+## H5 Evidence: Driver Ranking and Local Attribution {#h5-driver-ranking-and-local-attribution}
 
-The controlled symmetric arrival-share experiment shows that varying Class 1's share does not create a meaningful per-arrival class access gap when behavioral parameters are symmetric. The gap stays around -0.002 to +0.002 as Class 1 share varies from 0.30 to 0.70. This supports the interpretation that pooled FCFS is neutral under symmetric behavior, and that observed class gaps require behavioral asymmetry or interaction effects.
+The broad regression screen and the realistic attribution experiment answer different questions. The regression screen ranks associations across a sampled design space, while the attribution experiment decomposes one realistic scenario.
 
-![Class access gap vs. arrival share](../../../outputs/exp4_arrival_share_symmetric/figures/class_access_gap.png)
-
-[Back to summary table](#summary-table)
-
-## H6 Evidence: Driver Ranking and Local Attribution {#h6-driver-ranking-and-local-attribution}
-
-The broad regression screen and the realistic attribution experiment answer different questions. The regression screen ranks associations across a sampled design space, while the attribution experiment decomposes one realistic scenario. In the local attribution output, the full gap is about 0.213, with about 0.120 from no-show asymmetry, 0.073 from cancellation, and 0.019 from balking threshold. The relevant conclusion is therefore not that one driver universally dominates, but that class-gap driver rankings are regime-specific.
+In the local attribution output, the full gap is about 0.213, with about 0.120 from no-show asymmetry, 0.073 from cancellation, and 0.019 from balking threshold. The relevant conclusion is therefore not that one driver universally dominates, but that class-gap driver rankings are regime-specific.
 
 ![Regression driver screen](../conclusions/deck/figures/bg_regression_drivers.png)
 
@@ -296,39 +284,33 @@ The broad regression screen and the realistic attribution experiment answer diff
 
 Booking horizon acts as a design modifier: in the realistic parameterization, it can amplify the class gap until roughly a three-week horizon, after which the effect plateaus.
 
+### H5 Conclusion
+
+H5 is qualified. The evidence supports the claim that driver rankings depend on the regime and the method of attribution. A broad regression screen and a local decomposition should not be expected to rank mechanisms identically because they answer different questions.
+
 [Back to summary table](#summary-table)
 
-**Interpretation Across Mechanisms.** Cancellation is best read as high-demand reallocation, no-show loss as regime-dependent service-day loss, balking as accepted-wait selection plus class reallocation, and arrival share alone as insufficient to create a class access gap under symmetric behavior.
 
-## Conclusion
+## H6 Evidence: Balking Level vs. Class Difference {#h6-balking-gap-vs-level-evidence}
 
-This synthesis sharpens the interpretation along three dimensions. First, the denominator matters: utilization, served rate, offered wait, accepted wait, and no-offer share answer different questions. Second, timing matters: balking, cancellation, and no-show occur at different points in the booking process and therefore have different capacity consequences. Third, regime matters: no-show effects and class-gap driver rankings depend on demand pressure, threshold placement, and parameterization.
-
-
-## H7 Evidence: Balking Level vs. Class Difference {#h7-balking-gap-vs-level-evidence}
-
-This hypothesis asks whether class differences in outcomes are driven more by the absolute level of balking or by the difference between Class 1 and Class 2 balking behavior.
-
-The hypothesis is supported if class gaps remain small when Class 1 and Class 2 have similar balking steps, but become larger when one class has a higher balking step than the other.
+This hypothesis asks whether balking-driven class gaps come mainly from the absolute level of balking or from the difference between Class 1 and Class 2 balking behavior.
 
 ### Balking Step: Class 1 Access Advantage
 
 ![Balking step class advantage](../metric_analysis/figures/balking_step_benefit_heatmaps.png)
 
-The main evidence is the Class 1 access-advantage panel. The diagonal band is close to neutral, meaning that when Class 1 and Class 2 have similar balking steps, neither class has a large served-rate advantage. Away from the diagonal, the class gap becomes stronger. When Class 1's balking step is higher than Class 2's, Class 1 loses access relative to Class 2. When Class 2's balking step is higher, Class 1 gains access relative to Class 2.
+The bottom-left panel is the main evidence. The diagonal band is close to neutral, meaning that when Class 1 and Class 2 have similar balking steps, neither class has a large access advantage. Away from the diagonal, the class gap becomes stronger.
 
-This pattern suggests that class advantage is driven mainly by the relative difference between the two classes' balking behavior, not simply by the absolute level of balking in the system.
+When Class 1's balking step is higher than Class 2's, Class 1 loses access relative to Class 2. When Class 2's balking step is higher, Class 1 gains access relative to Class 2.
 
-### H7 Conclusion
+### H6 Conclusion
 
-H7 is supported. The class-advantage pattern is clearest off the diagonal, where the two classes have different balking steps. Along the diagonal, where both classes have similar balking behavior, class gaps remain small even when the absolute balking level changes.
-
-This means that symmetric balking changes mostly affect the shared booking environment, while unequal balking behavior shifts access between classes.
+H6 is supported. Class access gaps are driven mainly by relative differences in balking behavior. Symmetric changes in absolute balking level do not create a large class advantage because both classes are affected similarly.
 
 [Back to summary table](#summary-table)
 
 
-## H8 Evidence: No-Show Level vs. Class Difference {#h8-no-show-level-vs-gap-evidence}
+## H7 Evidence: No-Show Level vs. Class Difference {#h7-no-show-level-vs-gap-evidence}
 
 This hypothesis asks whether no-show outcomes are driven more by the absolute no-show level or by the difference between Class 1 and Class 2 no-show behavior.
 
@@ -343,9 +325,9 @@ The hypothesis is supported if aggregate utilization changes when both classes' 
 
 ![No-show step benefit heatmaps](../metric_analysis/figures/no_show_step_benefit_heatmaps.png)
 
-This figure provides the main evidence for H8. The utilization panel should be read as the absolute-level effect: when no-show risk is high for both classes, more booked appointments fail to become completed visits, so aggregate utilization falls.
+This figure provides the main evidence for H7. The utilization panel should be read as the absolute-level effect: when no-show risk is high for both classes, more booked appointments fail to become completed visits, so aggregate utilization falls.
 
-The class-advantage panel should be read as the relative-difference effect. Along the diagonal, where Class 1 and Class 2 have similar no-show steps, class advantage should remain close to neutral even if the absolute no-show level changes. Away from the diagonal, class advantage becomes stronger because one class loses more completed visits than the other.
+The class-advantage panel should be read as the relative-difference effect. Along the diagonal, where Class 1 and Class 2 have similar no-show steps, class advantage remains close to neutral even if the absolute no-show level changes. Away from the diagonal, class advantage becomes stronger because one class loses more completed visits than the other.
 
 ### No-Show Step: Class Gap
 
@@ -355,115 +337,75 @@ This figure isolates the class-gap interpretation. If Class 1 has a higher no-sh
 
 This supports the claim that class differences are driven by relative differences in no-show behavior, not simply by the absolute level of no-shows in the system.
 
-### H8 Conclusion
+### H7 Conclusion
 
-H8 is supported. Absolute no-show levels matter most for aggregate utilization because no-show slots are lost on the service day and cannot be rebooked. Relative no-show differences matter most for class access advantage because the class with higher no-show risk loses more completed visits relative to the other class.
+H7 is supported. Absolute no-show levels matter most for aggregate utilization because no-show slots are lost on the service day and cannot be rebooked. Relative no-show differences matter most for class access advantage because the class with higher no-show risk loses more completed visits relative to the other class.
 
 In short, the average no-show level explains the system-level loss, while the no-show gap explains which class is disadvantaged.
 
 [Back to summary table](#summary-table)
 
 
-## H9 Evidence: Balking Threshold Crossing a High-Mass Delay Region {#h9-balking-threshold-evidence}
+## H8 Evidence: Balking Threshold Effects {#h8-balking-threshold-evidence}
 
-This hypothesis tests whether balking-threshold effects are smooth or nonlinear. The key idea is that threshold changes matter more when they cross delay regions where many patients are being offered or accepting appointments.
+This hypothesis tests whether balking-threshold effects are smooth or nonlinear. The key idea is that a threshold rule changes the treatment of an entire booking-delay bucket at once.
 
-The hypothesis is partially supported. The evidence shows that threshold changes have stronger effects in the late part of the booking horizon, but it does not isolate `tau ≈ 11` as the unique point where the largest jump occurs.
+The evidence partially supports the hypothesis. The graphs show that threshold changes have nonlinear effects, especially in the late part of the booking horizon. However, the evidence does not show that one specific delay, such as `tau ≈ 11`, uniquely produces the largest jump.
 
-### Baseline Accepted Booking Delay Distribution
+### Accepted Booking Delay Distribution
 
 ![Baseline accepted booking delay distribution](../../../outputs/class1_balking_threshold/figures/accepted_delay_distribution_baseline.png)
 
-This figure shows where accepted bookings are concentrated under the baseline balking threshold. The mass around later booking delays, including `tau ≈ 11`, suggests that threshold changes in this region can affect many patients.
+This figure shows that accepted bookings are concentrated in the later part of the booking horizon. That matters because a threshold change near this region can affect many patients at once.
 
-However, this figure is only a baseline diagnostic. It does not show the accepted-delay distribution under every threshold value in the sweep. Once the balking threshold changes, Class 1 accepts and rejects different offers, which changes the future booking calendar and can shift the accepted-delay distribution.
-
-### Accepted Booking Delay Distribution at Threshold 10
-
-![Accepted booking delay distribution at threshold 10](../../../outputs/class1_balking_threshold/figures/accepted_delay_distribution_threshold10.png)
-
-This figure checks whether the accepted-delay distribution remains the same after the Class 1 balking threshold changes. If the mass around `tau ≈ 11` changes, then the baseline histogram should not be treated as a fixed explanation for the threshold-sweep jumps.
-
-This matters because the threshold sweep reruns the whole simulation at each threshold. It does not simply reclassify one fixed baseline group. Each threshold changes the booking calendar, which changes which delays later patients are offered and which delays appear in the accepted sample.
+However, this distribution is measured under the baseline threshold. When the threshold changes, the booking calendar also changes, so the accepted-delay distribution is not fixed across the sweep.
 
 ### Balking Rate
 
 ![Balking rate by class](../../../outputs/class1_balking_threshold/figures/balking_rate_by_class.png)
 
-This figure tests the direct behavioral effect of the threshold change. Class 1's balking rate decreases as the threshold rises because fewer offered delays fall into the high-balking region.
+This figure shows the direct behavioral effect of changing the balking threshold. As the threshold rises, fewer delays are treated as high-balking delays, so Class 1's balking rate falls.
 
-The graph supports the claim that threshold effects are nonlinear in the late-horizon region. However, the largest change is not uniquely tied to crossing `tau ≈ 11`. This weakens the stronger version of the hypothesis that a single popular booking day mechanically produces the largest jump.
+The response is not perfectly linear, which supports the idea that threshold effects operate through discrete delay buckets rather than smooth continuous changes. The strongest evidence is therefore for nonlinear late-horizon threshold behavior, not for a single decisive jump at `tau ≈ 11`.
 
-### Mean Accepted Booking Delay
+### H8 Conclusion
 
-![Mean accepted booking delay by class](../../../outputs/class1_balking_threshold/figures/mean_accepted_delay_by_class.png)
+H8 is partially supported. The threshold sweep shows that balking thresholds can create nonlinear behavior because they reclassify entire delay buckets. The accepted-delay distribution helps explain why late-horizon threshold changes matter.
 
-This figure shows how the accepted patient sample changes as the threshold rises. When Class 1 becomes willing to accept longer-delay offers, more long-delay patients remain in the accepted sample, raising Class 1's mean accepted booking delay.
+However, the evidence does not prove that crossing `tau ≈ 11` specifically produces the largest effect. The more defensible conclusion is that balking-threshold effects become nonlinear when the threshold moves through delay regions where the system has substantial booking or offer mass.
 
-The changes are consistent with nonlinear threshold behavior, but they do not show that the jump at `tau ≈ 11` is uniquely larger than nearby threshold changes.
+[Back to summary table](#summary-table)
 
-### Served Rate
 
-![Served rate by class](../../../outputs/class1_balking_threshold/figures/percent_serviced_by_class.png)
+## H9 Evidence: No-Show Exposure and Utilization Loss {#h9-no-show-evidence}
 
-This figure tests whether the threshold effect reaches access outcomes, not only delay composition. As Class 1's threshold rises, Class 1 becomes more willing to accept long-delay appointments, which can increase its served rate and shift access away from Class 2.
+This hypothesis tests whether no-show losses always have the same utilization effect, or whether the effect depends on how many booked patients are exposed to high no-show risk.
 
-The served-rate evidence supports the broader idea that threshold changes affect class outcomes, but it does not isolate `tau ≈ 11` as the only decisive crossing point.
+No-shows are service-day losses: once a patient no-shows, the slot is not rebooked. However, increasing the high no-show probability only matters if patients are actually booked at delays above the no-show threshold.
+
+### No-Show Exposure and Utilization
+
+![No-show exposure and utilization](../../../outputs/h9_no_show_exposure/figures/no_show_exposure_utilization.png)
+
+The left panel shows how average utilization changes as Class 1's high no-show probability rises. The separate lines represent different no-show thresholds. Lower thresholds expose more accepted bookings to high no-show risk, so utilization should fall more steeply.
+
+The right panel shows the exposure mechanism directly: the share of Class 1 accepted bookings with `tau > threshold`. When this exposed share is larger, the same increase in high no-show probability has a larger effect on utilization.
 
 ### H9 Conclusion
 
-H9 is partially supported. The evidence supports the broader claim that balking-threshold effects are nonlinear when the threshold moves through the late-horizon booking region. The accepted-delay histograms show that the system has substantial booking mass in this region, and the threshold-sweep graphs show nonlinear changes in balking rate, accepted delay, and served rate.
-
-However, the evidence does not fully support the narrower claim that crossing `tau ≈ 11` specifically produces the largest jump. The baseline accepted-delay distribution changes when the threshold changes, and the largest metric changes may occur at nearby late-horizon thresholds. Therefore, the hypothesis is best interpreted as evidence of late-horizon nonlinear threshold effects, not as proof that `tau ≈ 11` is uniquely decisive.
-
-![Research note main panel](../metric_analysis/figures/research_note_main_panel.png)
+H9 is supported with qualification. No-shows are unrebookable service-day losses, so exposed no-shows directly reduce completed visits. But the aggregate utilization impact depends on delay exposure. If few patients are booked beyond the no-show threshold, increasing the high no-show probability has limited effect. If many patients are exposed to the high-risk delay region, utilization falls more sharply.
 
 [Back to summary table](#summary-table)
 
-## H10 Evidence: Class 1 No-Show Sweep {#h10-no-show-evidence}
 
-This sweep varies only Class 1's high-delay no-show probability while holding Class 2 at baseline.
-
-The hypothesis is supported if higher Class 1 no-show probability reduces completed visits when no-shows occur, while the size of the utilization effect depends on whether the regime creates enough no-show-risk exposure.
-
-### Average Utilization and Class Slot Shares
-
-![Average utilization and class slot shares](../../../outputs/class1_no_show/figures/average_utilization_aggregate.png)
-
-As Class 1's high no-show probability rises, Class 1 contributes fewer completed visits. Because no-show slots are not rebooked under the current implementation, those losses directly reduce completed slots. In the stress-test no-show sweep, utilization falls from about 0.920 to about 0.681.
-
-### Served Rate
-
-![Served rate by class](../../../outputs/class1_no_show/figures/percent_serviced_by_class.png)
-
-This figure shows that higher no-show risk lowers Class 1's served rate. The loss is direct because a booked appointment reaches the service day but does not become a completed visit.
-
-### Mean Offered Booking Delay
-
-![Mean offered booking delay by class](../../../outputs/class1_no_show/figures/mean_offered_delay_by_class.png)
-
-This figure tests whether higher no-show risk improves delay. A flat offered-delay curve supports the view that no-shows are mainly a completion loss rather than a congestion-relief mechanism.
-
-### Balking Rate
-
-![Balking rate by class](../../../outputs/class1_no_show/figures/balking_rate_by_class.png)
-
-This figure shows the no-show increase is not producing an offsetting benefit through fewer rejected offers.
-
-### H10 Conclusion
-
-H2 is supported. No-shows are unrebookable service-day losses under the current implementation, but the utilization effect is regime-dependent. In the realistic demand/no-show grid at lambda/S = 1.2, doubling no-show intensity changes utilization only from about 0.935 to about 0.934. The overclaim to avoid is that no-show risk has the same aggregate effect in every demand regime; threshold ordering and demand gating belong inside this hypothesis.
-
-[Back to summary table](#summary-table)
-
-## H11 Evidence: Pre-Threshold vs. Post-Threshold Balking Rate {#h11-pre-vs-post-threshold-evidence}
+## H10 Evidence: Pre-Threshold vs. Post-Threshold Balking Rate {#h10-pre-vs-post-threshold-evidence}
 
 This experiment tests whether the location of a between-class balking rate difference — below or above the threshold — affects the served-rate gap. Both scenarios hold the gap magnitude at 0.30, the Class 2 step size at 0.20, and Class 1 parameters fixed at b₀=0.00, b₁=0.50. Only the placement of the 0.30 between-class difference changes.
 
 | Scenario | Class 1 (b₀, b₁) | Class 2 (b₀, b₁) | Gap location |
 |----------|-------------------|-------------------|--------------|
-| A        | (0.00, 0.50)      | (0.30, 0.50)      | Pre-threshold |
-| B        | (0.00, 0.50)      | (0.00, 0.20)      | Post-threshold |
+| A | (0.00, 0.50) | (0.30, 0.50) | Pre-threshold |
+| B | (0.00, 0.50) | (0.00, 0.20) | Post-threshold |
 
 The hypothesis is supported if Scenario A produces a larger served-rate gap than Scenario B.
 
@@ -471,33 +413,56 @@ The hypothesis is supported if Scenario A produces a larger served-rate gap than
 
 ![Pre vs. post threshold comparison](../../../outputs/pre_vs_post_threshold/figures/pre_vs_post_comparison.png)
 
-Scenario A (pre-threshold gap) produces a served-rate gap of 0.065. Scenario B (post-threshold gap) produces 0.038. The pre-threshold difference has approximately 1.7 times more impact on the class gap, despite identical gap magnitude and step size. This follows from the delay distribution: pre-threshold balking acts on all patients offered delays 1 through 9, which accounts for roughly half of all offers. Post-threshold balking only acts on the subset offered delays above 9.
+Scenario A, the pre-threshold gap, produces a served-rate gap of 0.065. Scenario B, the post-threshold gap, produces a served-rate gap of 0.038. The pre-threshold difference has approximately 1.7 times more impact on the class gap, despite identical gap magnitude and step size.
 
-### H11 Conclusion
+This follows from the delay distribution: pre-threshold balking acts on all patients offered delays 1 through 9, which accounts for roughly half of all offers. Post-threshold balking only acts on the subset offered delays above 9.
 
-H11 is supported. With all other parameters controlled, placing a between-class balking difference below the threshold produces a larger served-rate gap than placing it above. Pre-threshold balking has wider population exposure and therefore greater impact on class-level outcomes.
+### H10 Conclusion
+
+H10 is supported. With all other parameters controlled, placing a between-class balking difference below the threshold produces a larger served-rate gap than placing it above. Pre-threshold balking has wider population exposure and therefore greater impact on class-level outcomes.
 
 [Back to summary table](#summary-table)
 
-## H12 Evidence: Step Size vs. Post-Threshold Level {#h12-step-vs-level-evidence}
 
-This experiment isolates two factors that determine a class's balking behavior: the within-class step size (b₁ − b₀) and the absolute post-threshold level (b₁). Two controlled sweeps vary one factor while holding the other constant, both applied to Class 1 with Class 2 at baseline.
+## H11 Evidence: Step Size vs. Post-Threshold Level {#h11-step-vs-level-evidence}
+
+This experiment isolates two factors that determine a class's balking behavior: the within-class step size, `b₁ − b₀`, and the absolute post-threshold level, `b₁`. Two controlled sweeps vary one factor while holding the other constant, both applied to Class 1 with Class 2 at baseline.
 
 | Sweep | Fixed factor | Varied factor | How it varies |
 |-------|-------------|---------------|---------------|
-| Purple | Step = 0.30 | Post-threshold (b₁) | b₁ rises from 0.30 to 0.70; b₀ rises with it (0.00 to 0.40) to maintain the fixed step |
-| Green | Post-threshold (b₁) = 0.50 | Step (b₁ − b₀) | b₀ decreases from 0.40 to 0.00, widening the step from 0.10 to 0.50 |
+| Purple | Step = 0.30 | Post-threshold (`b₁`) | `b₁` rises from 0.30 to 0.70; `b₀` rises with it from 0.00 to 0.40 to maintain the fixed step |
+| Green | Post-threshold (`b₁`) = 0.50 | Step (`b₁ − b₀`) | `b₀` decreases from 0.40 to 0.00, widening the step from 0.10 to 0.50 |
 
-The hypothesis is supported if the post-threshold sweep produces a larger swing in Class 1 served rate than the step-size sweep. In the green sweep, increasing the step means lowering b₀ — so a larger step corresponds to less pre-threshold balking, which improves served rate.
+The hypothesis is supported if the post-threshold sweep produces a larger swing in Class 1 served rate than the step-size sweep.
+
+In the green sweep, increasing the step means lowering `b₀`, so a larger step corresponds to less pre-threshold balking, which improves served rate.
 
 ### Class 1 Served Rate Comparison
 
 ![Step vs. post-threshold level](../../../outputs/step_vs_post_level/figures/step_vs_post_level.png)
 
-The post-threshold sweep (purple) produces a served-rate swing of 0.083 (from 0.284 down to 0.201). The step-size sweep (green) produces a swing of 0.048 (from 0.221 up to 0.269). Per unit change, the post-threshold level has approximately 1.7 times more impact on served rate than step size. This follows from the delay distribution: post-threshold balking governs the τ ≈ 10–12 region where roughly 55% of bookings concentrate, giving it more leverage than the pre-threshold rate which acts on the flatter τ ≤ 9 region.
+The post-threshold sweep, shown in purple, produces a served-rate swing of 0.083, from 0.284 down to 0.201. The step-size sweep, shown in green, produces a swing of 0.048, from 0.221 up to 0.269.
 
-### H12 Conclusion
+Per unit change, the post-threshold level has approximately 1.7 times more impact on served rate than step size. This follows from the delay distribution: post-threshold balking governs the `tau ≈ 10–12` region where roughly 55% of bookings concentrate, giving it more leverage than the pre-threshold rate, which acts on the flatter `tau ≤ 9` region.
 
-H12 is supported. The absolute post-threshold balking level has more influence on a class's own served rate than the within-class step size. For a clinic seeking to understand which aspect of patient balking behavior matters most for service outcomes, the rate at which patients reject long-delay offers is more consequential than the contrast between short-delay and long-delay rejection rates.
+### H11 Conclusion
+
+H11 is supported. The absolute post-threshold balking level has more influence on a class's own served rate than the within-class step size.
+
+For a clinic seeking to understand which aspect of patient balking behavior matters most for service outcomes, the rate at which patients reject long-delay offers is more consequential than the contrast between short-delay and long-delay rejection rates.
 
 [Back to summary table](#summary-table)
+
+
+**Interpretation Across Mechanisms.** Cancellation is best read as high-demand reallocation, no-show loss as regime-dependent service-day loss, and balking as accepted-wait selection plus class reallocation. Class-gap findings are regime-specific and depend on both timing and behavioral asymmetry.
+
+## Conclusion
+
+This synthesis sharpens the interpretation along three dimensions.
+
+First, the denominator matters: utilization, served rate, offered wait, accepted wait, and no-offer share answer different questions.
+
+Second, timing matters: balking, cancellation, and no-show occur at different points in the booking process and therefore have different capacity consequences.
+
+Third, regime matters: no-show effects and class-gap driver rankings depend on demand pressure, threshold placement, and parameterization.
+```
