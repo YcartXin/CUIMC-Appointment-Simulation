@@ -82,17 +82,20 @@ img {
     </tr>
     <tr>
       <td>H2</td>
-      <td>No-shows are unrebookable service-day losses, but their utilization impact depends on delay exposure.
-</td>
-      <td>A no-show consumes a booked slot that is not rebooked on the service day. Therefore, no-shows directly reduce completed visits. However, the aggregate utilization effect becomes material only beyond the no-show-risk threshold, or when low-delay no-show probability is nonzero.</td>
-      <td><a href="#h2-no-show-evidence">No-show sweep graphs</a></td>
-      <td>Qualified</td>
+      <td>
+        Balking step's effect on offered delay reverses under heavy oversubscription — moderate balking increases offered delay before reducing it.
+      </td>
+      <td>
+        At low demand (λ/S ≈ 1.25), balking has no effect on offered delay. At moderate demand, it reduces delay monotonically. At high demand (λ/S ≥ 3), moderate balking converts no-offer patients into long-delay offers, raising the average before demand reduction takes over.
+      </td>
+      <td><a href="#h2-balking-arrival-evidence">Balking × arrival rate evidence</a></td>
+      <td>Supported</td>
     </tr>
     <tr>
       <td>H3</td>
-      <td>Higher balking decreases affected-class served rate and lowers accepted delay by selection.</td>
+      <td>Higher balking step lowers accepted delay through selection bias, not through reduced congestion.</td>
       <td>Higher balking removes long-delay patients from the accepted sample. This improves accepted-wait statistics but reduces access for the affected class. Aggregate served rate may remain near baseline if the other class absorbs released capacity.</td>
-      <td><a href="#h3-balking-step-evidence">Balking step sweep graphs</a></td>
+      <td><a href="#h3-balking-selection-evidence">Balking step sweep graphs</a></td>
       <td>Qualified</td>
     </tr>
     <tr>
@@ -149,9 +152,39 @@ img {
       <td><a href="#h9-balking-threshold-evidence">Balking threshold evidence</a></td>
       <td>Partially Supported</td>
     </tr>
+    <tr>
+      <td>H10</td>
+      <td>No-shows are unrebookable service-day losses, but their utilization impact depends on delay exposure.
+</td>
+      <td>A no-show consumes a booked slot that is not rebooked on the service day. Therefore, no-shows directly reduce completed visits. However, the aggregate utilization effect becomes material only beyond the no-show-risk threshold, or when low-delay no-show probability is nonzero.</td>
+      <td><a href="#h10-no-show-evidence">No-show sweep graphs</a></td>
+      <td>Qualified</td>
+    </tr>
+<tr>
+  <td>H11</td>
+  <td>
+    A between-class difference in pre-threshold balking rate produces a larger served-rate gap than the same magnitude difference in post-threshold rate.
+  </td>
+  <td>
+    With the between-class gap magnitude (0.30) and Class 2 step size (0.20) held constant, placing the gap below the threshold produces a served-rate gap of 0.065 versus 0.038 when placed above. Pre-threshold affect a larger share of the patient pool.
+  </td>
+  <td><a href="#h11-pre-vs-post-threshold-evidence">Pre vs. post threshold evidence</a></td>
+  <td>Supported</td>
+</tr>
+<tr>
+  <td>H12</td>
+  <td>
+    A class's served rate is more sensitive to its post-threshold balking level than to its within-class step size.
+  </td>
+  <td>
+    With one factor fixed and the other varied across matched ranges, the post-threshold level produces a served-rate swing of 0.083 versus 0.048 for step size — approximately 1.7 times more sensitivity. The post-threshold rate governs the high-mass delay region (τ ≈ 10–12) where most bookings concentrate.
+  </td>
+  <td><a href="#h12-step-vs-level-evidence">Step vs. level evidence</a></td>
+  <td>Supported</td>
+</tr>
+
   </tbody>
 </table>
-
 
 
 
@@ -185,73 +218,45 @@ H1 is supported. The evidence supports a high-demand reallocation mechanism: the
 
 [Back to summary table](#summary-table)
 
-## H2 Evidence: Class 1 No-Show Sweep {#h2-no-show-evidence}
+## H2 Evidence: Balking Step × Arrival Rate {#h2-balking-arrival-evidence}
 
-This sweep varies only Class 1's high-delay no-show probability while holding Class 2 at baseline.
+This sweep varies both the high-balking probability (0.0–0.9) and the per-class arrival rate (λ = 20, 35, 50, 65) symmetrically across both classes. The goal is to test whether balking step's effect on mean offered booking delay changes direction under different demand regimes.
 
-The hypothesis is supported if higher Class 1 no-show probability reduces completed visits when no-shows occur, while the size of the utilization effect depends on whether the regime creates enough no-show-risk exposure.
+The hypothesis is supported if (1) offered delay is unaffected by balking at low demand, (2) offered delay decreases monotonically at moderate demand, and (3) offered delay initially rises before falling at high demand.
 
-### Average Utilization and Class Slot Shares
+### Mean Offered Booking Delay by Arrival Rate
 
-![Average utilization and class slot shares](../../../outputs/class1_no_show/figures/average_utilization_aggregate.png)
+![Offered delay by arrival rate](../../../outputs/balking_step_by_arrival/figures/offered_delay_by_arrival_rate.png)
 
-As Class 1's high no-show probability rises, Class 1 contributes fewer completed visits. Because no-show slots are not rebooked under the current implementation, those losses directly reduce completed slots. In the stress-test no-show sweep, utilization falls from about 0.920 to about 0.681.
+At low demand (λ/S = 1.25), offered delay is flat at approximately 3.1 days regardless of balking step — the calendar is never congested, so balking has nothing to relieve. At moderate demand (λ/S = 2.19), offered delay falls monotonically from approximately 9.1 to 7.5 days as balking removes enough demand to ease congestion.
 
-### Served Rate
-
-![Served rate by class](../../../outputs/class1_no_show/figures/percent_serviced_by_class.png)
-
-This figure shows that higher no-show risk lowers Class 1's served rate. The loss is direct because a booked appointment reaches the service day but does not become a completed visit.
-
-### Mean Offered Booking Delay
-
-![Mean offered booking delay by class](../../../outputs/class1_no_show/figures/mean_offered_delay_by_class.png)
-
-This figure tests whether higher no-show risk improves delay. A flat offered-delay curve supports the view that no-shows are mainly a completion loss rather than a congestion-relief mechanism.
-
-### Balking Rate
-
-![Balking rate by class](../../../outputs/class1_no_show/figures/balking_rate_by_class.png)
-
-This figure shows the no-show increase is not producing an offsetting benefit through fewer rejected offers.
+At high demand (λ/S ≥ 3.12), offered delay rises at low-to-moderate balking before eventually falling. The mechanism: moderate balking reduces the no-offer rate, converting patients who previously received no offer into patients who receive long-delay offers. These new long-delay offers pull the average up. Only at high balking does total demand drop enough to genuinely shorten the calendar. The higher the demand, the more persistent this hump.
 
 ### H2 Conclusion
 
-H2 is supported. No-shows are unrebookable service-day losses under the current implementation, but the utilization effect is regime-dependent. In the realistic demand/no-show grid at lambda/S = 1.2, doubling no-show intensity changes utilization only from about 0.935 to about 0.934. The overclaim to avoid is that no-show risk has the same aggregate effect in every demand regime; threshold ordering and demand gating belong inside this hypothesis.
+H2 is supported. The same patient behavior produces opposite effects on the same metric depending on demand pressure. Under the stress-test baseline (λ/S = 3.12), moderate balking paradoxically worsens offered delay before improving it — a pattern absent at lower demand levels. This means balking's impact on offered delay cannot be generalized without specifying the demand regime.
 
 [Back to summary table](#summary-table)
 
-## H3 Evidence: Class 1 Balking Step Sweep {#h3-balking-step-evidence}
 
-This sweep varies only Class 1's high-delay balking probability while holding Class 2 at baseline.
+## H3 Evidence: Balking Selection Effect {#h3-balking-selection-evidence}
 
-The main hypothesis is supported if higher Class 1 balking probability lowers Class 1 accepted booking delay but also lowers Class 1 served rate.
+This sweep varies Class 1's high-balking probability (0.0–0.9) while holding Class 2 at baseline. The hypothesis is supported if accepted delay drops while offered delay stays flat or rises — proving the delay improvement is selection, not reduced congestion.
 
-### Mean Accepted Booking Delay
+### Offered Delay vs. Accepted Delay
 
-![Mean accepted booking delay by class](../../../outputs/class1_balking/figures/mean_accepted_delay_by_class.png)
+![Mean offered booking delay](../../../outputs/class1_balking/figures/mean_offered_delay_by_class.png)
 
-As more long-delay Class 1 patients reject offers, the remaining accepted Class 1 appointments are concentrated at shorter delays. Across the Class 1 high-balking sweep, Class 1 accepted delay falls from about 9.95 days to about 6.71 days.
+![Mean accepted booking delay](../../../outputs/class1_balking/figures/mean_accepted_delay_by_class.png)
 
-For Class 2, the initial rise in accepted delay is consistent with the subhypothesis. At low-to-moderate Class 1 balking probabilities, Class 2 gains access to slots that were previously unavailable, but those slots are still relatively far out in the schedule.
-
-### Served Rate
-
-![Served rate by class](../../../outputs/class1_balking/figures/percent_serviced_by_class.png)
-
-This figure tests whether the lower accepted delay comes at the cost of lower access. Class 1 served rate falls from about 0.297 to about 0.237 as its high-delay balking probability rises from 0.00 to 0.90. Class 2 served rate rises from about 0.240 to about 0.301, so aggregate served rate remains near 0.269 under the stress-test baseline.
-
-### Mean Offered Booking Delay
-
-![Mean offered booking delay by class](../../../outputs/class1_balking/figures/mean_offered_delay_by_class.png)
-
-This figure supports the selection interpretation by showing the delay environment faced by patients who receive offers, including those who later balk.
+Offered delay stays flat or rises slightly across the sweep (from approximately 9.9 to 10.1 at moderate balking, then falling to approximately 8.4 at 0.9). Accepted delay drops steadily from approximately 9.9 to 6.6 for Class 1. The two metrics diverge because higher balking removes the long-wait patients from the accepted sample without relieving congestion on the calendar. By contrast, the H1 cancellation sweep shows both metrics falling in lockstep — a genuine congestion reduction.
 
 ### H3 Conclusion
 
-H3 is supported. Higher balking can make accepted delay look better because long-delay patients leave the accepted sample, while the affected class's served rate worsens. The overclaim to avoid is that aggregate served rate necessarily falls; under the stress-test baseline, the other class can absorb released capacity.
+H3 is qualified. At low-to-moderate balking, the accepted delay drop is primarily a selection artifact — offered delay stays flat or rises while accepted delay falls. At high balking (above 0.5), offered delay also begins to fall, indicating genuine congestion relief contributes alongside selection. Accepted delay remains an unreliable congestion signal when balking is present, but the effect is not purely selection at all levels.
 
 [Back to summary table](#summary-table)
+
 
 ## H4 Evidence: Balking vs. No-Show Loss {#h4-balking-vs-no-show-evidence}
 
@@ -259,29 +264,13 @@ The comparison is best interpreted as a timing mechanism. Balking happens before
 
 The hypothesis is supported if the Class 1 balking sweep shows relatively stable aggregate utilization despite declining Class 1 served rate, while the Class 1 no-show sweep shows declining aggregate utilization and declining Class 1 served rate.
 
-### Balking Sweep: Average Utilization and Class Slot Shares
+### Loss Timing Comparison
 
-![Class 1 balking utilization](../../../outputs/class1_balking/figures/average_utilization_aggregate.png)
+![H4 loss timing comparison](../../../outputs/h4_balking_vs_noshow/figures/h4_loss_timing_comparison.png)
 
-This figure tests whether utilization is preserved when losses occur through balking. Since balking happens before booking, rejected long-delay offers can be taken by other patients. Under the stress-test baseline, aggregate utilization remains relatively stable as Class 1 gives up more appointment opportunities.
+The left panel overlays overall utilization from both sweeps. Balking (purple) holds flat at approximately 0.84 across the full 0.0–0.9 range, while no-show (green) falls from approximately 0.92 to 0.68. Pre-booking losses consume no slot and are absorbed by other patients in the FCFS queue; service-day losses waste booked slots that cannot be rebooked.
 
-### Balking Sweep: Served Rate
-
-![Class 1 balking served rate](../../../outputs/class1_balking/figures/percent_serviced_by_class.png)
-
-This figure tests whether the affected class still loses access under higher balking. As Class 1's high-delay balking probability rises, Class 1's served rate falls. Aggregate utilization can remain stable while Class 1 access worsens, because Class 2 absorbs some of the released capacity.
-
-### No-Show Sweep: Average Utilization and Class Slot Shares
-
-![Class 1 no-show utilization](../../../outputs/class1_no_show/figures/average_utilization_aggregate.png)
-
-This figure tests the no-show side of the hypothesis. Because no-show slots are not rebooked, higher Class 1 no-show probability reduces completed visits and lowers aggregate utilization within the stress-test sweep.
-
-### No-Show Sweep: Served Rate
-
-![Class 1 no-show served rate](../../../outputs/class1_no_show/figures/percent_serviced_by_class.png)
-
-This figure tests whether no-show losses also reduce the affected class's served rate. As Class 1's high-delay no-show probability rises, more booked Class 1 appointments fail to become completed visits, lowering Class 1's served rate.
+The right panel overlays Class 1 served rate from both sweeps. Both lines decline, confirming that the affected class loses access regardless of when the loss occurs. No-show losses produce a steeper decline because the patient occupies a slot through booking but fails to convert it into a completed visit.
 
 ### H4 Conclusion
 
@@ -422,5 +411,87 @@ H9 is partially supported. The evidence supports the broader claim that balking-
 However, the evidence does not fully support the narrower claim that crossing `tau ≈ 11` specifically produces the largest jump. The baseline accepted-delay distribution changes when the threshold changes, and the largest metric changes may occur at nearby late-horizon thresholds. Therefore, the hypothesis is best interpreted as evidence of late-horizon nonlinear threshold effects, not as proof that `tau ≈ 11` is uniquely decisive.
 
 ![Research note main panel](../metric_analysis/figures/research_note_main_panel.png)
+
+[Back to summary table](#summary-table)
+
+## H10 Evidence: Class 1 No-Show Sweep {#h10-no-show-evidence}
+
+This sweep varies only Class 1's high-delay no-show probability while holding Class 2 at baseline.
+
+The hypothesis is supported if higher Class 1 no-show probability reduces completed visits when no-shows occur, while the size of the utilization effect depends on whether the regime creates enough no-show-risk exposure.
+
+### Average Utilization and Class Slot Shares
+
+![Average utilization and class slot shares](../../../outputs/class1_no_show/figures/average_utilization_aggregate.png)
+
+As Class 1's high no-show probability rises, Class 1 contributes fewer completed visits. Because no-show slots are not rebooked under the current implementation, those losses directly reduce completed slots. In the stress-test no-show sweep, utilization falls from about 0.920 to about 0.681.
+
+### Served Rate
+
+![Served rate by class](../../../outputs/class1_no_show/figures/percent_serviced_by_class.png)
+
+This figure shows that higher no-show risk lowers Class 1's served rate. The loss is direct because a booked appointment reaches the service day but does not become a completed visit.
+
+### Mean Offered Booking Delay
+
+![Mean offered booking delay by class](../../../outputs/class1_no_show/figures/mean_offered_delay_by_class.png)
+
+This figure tests whether higher no-show risk improves delay. A flat offered-delay curve supports the view that no-shows are mainly a completion loss rather than a congestion-relief mechanism.
+
+### Balking Rate
+
+![Balking rate by class](../../../outputs/class1_no_show/figures/balking_rate_by_class.png)
+
+This figure shows the no-show increase is not producing an offsetting benefit through fewer rejected offers.
+
+### H10 Conclusion
+
+H2 is supported. No-shows are unrebookable service-day losses under the current implementation, but the utilization effect is regime-dependent. In the realistic demand/no-show grid at lambda/S = 1.2, doubling no-show intensity changes utilization only from about 0.935 to about 0.934. The overclaim to avoid is that no-show risk has the same aggregate effect in every demand regime; threshold ordering and demand gating belong inside this hypothesis.
+
+[Back to summary table](#summary-table)
+
+## H11 Evidence: Pre-Threshold vs. Post-Threshold Balking Rate {#h11-pre-vs-post-threshold-evidence}
+
+This experiment tests whether the location of a between-class balking rate difference — below or above the threshold — affects the served-rate gap. Both scenarios hold the gap magnitude at 0.30, the Class 2 step size at 0.20, and Class 1 parameters fixed at b₀=0.00, b₁=0.50. Only the placement of the 0.30 between-class difference changes.
+
+| Scenario | Class 1 (b₀, b₁) | Class 2 (b₀, b₁) | Gap location |
+|----------|-------------------|-------------------|--------------|
+| A        | (0.00, 0.50)      | (0.30, 0.50)      | Pre-threshold |
+| B        | (0.00, 0.50)      | (0.00, 0.20)      | Post-threshold |
+
+The hypothesis is supported if Scenario A produces a larger served-rate gap than Scenario B.
+
+### Served-Rate Gap Comparison
+
+![Pre vs. post threshold comparison](../../../outputs/pre_vs_post_threshold/figures/pre_vs_post_comparison.png)
+
+Scenario A (pre-threshold gap) produces a served-rate gap of 0.065. Scenario B (post-threshold gap) produces 0.038. The pre-threshold difference has approximately 1.7 times more impact on the class gap, despite identical gap magnitude and step size. This follows from the delay distribution: pre-threshold balking acts on all patients offered delays 1 through 9, which accounts for roughly half of all offers. Post-threshold balking only acts on the subset offered delays above 9.
+
+### H11 Conclusion
+
+H11 is supported. With all other parameters controlled, placing a between-class balking difference below the threshold produces a larger served-rate gap than placing it above. Pre-threshold balking has wider population exposure and therefore greater impact on class-level outcomes.
+
+[Back to summary table](#summary-table)
+
+## H12 Evidence: Step Size vs. Post-Threshold Level {#h12-step-vs-level-evidence}
+
+This experiment isolates two factors that determine a class's balking behavior: the within-class step size (b₁ − b₀) and the absolute post-threshold level (b₁). Two controlled sweeps vary one factor while holding the other constant, both applied to Class 1 with Class 2 at baseline.
+
+| Sweep | Fixed factor | Varied factor | How it varies |
+|-------|-------------|---------------|---------------|
+| Purple | Step = 0.30 | Post-threshold (b₁) | b₁ rises from 0.30 to 0.70; b₀ rises with it (0.00 to 0.40) to maintain the fixed step |
+| Green | Post-threshold (b₁) = 0.50 | Step (b₁ − b₀) | b₀ decreases from 0.40 to 0.00, widening the step from 0.10 to 0.50 |
+
+The hypothesis is supported if the post-threshold sweep produces a larger swing in Class 1 served rate than the step-size sweep. In the green sweep, increasing the step means lowering b₀ — so a larger step corresponds to less pre-threshold balking, which improves served rate.
+
+### Class 1 Served Rate Comparison
+
+![Step vs. post-threshold level](../../../outputs/step_vs_post_level/figures/step_vs_post_level.png)
+
+The post-threshold sweep (purple) produces a served-rate swing of 0.083 (from 0.284 down to 0.201). The step-size sweep (green) produces a swing of 0.048 (from 0.221 up to 0.269). Per unit change, the post-threshold level has approximately 1.7 times more impact on served rate than step size. This follows from the delay distribution: post-threshold balking governs the τ ≈ 10–12 region where roughly 55% of bookings concentrate, giving it more leverage than the pre-threshold rate which acts on the flatter τ ≤ 9 region.
+
+### H12 Conclusion
+
+H12 is supported. The absolute post-threshold balking level has more influence on a class's own served rate than the within-class step size. For a clinic seeking to understand which aspect of patient balking behavior matters most for service outcomes, the rate at which patients reject long-delay offers is more consequential than the contrast between short-delay and long-delay rejection rates.
 
 [Back to summary table](#summary-table)
