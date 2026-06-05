@@ -282,11 +282,17 @@ H4 is supported. The evidence supports the timing distinction: balking is pre-bo
 
 The controlled symmetric arrival-share experiment shows that varying Class 1's share does not create a meaningful per-arrival class access gap when behavioral parameters are symmetric. The gap stays around -0.002 to +0.002 as Class 1 share varies from 0.30 to 0.70. This supports the interpretation that pooled FCFS is neutral under symmetric behavior, and that observed class gaps require behavioral asymmetry or interaction effects.
 
+![Class access gap vs. arrival share](../../../outputs/exp4_arrival_share_symmetric/figures/class_access_gap.png)
+
 [Back to summary table](#summary-table)
 
 ## H6 Evidence: Driver Ranking and Local Attribution {#h6-driver-ranking-and-local-attribution}
 
 The broad regression screen and the realistic attribution experiment answer different questions. The regression screen ranks associations across a sampled design space, while the attribution experiment decomposes one realistic scenario. In the local attribution output, the full gap is about 0.213, with about 0.120 from no-show asymmetry, 0.073 from cancellation, and 0.019 from balking threshold. The relevant conclusion is therefore not that one driver universally dominates, but that class-gap driver rankings are regime-specific.
+
+![Regression driver screen](../conclusions/deck/figures/bg_regression_drivers.png)
+
+![Class access gap by source of asymmetry](../conclusions/deck/figures/exp1_gap_attribution_bar.png)
 
 Booking horizon acts as a design modifier: in the realistic parameterization, it can amplify the class gap until roughly a three-week horizon, after which the effect plateaus.
 
