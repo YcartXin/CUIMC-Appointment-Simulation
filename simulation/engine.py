@@ -107,9 +107,7 @@ class ClinicAppointmentSimulation:
         self,
         class_id: int,
         *,
-        reserved_only: bool = False,
-        general_only: bool = False,
-        release_reserved: bool = False,
+        allow_reserved_backfill: bool = False,
     ) -> Optional[Tuple[int, bool]]:
         """
         Find the earliest day with available capacity.
@@ -120,9 +118,6 @@ class ClinicAppointmentSimulation:
         reserved_class_id = self.config.reserved_class_id
 
         if reserved_slots == 0 or reserved_class_id is None:
-            if reserved_only:
-                return None
-
             for r in range(self.config.horizon_days):
                 if len(self.calendar[r]) < self.config.slots_per_day:
                     return r, False
@@ -135,18 +130,16 @@ class ClinicAppointmentSimulation:
             general_used = len(self.calendar[r]) - reserved_used
 
             if (
-                not general_only
-                and class_id == reserved_class_id
+                class_id == reserved_class_id
                 and reserved_used < reserved_slots
             ):
                 return r, True
 
-            if not reserved_only and general_used < general_slots:
+            if general_used < general_slots:
                 return r, False
 
             if (
-                not general_only
-                and release_reserved
+                allow_reserved_backfill
                 and class_id != reserved_class_id
                 and reserved_used < reserved_slots
             ):
@@ -178,14 +171,15 @@ class ClinicAppointmentSimulation:
         """
         Process the full day's arrivals under the configured booking rule.
 
-        With released reservations, the reserved class gets the first pass on
-        protected slots; remaining patients then compete for open capacity.
+        With Class-1-first backfill reservation, the reserved class is processed
+        before non-reserved classes. Non-reserved classes may then backfill
+        unused protected capacity.
         """
         if track_patients:
             for class_id in ordered_arrivals:
                 self.class_metrics[class_id].arrivals += 1
 
-        release_policy = (
+        backfill_policy = (
             self.config.release_reserved_slots
             and self.config.reserved_class_id is not None
             and self.config.reserved_slots_per_day > 0
@@ -195,23 +189,18 @@ class ClinicAppointmentSimulation:
         def process_one(
             class_id: int,
             *,
-            reserved_only: bool = False,
-            general_only: bool = False,
-            release_reserved: bool = False,
-            count_no_offer: bool = True,
+            allow_reserved_backfill: bool = False,
         ) -> bool:
             params = self.config.classes[class_id]
             metrics = self.class_metrics[class_id]
 
             offer = self.find_earliest_open_day(
                 class_id,
-                reserved_only=reserved_only,
-                general_only=general_only,
-                release_reserved=release_reserved,
+                allow_reserved_backfill=allow_reserved_backfill,
             )
 
             if offer is None:
-                if track_patients and count_no_offer:
+                if track_patients:
                     metrics.no_offer += 1
                 return False
 
@@ -248,26 +237,17 @@ class ClinicAppointmentSimulation:
 
             return True
 
-        if release_policy:
-            remaining_arrivals: List[int] = []
+        if backfill_policy:
+            for class_id in ordered_arrivals:
+                if class_id == reserved_class_id:
+                    process_one(class_id)
 
             for class_id in ordered_arrivals:
                 if class_id == reserved_class_id:
-                    handled = process_one(
-                        class_id,
-                        reserved_only=True,
-                        count_no_offer=False,
-                    )
-                    if not handled:
-                        remaining_arrivals.append(class_id)
-                else:
-                    remaining_arrivals.append(class_id)
-
-            for class_id in remaining_arrivals:
+                    continue
                 process_one(
                     class_id,
-                    general_only=class_id == reserved_class_id,
-                    release_reserved=class_id != reserved_class_id,
+                    allow_reserved_backfill=True,
                 )
         else:
             for class_id in ordered_arrivals:

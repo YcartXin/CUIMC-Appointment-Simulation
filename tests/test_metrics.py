@@ -6,6 +6,7 @@ from analysis.metrics import (
     aggregate_delay_metrics,
     aggregate_result_row,
     class_result_rows,
+    outcome_totals,
     outcome_rates_from_result,
     result_metrics_from_result,
 )
@@ -85,7 +86,19 @@ class MetricsTest(unittest.TestCase):
         self.assertAlmostEqual(class_rows[0]["slot_utilization"], 0.1)
         self.assertAlmostEqual(class_rows[0]["balking_rate"], 2 / 6)
 
+    def test_outcome_totals_exposes_negative_unresolved_booked(self) -> None:
+        class_1 = ClassMetrics(arrivals=1, booked=1, served=2)
+        result = SimulationResults(
+            class_metrics={1: class_1, 2: ClassMetrics()},
+            slot_metrics=SlotMetrics(),
+            total_slots=1,
+            total_value=0.0,
+            daily_summary_states=[],
+            final_full_state=[],
+        )
+
+        self.assertEqual(outcome_totals(result)["unresolved_booked"], -1)
+
 
 if __name__ == "__main__":
     unittest.main()
-
