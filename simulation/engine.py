@@ -103,12 +103,7 @@ class ClinicAppointmentSimulation:
     # Booking logic
     # -------------------------
 
-    def find_earliest_open_day(
-        self,
-        class_id: int,
-        *,
-        allow_reserved_backfill: bool = False,
-    ) -> Optional[Tuple[int, bool]]:
+    def find_earliest_open_day(self, class_id: int) -> Optional[Tuple[int, bool]]:
         """
         Find the earliest day with available capacity.
 
@@ -138,13 +133,6 @@ class ClinicAppointmentSimulation:
             if general_used < general_slots:
                 return r, False
 
-            if (
-                allow_reserved_backfill
-                and class_id != reserved_class_id
-                and reserved_used < reserved_slots
-            ):
-                return r, True
-
         return None
 
     def generate_daily_arrival_order(self) -> List[int]:
@@ -170,34 +158,16 @@ class ClinicAppointmentSimulation:
     ) -> None:
         """
         Process the full day's arrivals under the configured booking rule.
-
-        With Class-1-first backfill reservation, the reserved class is processed
-        before non-reserved classes. Non-reserved classes may then backfill
-        unused protected capacity.
         """
         if track_patients:
             for class_id in ordered_arrivals:
                 self.class_metrics[class_id].arrivals += 1
 
-        backfill_policy = (
-            self.config.release_reserved_slots
-            and self.config.reserved_class_id is not None
-            and self.config.reserved_slots_per_day > 0
-        )
-        reserved_class_id = self.config.reserved_class_id
-
-        def process_one(
-            class_id: int,
-            *,
-            allow_reserved_backfill: bool = False,
-        ) -> bool:
+        def process_one(class_id: int) -> bool:
             params = self.config.classes[class_id]
             metrics = self.class_metrics[class_id]
 
-            offer = self.find_earliest_open_day(
-                class_id,
-                allow_reserved_backfill=allow_reserved_backfill,
-            )
+            offer = self.find_earliest_open_day(class_id)
 
             if offer is None:
                 if track_patients:
@@ -237,21 +207,8 @@ class ClinicAppointmentSimulation:
 
             return True
 
-        if backfill_policy:
-            for class_id in ordered_arrivals:
-                if class_id == reserved_class_id:
-                    process_one(class_id)
-
-            for class_id in ordered_arrivals:
-                if class_id == reserved_class_id:
-                    continue
-                process_one(
-                    class_id,
-                    allow_reserved_backfill=True,
-                )
-        else:
-            for class_id in ordered_arrivals:
-                process_one(class_id)
+        for class_id in ordered_arrivals:
+            process_one(class_id)
 
     # -------------------------
     # Daily service logic

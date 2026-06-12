@@ -72,7 +72,6 @@ class SimulationConfig:
     seed: Optional[int] = None
     reserved_class_id: Optional[int] = None
     reserved_slots_per_day: int = 0
-    release_reserved_slots: bool = False
 
     def __post_init__(self) -> None:
         if self.slots_per_day <= 0:

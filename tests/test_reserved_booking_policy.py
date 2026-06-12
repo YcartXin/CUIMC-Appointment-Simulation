@@ -19,7 +19,6 @@ class ReservedBookingPolicyTest(unittest.TestCase):
         measure_days: int = 1,
         cooldown_days: int = 0,
         reserved_slots_per_day: int = 2,
-        release_reserved_slots: bool = False,
         lambda_per_day: float = 0.0,
         balk_prob=ZERO_RULE,
         cancel_prob: float = 0.0,
@@ -51,7 +50,6 @@ class ReservedBookingPolicyTest(unittest.TestCase):
             seed=seed,
             reserved_class_id=1 if reserved_slots_per_day > 0 else None,
             reserved_slots_per_day=reserved_slots_per_day,
-            release_reserved_slots=release_reserved_slots,
         )
 
     def assert_calendar_capacity(self, sim: ClinicAppointmentSimulation) -> None:
@@ -149,61 +147,12 @@ class ReservedBookingPolicyTest(unittest.TestCase):
         self.assertEqual(sum(not b.reserved_slot for b in sim.calendar[0]), 1)
         self.assert_calendar_capacity(sim)
 
-    def test_class_1_first_backfill_reservation_lets_class_2_fill_unused_reserved_slots(self) -> None:
-        sim = ClinicAppointmentSimulation(
-            self.make_config(release_reserved_slots=True)
-        )
-
-        sim.process_daily_arrivals([2, 2, 2, 1], track_patients=True)
-
-        self.assertEqual(sim.class_metrics[1].booked, 1)
-        self.assertEqual(sim.class_metrics[2].booked, 3)
-        self.assertEqual(sim.class_metrics[2].no_offer, 0)
-        self.assertEqual(len(sim.calendar[0]), 4)
-        self.assertEqual(sum(b.reserved_slot for b in sim.calendar[0]), 2)
-        self.assert_calendar_capacity(sim)
-
-    def test_class_1_first_backfill_reservation_processes_class_1_before_class_2(self) -> None:
-        sim = ClinicAppointmentSimulation(
-            self.make_config(
-                slots_per_day=1,
-                reserved_slots_per_day=1,
-                release_reserved_slots=True,
-            )
-        )
-
-        sim.process_daily_arrivals([2, 1], track_patients=True)
-
-        self.assertEqual(sim.class_metrics[1].booked, 1)
-        self.assertEqual(sim.class_metrics[2].booked, 0)
-        self.assertEqual(sim.class_metrics[2].no_offer, 1)
-        self.assertEqual(sim.calendar[0][0].patient_class, 1)
-        self.assertTrue(sim.calendar[0][0].reserved_slot)
-        self.assert_calendar_capacity(sim)
-
-    def test_class_1_first_backfill_class_2_uses_leftover_reserved_after_class_1_batch(self) -> None:
-        sim = ClinicAppointmentSimulation(
-            self.make_config(
-                slots_per_day=2,
-                reserved_slots_per_day=2,
-                release_reserved_slots=True,
-            )
-        )
-
-        sim.process_daily_arrivals([1, 2], track_patients=True)
-
-        self.assertEqual(sim.class_metrics[1].booked, 1)
-        self.assertEqual(sim.class_metrics[2].booked, 1)
-        self.assertEqual(sum(b.reserved_slot for b in sim.calendar[0]), 2)
-        self.assert_calendar_capacity(sim)
-
-    def test_class_1_first_backfill_class_1_takes_day_0_general_before_day_1_reserved(self) -> None:
+    def test_class_1_takes_day_0_general_before_day_1_reserved(self) -> None:
         sim = ClinicAppointmentSimulation(
             self.make_config(
                 slots_per_day=2,
                 horizon_days=2,
                 reserved_slots_per_day=1,
-                release_reserved_slots=True,
             )
         )
         sim.calendar[0].append(
@@ -221,64 +170,6 @@ class ReservedBookingPolicyTest(unittest.TestCase):
         self.assertEqual(len(sim.calendar[1]), 0)
         self.assertFalse(sim.calendar[0][1].reserved_slot)
         self.assertEqual(sim.calendar[0][1].booking_delay, 0)
-        self.assert_calendar_capacity(sim)
-
-    def test_class_1_first_backfill_class_1_takes_day_0_reserved_when_available(self) -> None:
-        sim = ClinicAppointmentSimulation(
-            self.make_config(
-                slots_per_day=2,
-                horizon_days=2,
-                reserved_slots_per_day=1,
-                release_reserved_slots=True,
-            )
-        )
-
-        sim.process_daily_arrivals([1], track_patients=True)
-
-        self.assertEqual(sim.class_metrics[1].booked, 1)
-        self.assertTrue(sim.calendar[0][0].reserved_slot)
-        self.assertEqual(sim.calendar[0][0].booking_delay, 0)
-        self.assert_calendar_capacity(sim)
-
-    def test_class_1_first_backfill_class_2_prefers_same_day_leftover_reserved_to_later_general(self) -> None:
-        sim = ClinicAppointmentSimulation(
-            self.make_config(
-                slots_per_day=2,
-                horizon_days=2,
-                reserved_slots_per_day=1,
-                release_reserved_slots=True,
-            )
-        )
-        sim.calendar[0].append(
-            Booking(
-                patient_class=2,
-                booking_delay=0,
-                tracked=False,
-                reserved_slot=False,
-            )
-        )
-
-        sim.process_daily_arrivals([2], track_patients=True)
-
-        self.assertEqual(len(sim.calendar[0]), 2)
-        self.assertEqual(len(sim.calendar[1]), 0)
-        self.assertTrue(sim.calendar[0][1].reserved_slot)
-        self.assertEqual(sim.calendar[0][1].booking_delay, 0)
-        self.assert_calendar_capacity(sim)
-
-    def test_class_1_first_backfill_class_2_uses_general_before_leftover_reserved_on_same_day(self) -> None:
-        sim = ClinicAppointmentSimulation(
-            self.make_config(
-                slots_per_day=2,
-                reserved_slots_per_day=1,
-                release_reserved_slots=True,
-            )
-        )
-
-        sim.process_daily_arrivals([2], track_patients=True)
-
-        self.assertEqual(sim.class_metrics[2].booked, 1)
-        self.assertFalse(sim.calendar[0][0].reserved_slot)
         self.assert_calendar_capacity(sim)
 
     def test_run_accounting_and_capacity_invariants(self) -> None:
@@ -308,19 +199,6 @@ class ReservedBookingPolicyTest(unittest.TestCase):
                 cancel_prob=0.10,
                 no_show_prob=no_show_rule,
                 seed=102,
-            ),
-            self.make_config(
-                slots_per_day=4,
-                horizon_days=3,
-                measure_days=8,
-                cooldown_days=3,
-                reserved_slots_per_day=2,
-                release_reserved_slots=True,
-                lambda_per_day=3.0,
-                balk_prob=balk_rule,
-                cancel_prob=0.10,
-                no_show_prob=no_show_rule,
-                seed=103,
             ),
         ]
 

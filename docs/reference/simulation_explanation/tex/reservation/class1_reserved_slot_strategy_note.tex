@@ -89,20 +89,24 @@
 
 This note is a companion to \texttt{first\_two\_class\_simulation\_note\_v2.tex}. It keeps the same
 day-level notation, the same patient behavior objects, and the same metric interpretation, but it
-adds two booking strategies in which Class 1 has protected daily capacity.
+adds a strict booking strategy in which Class 1 has protected daily capacity.
 
 \begin{keybox}[title={Core Policy Question}]
-The pooled FCFS baseline asks which patient arrives first. The reserved-slot strategies ask whether
+The pooled FCFS baseline asks which patient arrives first. The reserved-slot strategy asks whether
 some daily capacity should be protected for Class 1 before the two classes compete for the remaining
 slots.
 \end{keybox}
 
-The three strategies compared in this note are:
+The two strategies compared in this note are:
 \begin{itemize}[nosep]
     \item \textbf{Pooled FCFS:} every class competes for the same \(S\) daily slots.
     \item \textbf{Strict Class 1 reservation:} \(Q=10\) slots per day are reserved for Class 1 only; unused reserved slots stay empty.
-    \item \textbf{Class-1-first backfill reservation:} all Class 1 arrivals on a simulation day are handled before Class 2 arrivals; Class 1 searches reserved then general capacity on each residual day, and Class 2 may later backfill unused reserved slots.
 \end{itemize}
+
+\begin{keybox}[title={Future Focus: Soft Reservation}]
+A soft reservation or Class-1-priority backfill policy remains a possible future extension. It is not
+part of the current code or notebook exploration.
+\end{keybox}
 
 \subsubsection{What Changes from the FCFS Note}
 
@@ -227,7 +231,7 @@ N_r^D\le S.
 \toprule
 \textbf{Pool} & \textbf{Capacity} & \textbf{Eligibility} \\
 \midrule
-Reserved pool & \(Q=10\) & Class 1 always; Class 2 only under the Class-1-first backfill policy after that day's Class 1 arrivals have been handled \\
+Reserved pool & \(Q=10\) & Class 1 only \\
 \addlinespace
 General pool & \(S-Q=22\) & Class 1 overflow and Class 2 \\
 \addlinespace
@@ -244,7 +248,7 @@ The class behavior object remains
 \[
 C_i=\{\lambda_i,b_i(\tau),\phi_i,\xi_i(\tau)\}.
 \]
-The reservation policies do not change arrival rates, balking, cancellation, or no-show behavior.
+The reservation policy does not change arrival rates, balking, cancellation, or no-show behavior.
 They only change which residual day and which capacity pool an arriving patient is offered.
 
 \begin{keybox}[title={What the Reservation Strategy Does Not Change}]
@@ -343,88 +347,6 @@ Strict reservation protects Class 1 access at the cost of possible empty protect
 not a utilization-maximizing policy; it is an access-protection policy.
 \end{keybox}
 
-\subsection{Class-1-First Backfill Reservation}
-
-The Class-1-first backfill policy keeps the same \(Q=10\) protected slots, but it changes the
-within-day order of the booking step. Arrivals on day \(D\) are handled in two priority stages.
-First, all Class 1 arrivals are offered appointments. Second, Class 2 arrivals are offered
-appointments. Class 2 cannot use protected capacity until the Class 1 stage for that simulation day
-is complete.
-
-\subsubsection{Stage 1: Class 1 Arrivals}
-
-Let the randomized arrival sequence on day \(D\) be
-\[
-A^D=(a_1^D,a_2^D,\dots,a_{M^D}^D),
-\]
-where each \(a_k^D\in\mathcal I\). In the first stage, the policy processes only entries with
-\[
-a_k^D=1.
-\]
-
-For each Class 1 arrival, residual days are searched chronologically. Within each residual day,
-reserved capacity is checked before general capacity:
-\[
-\tau_{1,\mathrm{bf}}
-=
-\min\left\{r\in\mathcal R:R_r^D<Q\ \text{or}\ G_r^D<S-Q\right\}.
-\]
-The pool label is
-\[
-z_{1,\mathrm{bf}}(r)
-=
-\begin{cases}
-\mathrm{res}, & R_r^D<Q,\\
-\mathrm{gen}, & R_r^D=Q\ \text{and}\ G_r^D<S-Q.
-\end{cases}
-\]
-
-Thus the Class 1 search order is
-\[
-(0,\mathrm{res}),\ (0,\mathrm{gen}),\ (1,\mathrm{res}),\ (1,\mathrm{gen}),\dots
-\]
-If both pools are unavailable for every \(r\in\mathcal R\), the Class 1 patient receives no offer.
-
-\begin{keybox}[title={No Horizon-Wide Reserved-Only Pass}]
-Class-1-first backfill reservation does not search all future reserved slots before general slots. If day 0 has no
-reserved capacity but has a general slot, and day 1 has a reserved slot, a Class 1 patient is offered
-the day 0 general slot.
-\end{keybox}
-
-\subsubsection{Stage 2: Class 2 Arrivals}
-
-After all Class 1 arrivals from day \(D\) have been handled, the policy processes the Class 2
-arrivals from that same simulation day.
-
-Class 2 first searches the general pool and then may use leftover reserved capacity:
-\[
-\tau_{2,\mathrm{bf}}
-=
-\min\left\{r\in\mathcal R:G_r^D<S-Q\ \text{or}\ R_r^D<Q\right\}.
-\]
-The pool label for Class 2 is
-\[
-z_{2,\mathrm{bf}}(r)
-=
-\begin{cases}
-\mathrm{gen}, & G_r^D<S-Q,\\
-\mathrm{res}, & G_r^D=S-Q\ \text{and}\ R_r^D<Q.
-\end{cases}
-\]
-
-Thus the Class 2 search order is
-\[
-(0,\mathrm{gen}),\ (0,\mathrm{res}),\ (1,\mathrm{gen}),\ (1,\mathrm{res}),\dots
-\]
-where a reserved slot is available to Class 2 only because the Class 1 stage for day \(D\) has already
-ended.
-
-\begin{keybox}[title={Class-1-First Backfill Interpretation}]
-Class-1-first backfill reservation is a compromise. Class 1 receives priority access to \(Q\) protected daily slots,
-but unused protected capacity can still be converted into Class 2 access after the day-level Class 1
-stage.
-\end{keybox}
-
 \section{Visual Calendar Logic}
 
 \subsection{One Residual Day}
@@ -468,9 +390,8 @@ N_r^D=29.
 }
 \end{center}
 
-Under strict reservation, a Class 1 patient can be offered this day, but a Class 2 patient cannot.
-Under Class-1-first backfill reservation after the day-level Class 1 stage, a Class 2 patient can use one of the three
-open protected slots.
+Under strict reservation, a Class 1 patient can be offered this day, but a Class 2 patient cannot
+use the open protected slots.
 \end{examplebox}
 
 \subsection{Residual-Day Search}
@@ -511,8 +432,6 @@ Pooled FCFS, either class & \(r=1\) & \(N_1^D=30<32\) \\
 Strict reservation, Class 1 & \(r=1\), reserved & \(R_1^D=8<10\) \\
 \addlinespace
 Strict reservation, Class 2 & \(r=2\), general & \(G_1^D=22\) is full, but \(G_2^D=20<22\) \\
-\addlinespace
-Class-1-first backfill reservation, Class 2 after Class 1 stage & \(r=1\), reserved if unused & leftover protected slots can be backfilled \\
 \bottomrule
 \end{tabular}
 \normalsize
@@ -528,7 +447,7 @@ The daily event order remains the same as in the v2 note:
     \item \textbf{Compute cancellations for the day.} Future appointments independently cancel with probability \(\phi_i\).
     \item \textbf{Simulate daily arrivals.} \(M_i^D\sim\mathrm{Poisson}(\lambda_i)\).
     \item \textbf{Generate a randomized within-day arrival order.}
-    \item \textbf{Apply the configured offer rule.} This is the only step changed by the reserved-slot strategies.
+    \item \textbf{Apply the configured offer rule.} This is the only step changed by the reserved-slot strategy.
     \item \textbf{Simulate balking.} A class-\(i\) patient offered delay \(\tau\) accepts with probability \(1-b_i(\tau)\).
     \item \textbf{Simulate no-shows and service for day \(D\).}
     \item \textbf{Compute metrics and advance to day \(D+1\).}
@@ -585,42 +504,6 @@ If \(\mathcal F_{i,\mathrm{strict}}^D\) is empty, that patient receives no offer
 continues to later arrivals because a later Class 1 arrival may still have protected capacity even
 when a Class 2 arrival has no general capacity.
 
-\subsection{Class-1-First Backfill Reservation Day}
-
-Under Class-1-first backfill reservation, the day has two priority stages.
-
-\begin{enumerate}[itemsep=0.35em]
-    \item \textbf{Class 1 stage.} Class 1 arrivals search residual days chronologically and check reserved capacity before general capacity on each residual day:
-    \[
-    (0,\mathrm{res}),\ (0,\mathrm{gen}),\ (1,\mathrm{res}),\ (1,\mathrm{gen}),\dots
-    \]
-    Equivalently,
-    \[
-    \mathcal F_{1,\mathrm{bf}}^D
-    =
-    \left\{(r,\mathrm{res}):r\in\mathcal R,\ R_r^D<Q\right\}
-    \cup
-    \left\{(r,\mathrm{gen}):r\in\mathcal R,\ G_r^D<S-Q\right\},
-    \]
-    with the ordered search above. This is not a horizon-wide reserved-only pass.
-    \item \textbf{Class 2 stage.} After all Class 1 arrivals have been handled, Class 2 arrivals search general capacity first and then leftover protected capacity on each residual day:
-    \[
-    (0,\mathrm{gen}),\ (0,\mathrm{res}),\ (1,\mathrm{gen}),\ (1,\mathrm{res}),\dots
-    \]
-    Equivalently,
-    \[
-    \mathcal F_{2,\mathrm{bf}}^D
-    =
-    \left\{(r,\mathrm{gen}):r\in\mathcal R,\ G_r^D<S-Q\right\}
-    \cup
-    \left\{(r,\mathrm{res}):r\in\mathcal R,\ R_r^D<Q\right\},
-    \]
-    with the ordered search above.
-\end{enumerate}
-
-This staged rule is the mathematical version of ``Class 1 gets priority within the day; if protected
-slots remain after that Class 1 stage, Class 2 may fill them later.''
-
 \section{Comparison to Pooled FCFS}
 
 \subsection{Policy Effects}
@@ -628,21 +511,21 @@ slots remain after that Class 1 stage, Class 2 may fill them later.''
 \begin{center}
 \small
 \resizebox{\linewidth}{!}{
-\begin{tabular}{L{0.21\textwidth} L{0.24\textwidth} L{0.24\textwidth} L{0.24\textwidth}}
+\begin{tabular}{L{0.25\textwidth} L{0.30\textwidth} L{0.35\textwidth}}
 \toprule
-\textbf{Feature} & \textbf{Pooled FCFS} & \textbf{Strict Class 1 reservation} & \textbf{Class-1-first backfill reservation} \\
+\textbf{Feature} & \textbf{Pooled FCFS} & \textbf{Strict Class 1 reservation} \\
 \midrule
-Capacity structure & all \(S\) slots pooled & \(Q\) protected, \(S-Q\) general & \(Q\) protected first, then releasable \\
+Capacity structure & all \(S\) slots pooled & \(Q\) protected, \(S-Q\) general \\
 \addlinespace
-Class 1 access & competes only by arrival order & protected first, then general overflow & handled before Class 2; protected then general on each residual day \\
+Class 1 access & competes only by arrival order & protected first, then general overflow \\
 \addlinespace
-Class 2 access & can use any open slot & can use only general slots & can use general slots and unused protected slots after the Class 1 stage \\
+Class 2 access & can use any open slot & can use only general slots \\
 \addlinespace
-Unused reserved slots & not applicable & may remain empty & can be backfilled by Class 2 \\
+Unused reserved slots & not applicable & may remain empty \\
 \addlinespace
-Utilization tendency & highest when demand is sufficient and no-shows are low & can fall if Class 1 demand is not enough to use \(Q\) & closer to pooled FCFS because unused protection can be recovered \\
+Utilization tendency & highest when demand is sufficient and no-shows are low & can fall if Class 1 demand is not enough to use \(Q\) \\
 \addlinespace
-Equity/access tendency & neutral in the offer rule; differences come from behavior & shifts access toward Class 1 & shifts access toward Class 1, but less rigidly \\
+Equity/access tendency & neutral in the offer rule; differences come from behavior & shifts access toward Class 1 \\
 \bottomrule
 \end{tabular}
 }
@@ -662,7 +545,7 @@ The main metrics are unchanged:
 \frac{\mathrm{served}_i}{\mathrm{arrivals}_i}.
 \]
 
-The reservation strategies mainly affect the path to those metrics:
+The reservation strategy mainly affects the path to those metrics:
 \[
 \text{offer rule}
 \rightarrow
@@ -679,8 +562,7 @@ b_i(\tau)
 
 \begin{keybox}[title={Interpretation of the Comparison}]
 Strict reservation can improve Class 1 access while lowering aggregate utilization if protected
-slots are not filled. Class-1-first backfill reservation tests whether most of the Class 1 access protection can be
-kept while reducing the utilization loss by letting Class 2 backfill unused protected capacity.
+slots are not filled.
 \end{keybox}
 
 \subsection{No-Offer Interpretation}
@@ -697,10 +579,6 @@ Pooled FCFS & no day in \(\mathcal R\) satisfies \(N_r^D<S\) \\
 Strict reservation, Class 1 & no day has either \(R_r^D<Q\) or \(G_r^D<S-Q\) \\
 \addlinespace
 Strict reservation, Class 2 & no day has \(G_r^D<S-Q\), even if \(R_r^D<Q\) somewhere \\
-\addlinespace
-Class-1-first backfill reservation, Class 1 & no day has either \(R_r^D<Q\) or \(G_r^D<S-Q\) during the Class 1 stage \\
-\addlinespace
-Class-1-first backfill reservation, Class 2 & no general slot and no leftover protected slot are available after the Class 1 stage \\
 \bottomrule
 \end{tabular}
 \normalsize
@@ -723,8 +601,6 @@ The new implementation fields map directly to the notation:
 \addlinespace
 \texttt{reserved\_slots\_per\_day} & \(Q\) & protected daily capacity; here \(Q=10\) \\
 \addlinespace
-\texttt{release\_reserved\_slots} & backfill flag & false for strict reservation, true for Class-1-first backfill reservation \\
-\addlinespace
 \texttt{Booking.reserved\_slot} & pool label \(z\) & true means the appointment was placed in the reserved pool \\
 \bottomrule
 \end{tabular}
@@ -736,10 +612,9 @@ The new implementation fields map directly to the notation:
 The policy logic appears in the booking step:
 \begin{itemize}[nosep]
     \item \texttt{find\_earliest\_open\_day} computes the earliest feasible \((r,z)\) pair.
-    \item \texttt{process\_daily\_arrivals} applies either the one-pass rule or the Class-1-first backfill priority-stage rule.
-    \item In the backfill rule, all Class 1 arrivals are processed before non-reserved classes.
+    \item \texttt{process\_daily\_arrivals} applies the one-pass arrival order.
     \item For Class 1, \texttt{find\_earliest\_open\_day} searches each residual day as reserved then general.
-    \item For Class 2 in the backfill stage, the search order is general then leftover reserved on each residual day.
+    \item For Class 2, \texttt{find\_earliest\_open\_day} searches general capacity only.
 \end{itemize}
 
 \begin{reviewbox}[title={Review Against the Implemented Reserved-Slot Model}]
@@ -748,14 +623,13 @@ The policy logic appears in the booking step:
     \item The new audit-layer pool counts \(R_r^D\) and \(G_r^D\) split the same daily capacity into reserved and general pools.
     \item \(Q=10\) protected slots are reserved for Class 1 out of \(S=32\).
     \item In strict reservation, unused protected slots stay unavailable to Class 2.
-    \item In Class-1-first backfill reservation, Class 1 gets the day-level priority stage and Class 2 can backfill unused protected capacity afterward.
     \item Cancellation, no-show, service, and metric definitions remain the same as in the FCFS v2 note.
 \end{itemize}
 \end{reviewbox}
 
 \section{Conclusion}
 
-The reservation strategies are not separate patient behavior models. They are changes to the offer
+The reservation strategy is not a separate patient behavior model. It is a change to the offer
 rule inside the same day-level appointment simulator. Pooled FCFS uses one capacity constraint
 \[
 N_r^D<S.
@@ -766,8 +640,6 @@ R_r^D<Q
 \qquad\text{and}\qquad
 G_r^D<S-Q.
 \]
-Class-1-first backfill reservation keeps a protected day-level priority stage for Class 1, then relaxes the strict
-rule by letting Class 2 use protected capacity that Class 1 did not reserve.
 
 The comparison should therefore be read as an access/utilization tradeoff:
 \[

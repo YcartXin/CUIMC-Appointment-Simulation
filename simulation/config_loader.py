@@ -72,5 +72,4 @@ def load_config(path: str | Path) -> SimulationConfig:
             else int(raw["reserved_class_id"])
         ),
         reserved_slots_per_day=int(raw.get("reserved_slots_per_day", 0)),
-        release_reserved_slots=bool(raw.get("release_reserved_slots", False)),
     )
