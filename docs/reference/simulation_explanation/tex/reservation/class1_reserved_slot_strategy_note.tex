@@ -565,6 +565,197 @@ Strict reservation can improve Class 1 access while lowering aggregate utilizati
 slots are not filled.
 \end{keybox}
 
+\subsection{Objective-Function Analysis}
+
+The metrics above describe what happened in one simulation run. The objective-function analysis
+adds one more step: it turns each FCFS run and each strict-reservation run into a single comparable
+score. This is useful because strict reservation can improve Class 1 outcomes while also leaving
+some protected capacity unused. A single metric is therefore not enough to decide whether a given
+\(Q\) is attractive.
+
+The objective functions are not a new booking policy. The booking policies remain pooled FCFS and
+strict Class 1 reservation. The objective functions are only used after the simulation to compare
+the resulting outcomes.
+
+\subsubsection{Policy Parameter}
+
+The main policy parameter is the protected daily capacity
+\[
+Q=\text{number of Class 1 reserved slots per day}.
+\]
+In the visual examples above, \(Q=10\) and \(S=32\) are fixed to make the mechanics concrete. In
+the objective-function notebooks, \(Q\) is swept across a range of values and compared against the
+matched FCFS baseline, where \(Q=0\).
+
+It is helpful to scale the cost of reservation by the protected share of the day:
+\[
+\frac{Q}{S}.
+\]
+This treats one protected slot as more expensive when the clinic has fewer total daily slots.
+
+\subsubsection{Initial Analysis Grid}
+
+The first objective-function notebooks center the sweep around the realistic demand scale rather
+than the larger visual example in this note. The baseline analysis uses total daily demand
+\(\lambda\approx 25\), Class 1 share \(p=0.58\), and daily capacity \(S=20\). The main \(Q\) sweep is
+\[
+Q\in\{0,1,2,3,4,5,6,8,10,12\}.
+\]
+Demand and mix are varied around that center:
+\[
+\lambda\in\{15,20,25,30,35,40,50\},
+\qquad
+p\in\{0.40,0.50,0.58,0.65,0.75\}.
+\]
+
+The initial weight and penalty values are
+\[
+w_1\in\{1,1.25,1.5,2,3\},
+\qquad
+c\in\{0,0.02,0.05,0.10\},
+\qquad
+\gamma\in\{0,0.02,0.05,0.10\},
+\]
+with \(w_2=1\). The headline setting is \(w_1=1.5\), \(c=0.05\), and
+\(\gamma=0.05\). These values are not claimed to be final; they are starting values for finding
+which parts of the demand and behavior space make strict reservation look better than FCFS.
+
+\subsubsection{Weighted Slot Use}
+
+For class-specific slot use, define each class contribution to attended utilization as
+\[
+\rho_i^{\mathrm{attended}}
+=
+\frac{\mathrm{served}_i}{S\times\mathrm{measured\ days}}.
+\]
+
+The weighted slot-use objective is
+\[
+U_{\mathrm{slot}}(w_1,w_2)
+=
+w_1\rho_1^{\mathrm{attended}}
++
+w_2\rho_2^{\mathrm{attended}}.
+\]
+Class 2 is kept at \(w_2=1\). Increasing \(w_1\) makes Class 1 served slots count more in the
+comparison. When \(w_1=w_2=1\), this reduces to total attended utilization
+\(\rho^{\mathrm{attended}}\).
+
+\subsubsection{Weighted Served Rate}
+
+The class served-rate metric from the previous subsection is
+\[
+\mathrm{served\ rate}_i
+=
+\frac{\mathrm{served}_i}{\mathrm{arrivals}_i}.
+\]
+
+The weighted served-rate objective compares weighted served patients to weighted arrivals:
+\[
+U_{\mathrm{served}}(w_1,w_2)
+=
+\frac{
+w_1\mathrm{served}_1+w_2\mathrm{served}_2
+}{
+w_1\mathrm{arrivals}_1+w_2\mathrm{arrivals}_2
+}.
+\]
+This objective is bounded between 0 and 1 before any penalty is applied. It answers a direct
+access question: after giving Class 1 a higher weight, what share of weighted demand was served?
+
+\subsubsection{Slot-Cost Penalty}
+
+Strict reservation protects access, but protected slots can be left empty if Class 1 demand is not
+large enough or if Class 1 behavior leads to cancellations, no-shows, or balking. To reflect that
+tradeoff, the net priority objective subtracts a cost for configured protected capacity:
+\[
+U_{\mathrm{net}}(w_1,w_2,c)
+=
+U_{\mathrm{served}}(w_1,w_2)
+-
+c\frac{Q}{S}.
+\]
+Here \(c\) controls how expensive protected capacity is. A larger \(c\) makes high-\(Q\) policies
+harder to justify unless they create enough weighted service benefit.
+
+\subsubsection{Waiting-Time Penalty}
+
+Because the simulator stores the originally offered delay \(\tau\), a waiting-time version can also
+be evaluated. For offered patients, define the weighted average offered delay
+\[
+\bar{\tau}_w
+=
+\frac{
+w_1\sum_{\mathrm{offered\ class\ 1}}\tau
++
+w_2\sum_{\mathrm{offered\ class\ 2}}\tau
+}{
+w_1\mathrm{offered}_1+w_2\mathrm{offered}_2
+}.
+\]
+
+The wait-adjusted objective is
+\[
+U_{\mathrm{wait}}(w_1,w_2,c,\gamma)
+=
+U_{\mathrm{slot}}(w_1,w_2)
+-
+c\frac{Q}{S}
+-
+\gamma\frac{\bar{\tau}_w}{H}.
+\]
+The term \(\bar{\tau}_w/H\) normalizes offered delay by the booking horizon. The parameter
+\(\gamma\) controls how strongly longer offered waits should lower the score.
+
+\subsubsection{Basic Requirements}
+
+Some comparisons are easier to read as a requirements check rather than a single score. The
+notebooks therefore also record whether a run satisfies
+\[
+\rho^{\mathrm{attended}}\ge \rho_{\min},
+\qquad
+\min_i\ \mathrm{served\ rate}_i\ge x,
+\qquad
+\left|\rho_1^{\mathrm{attended}}-\rho_2^{\mathrm{attended}}\right|\le g.
+\]
+Here \(\rho_{\min}\) is the minimum attended utilization level, \(x\) is the minimum served-rate
+floor for each class, and \(g\) is the largest allowed gap between the two class-specific attended
+utilization contributions.
+
+\subsubsection{Matched Comparison to FCFS}
+
+Each strict-reservation run is compared to a pooled FCFS run with the same scenario and seed. For a
+scenario \(a\), seed \(j\), and objective \(U\), the paired difference is
+\[
+\Delta U(Q;a,j)
+=
+U_{\mathrm{strict}}(Q;a,j)
+-
+U_{\mathrm{FCFS}}(a,j).
+\]
+The sweep averages this paired difference over \(J\) seeds:
+\[
+\overline{\Delta U}(Q)
+=
+\frac{1}{J}\sum_{j=1}^{J}\Delta U(Q;a,j).
+\]
+The best protected capacity for a scenario is the \(Q\) with the highest average paired difference:
+\[
+Q^\star(a)
+=
+\operatorname*{arg\,max}_{Q}\ \overline{\Delta U}(Q;a).
+\]
+
+The notebooks label a setting as a clear win when the average paired difference is positive and the
+lower end of the 95 percent interval is also positive. If the average is positive but the interval
+crosses zero, the setting is a possible win. Otherwise it is treated as a loss relative to FCFS.
+
+\begin{keybox}[title={How to Read the Objective Analysis}]
+The goal is not to find one universal \(Q\). The goal is to find when strict reservation beats FCFS
+for a stated priority weight, a stated cost of protected capacity, and a stated demand and behavior
+scenario.
+\end{keybox}
+
 \subsection{No-Offer Interpretation}
 
 The no-offer event has a slightly different meaning across the strategies:
