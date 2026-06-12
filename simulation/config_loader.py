@@ -66,4 +66,10 @@ def load_config(path: str | Path) -> SimulationConfig:
         cooldown_days=int(raw["cooldown_days"]),
         classes=classes,
         seed=None if raw.get("seed") is None else int(raw["seed"]),
+        reserved_class_id=(
+            None
+            if raw.get("reserved_class_id") is None
+            else int(raw["reserved_class_id"])
+        ),
+        reserved_slots_per_day=int(raw.get("reserved_slots_per_day", 0)),
     )
