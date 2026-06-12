@@ -11,8 +11,10 @@ Open these notebooks in order:
 7. `07_reservation_policy_demand_sensitivity.ipynb` compares pooled FCFS and strict reservation across symmetric and concentrated demand regimes.
 8. `08_reserved_capacity_sensitivity.ipynb` studies how strict reservation changes as reserved capacity `Q` varies.
 9. `09_reservation_policy_mechanism_checks.ipynb` checks class-specific loss shifts and whether reserved/general slot usage is exposed by the metrics layer.
-10. `appointment_simulation_analysis.ipynb` is the broader scenario walkthrough, now adapted to the cleaned `simulation/` package layout.
-11. `parameter_sensitivity_analysis.ipynb` is the larger exploratory sweep workbook, using the shared metric and plot-style helpers.
+10. `10_reservation_objective_functions.ipynb` defines strict-reservation objective functions and checks them on a small paired FCFS comparison.
+11. `11_reservation_objective_sweeps.ipynb` maps where strict reservation beats FCFS across `Q`, demand, behavior, weight, and slot-cost sweeps.
+12. `appointment_simulation_analysis.ipynb` is the broader scenario walkthrough, now adapted to the cleaned `simulation/` package layout.
+13. `parameter_sensitivity_analysis.ipynb` is the larger exploratory sweep workbook, using the shared metric and plot-style helpers.
 
 The first two notebooks are intentionally smaller than `scripts/generate_metric_analysis_figures.py`.
 They are for understanding and dynamic exploration. The metric report walkthrough is the notebook version of the rendered report plus its generated-figure appendix.
