@@ -103,15 +103,36 @@ class ClinicAppointmentSimulation:
     # Booking logic
     # -------------------------
 
-    def find_earliest_open_day(self) -> Optional[int]:
+    def find_earliest_open_day(self, class_id: int) -> Optional[Tuple[int, bool]]:
         """
         Find the earliest day with available capacity.
 
         Same-day booking is allowed, so the search starts at r = 0.
         """
+        reserved_slots = self.config.reserved_slots_per_day
+        reserved_class_id = self.config.reserved_class_id
+
+        if reserved_slots == 0 or reserved_class_id is None:
+            for r in range(self.config.horizon_days):
+                if len(self.calendar[r]) < self.config.slots_per_day:
+                    return r, False
+            return None
+
+        general_slots = self.config.slots_per_day - reserved_slots
+
         for r in range(self.config.horizon_days):
-            if len(self.calendar[r]) < self.config.slots_per_day:
-                return r
+            reserved_used = sum(1 for b in self.calendar[r] if b.reserved_slot)
+            general_used = len(self.calendar[r]) - reserved_used
+
+            if (
+                class_id == reserved_class_id
+                and reserved_used < reserved_slots
+            ):
+                return r, True
+
+            if general_used < general_slots:
+                return r, False
+
         return None
 
     def generate_daily_arrival_order(self) -> List[int]:
@@ -136,27 +157,24 @@ class ClinicAppointmentSimulation:
         track_patients: bool,
     ) -> None:
         """
-        Process the full day's arrivals in one random order.
-
-        If no slot is available for one patient, then that patient and all
-        remaining arrivals for the day are counted as no_offer and the
-        booking step stops for the day.
+        Process the full day's arrivals under the configured booking rule.
         """
         if track_patients:
             for class_id in ordered_arrivals:
                 self.class_metrics[class_id].arrivals += 1
 
-        for idx, class_id in enumerate(ordered_arrivals):
+        def process_one(class_id: int) -> bool:
             params = self.config.classes[class_id]
             metrics = self.class_metrics[class_id]
 
-            offered_day = self.find_earliest_open_day()
+            offer = self.find_earliest_open_day(class_id)
 
-            if offered_day is None:
+            if offer is None:
                 if track_patients:
-                    for remaining_class_id in ordered_arrivals[idx:]:
-                        self.class_metrics[remaining_class_id].no_offer += 1
-                return
+                    metrics.no_offer += 1
+                return False
+
+            offered_day, reserved_slot = offer
 
             tau = offered_day  # offered booking delay in days; tau = 0 is allowed
 
@@ -168,7 +186,7 @@ class ClinicAppointmentSimulation:
             if self.rng.random() < params.balk_prob(tau):
                 if track_patients:
                     metrics.balked += 1
-                continue
+                return True
 
             # Accept and book
             self.calendar[offered_day].append(
@@ -176,6 +194,7 @@ class ClinicAppointmentSimulation:
                     patient_class=class_id,
                     booking_delay=tau,
                     tracked=track_patients,
+                    reserved_slot=reserved_slot,
                 )
             )
 
@@ -185,6 +204,11 @@ class ClinicAppointmentSimulation:
                 metrics.accepted_delay_counts[tau] = (
                     metrics.accepted_delay_counts.get(tau, 0) + 1
                 )
+
+            return True
+
+        for class_id in ordered_arrivals:
+            process_one(class_id)
 
     # -------------------------
     # Daily service logic

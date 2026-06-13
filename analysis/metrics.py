@@ -104,7 +104,7 @@ def outcome_totals(result: SimulationResults) -> dict[str, int]:
 
     resolved_booked = totals["canceled"] + totals["no_show"] + totals["served"]
     totals["offered"] = totals["booked"] + totals["balked"]
-    totals["unresolved_booked"] = max(totals["booked"] - resolved_booked, 0)
+    totals["unresolved_booked"] = totals["booked"] - resolved_booked
     return totals
 
 
@@ -216,4 +216,3 @@ def class_result_rows(
 def metric_definition_rows(names: Iterable[str] | None = None) -> list[dict[str, str]]:
     selected = names or METRIC_DEFINITIONS.keys()
     return [METRIC_DEFINITIONS[name].__dict__.copy() for name in selected]
-
