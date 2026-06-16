@@ -206,3 +206,11 @@ class SimulationResults:
             if self.slot_metrics.measured_days > 0
             else 0.0
         )
+
+    @property
+    def booked_slot_utilization(self) -> float:
+        return (
+            self.slot_metrics.booked_slots / self.total_slots
+            if self.total_slots > 0
+            else 0.0
+        )

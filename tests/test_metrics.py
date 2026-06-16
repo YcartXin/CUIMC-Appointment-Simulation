@@ -29,7 +29,13 @@ class MetricsTest(unittest.TestCase):
         class_2 = ClassMetrics(arrivals=5)
         return SimulationResults(
             class_metrics={1: class_1, 2: class_2},
-            slot_metrics=SlotMetrics(daily_utilization_sum=5.0, measured_days=10),
+            slot_metrics=SlotMetrics(
+                booked_slots=3,
+                served_slots=2,
+                no_show_slots=1,
+                daily_utilization_sum=5.0,
+                measured_days=10,
+            ),
             total_slots=20,
             total_value=3.0,
             daily_summary_states=[],
@@ -57,6 +63,7 @@ class MetricsTest(unittest.TestCase):
 
         self.assertEqual(metrics["overall_balking_rate"], 0.0)
         self.assertEqual(metrics["class_1_slot_utilization"], 0.0)
+        self.assertEqual(metrics["booked_slot_utilization"], 0.0)
         self.assertEqual(metrics["access_advantage_class_1"], 0.0)
         self.assertEqual(rates["served_rate"], 0.0)
         self.assertEqual(rates["lost_after_booking_rate"], 0.0)
@@ -82,8 +89,13 @@ class MetricsTest(unittest.TestCase):
         self.assertEqual(rates["unresolved_booked_rate"], 0.0)
         self.assertEqual(aggregate_row["total_offered"], 6)
         self.assertEqual(aggregate_row["total_value"], 3.0)
+        self.assertEqual(aggregate_row["total_booked_slots"], 3)
+        self.assertEqual(aggregate_row["total_served_slots"], 2)
+        self.assertEqual(aggregate_row["total_no_show_slots"], 1)
+        self.assertAlmostEqual(aggregate_row["booked_slot_utilization"], 3 / 20)
         self.assertEqual(len(class_rows), 2)
         self.assertAlmostEqual(class_rows[0]["slot_utilization"], 0.1)
+        self.assertAlmostEqual(class_rows[0]["booked_slot_utilization"], 3 / 20)
         self.assertAlmostEqual(class_rows[0]["balking_rate"], 2 / 6)
 
     def test_outcome_totals_exposes_negative_unresolved_booked(self) -> None:

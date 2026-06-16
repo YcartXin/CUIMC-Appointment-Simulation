@@ -540,10 +540,18 @@ The main metrics are unchanged:
 =
 \frac{\mathrm{served\ slots}}{S\times\mathrm{measured\ days}},
 \qquad
+\rho^{\mathrm{booked}}
+=
+\frac{\mathrm{booked\ slots\ on\ service\ days}}{S\times\mathrm{measured\ days}},
+\qquad
 \mathrm{served\ rate}_i
 =
 \frac{\mathrm{served}_i}{\mathrm{arrivals}_i}.
 \]
+\(\rho^{\mathrm{attended}}\) is completed-visit utilization.  For the reservation analysis,
+\(\rho^{\mathrm{booked}}\) is also useful because it shows whether protected slots were actually
+occupied on the schedule.  No-shows count as booked slots; appointments that cancel early enough to
+free the service-day slot do not.
 
 The reservation strategy mainly affects the path to those metrics:
 \[
@@ -561,8 +569,8 @@ b_i(\tau)
 \]
 
 \begin{keybox}[title={Interpretation of the Comparison}]
-Strict reservation can improve Class 1 access while lowering aggregate utilization if protected
-slots are not filled.
+Strict reservation can improve Class 1 access while lowering booked-slot utilization if protected
+slots are not filled.  It can also lower attended utilization if booked slots turn into no-shows.
 \end{keybox}
 
 \subsection{Objective-Function Analysis}
@@ -570,8 +578,10 @@ slots are not filled.
 The metrics above describe what happened in one simulation run. The objective-function analysis
 adds one more step: it turns each FCFS run and each strict-reservation run into a single comparable
 score. This is useful because strict reservation can improve Class 1 outcomes while also leaving
-some protected capacity unused. A single metric is therefore not enough to decide whether a given
-\(Q\) is attractive.
+some protected capacity unused. In this section the main capacity score is booked-slot utilization,
+because the policy question is whether protected slots are actually occupied. Completed-visit
+utilization remains a related diagnostic for no-show losses. A single metric is therefore not enough
+to decide whether a given \(Q\) is attractive.
 
 The objective functions are not a new booking policy. The booking policies remain pooled FCFS and
 strict Class 1 reservation. The objective functions are only used after the simulation to compare
@@ -620,26 +630,34 @@ with \(w_2=1\). The headline setting is \(w_1=1.5\), \(c=0.05\), and
 \(\gamma=0.05\). These values are not claimed to be final; they are starting values for finding
 which parts of the demand and behavior space make strict reservation look better than FCFS.
 
-\subsubsection{Weighted Slot Use}
+\subsubsection{Weighted Booked Slot Use}
 
-For class-specific slot use, define each class contribution to attended utilization as
+For class-specific booked slot use, define each class contribution as
+\[
+\rho_i^{\mathrm{booked}}
+=
+\frac{\mathrm{served}_i+\mathrm{no\ show}_i}{S\times\mathrm{measured\ days}}.
+\]
+
+The weighted booked-slot objective is
+\[
+U_{\mathrm{booked}}(w_1,w_2)
+=
+w_1\rho_1^{\mathrm{booked}}
++
+w_2\rho_2^{\mathrm{booked}}.
+\]
+Class 2 is kept at \(w_2=1\). Increasing \(w_1\) makes Class 1 booked slots count more in the
+comparison. When \(w_1=w_2=1\), this reduces to total booked-slot utilization
+\(\rho^{\mathrm{booked}}\).
+
+The completed-visit version is still available as a diagnostic:
 \[
 \rho_i^{\mathrm{attended}}
 =
 \frac{\mathrm{served}_i}{S\times\mathrm{measured\ days}}.
 \]
-
-The weighted slot-use objective is
-\[
-U_{\mathrm{slot}}(w_1,w_2)
-=
-w_1\rho_1^{\mathrm{attended}}
-+
-w_2\rho_2^{\mathrm{attended}}.
-\]
-Class 2 is kept at \(w_2=1\). Increasing \(w_1\) makes Class 1 served slots count more in the
-comparison. When \(w_1=w_2=1\), this reduces to total attended utilization
-\(\rho^{\mathrm{attended}}\).
+This separates empty protected slots from booked slots that later no-show.
 
 \subsubsection{Weighted Served Rate}
 
@@ -667,16 +685,17 @@ access question: after giving Class 1 a higher weight, what share of weighted de
 
 Strict reservation protects access, but protected slots can be left empty if Class 1 demand is not
 large enough or if Class 1 behavior leads to cancellations, no-shows, or balking. To reflect that
-tradeoff, the net priority objective subtracts a cost for configured protected capacity:
+tradeoff, the net booked-slot objective subtracts a cost for configured protected capacity:
 \[
-U_{\mathrm{net}}(w_1,w_2,c)
+U_{\mathrm{net\ booked}}(w_1,w_2,c)
 =
-U_{\mathrm{served}}(w_1,w_2)
+U_{\mathrm{booked}}(w_1,w_2)
 -
 c\frac{Q}{S}.
 \]
 Here \(c\) controls how expensive protected capacity is. A larger \(c\) makes high-\(Q\) policies
-harder to justify unless they create enough weighted service benefit.
+harder to justify unless they create enough weighted booked-slot benefit.  The notebooks also keep
+the served-rate version \(U_{\mathrm{served}}(w_1,w_2)-cQ/S\) as an access diagnostic.
 
 \subsubsection{Waiting-Time Penalty}
 
@@ -698,7 +717,7 @@ The wait-adjusted objective is
 \[
 U_{\mathrm{wait}}(w_1,w_2,c,\gamma)
 =
-U_{\mathrm{slot}}(w_1,w_2)
+U_{\mathrm{booked}}(w_1,w_2)
 -
 c\frac{Q}{S}
 -
@@ -712,14 +731,14 @@ The term \(\bar{\tau}_w/H\) normalizes offered delay by the booking horizon. The
 Some comparisons are easier to read as a requirements check rather than a single score. The
 notebooks therefore also record whether a run satisfies
 \[
-\rho^{\mathrm{attended}}\ge \rho_{\min},
+\rho^{\mathrm{booked}}\ge \rho_{\min},
 \qquad
 \min_i\ \mathrm{served\ rate}_i\ge x,
 \qquad
-\left|\rho_1^{\mathrm{attended}}-\rho_2^{\mathrm{attended}}\right|\le g.
+\left|\rho_1^{\mathrm{booked}}-\rho_2^{\mathrm{booked}}\right|\le g.
 \]
-Here \(\rho_{\min}\) is the minimum attended utilization level, \(x\) is the minimum served-rate
-floor for each class, and \(g\) is the largest allowed gap between the two class-specific attended
+Here \(\rho_{\min}\) is the minimum booked-slot utilization level, \(x\) is the minimum served-rate
+floor for each class, and \(g\) is the largest allowed gap between the two class-specific booked-slot
 utilization contributions.
 
 \subsubsection{Matched Comparison to FCFS}
