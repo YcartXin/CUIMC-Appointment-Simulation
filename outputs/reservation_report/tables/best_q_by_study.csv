@@ -1,0 +1,13 @@
+scenario,best Q under Study A,Study A feasible?,best Q under Study B,Study B feasible?,do studies agree?,main reason if they differ,Study A strict-minus-FCFS difference,Study B strict-minus-FCFS difference,Study A Class 1 served-rate change,Study A Class 2 served-rate change,Study B Class 1 served-rate change,Study B Class 2 served-rate change,Study A utilization change,Study B utilization change,Study A wait change,Study B wait change
+"Symmetric baseline, lambda=40",0,True,0,True,yes,same selected Q,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+"Symmetric baseline, lambda=50",0,True,0,True,yes,same selected Q,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+"Symmetric baseline, lambda=70",0,False,32,False,no,wait/cost penalty changes ranking,0.0,0.22144215831876105,0.0,0.0,0.5285463129532765,-0.38629328426922455,0.0,0.0,0.0,-5.774496093203576
+"Symmetric baseline, lambda=100",0,False,32,False,no,wait/cost penalty changes ranking,0.0,0.21268607866160658,0.0,0.0,0.3136944518297619,-0.26727687522754023,0.0,0.0,0.0,-3.9007982117048954
+"Class 1 advantaged, lambda=40",0,True,0,True,yes,same selected Q,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+"Class 1 advantaged, lambda=50",0,False,24,False,no,wait/cost penalty changes ranking,0.0,0.03457838891809919,0.0,0.0,0.16341548668230785,-0.11628108779996656,0.0,0.0,0.0,-1.328670159898838
+"Class 1 advantaged, lambda=70",0,False,32,False,no,wait/cost penalty changes ranking,0.0,0.08818608458120565,0.0,0.0,0.2744846765064353,-0.16675400985631525,0.0,0.0,0.0,-5.529988939153388
+"Class 1 advantaged, lambda=100",0,False,32,False,no,wait/cost penalty changes ranking,0.0,0.07930809626222124,0.0,0.0,0.13415512596450124,-0.11700342052345244,0.0,0.0,0.0,-1.1805470496203216
+"Class 1 disadvantaged, lambda=40",0,True,16,True,no,wait/cost penalty changes ranking,0.0,0.0074926742069056475,0.0,0.0,0.10213914822224776,-0.10251980299888082,0.0,0.0,0.0,0.8016374069720902
+"Class 1 disadvantaged, lambda=50",16,True,16,True,yes,same selected Q,0.0,0.03848387577005865,0.2089386009689767,-0.24565480329490114,0.2089386009689767,-0.24565480329490114,0.0,0.0,1.1571685109155738,1.1571685109155738
+"Class 1 disadvantaged, lambda=70",0,False,32,False,no,wait/cost penalty changes ranking,0.0,0.3558010721721879,0.0,0.0,0.7012052446425631,-0.6390793348689444,0.0,-0.00015410958904109594,0.0,-6.879708158507396
+"Class 1 disadvantaged, lambda=100",0,False,32,False,no,wait/cost penalty changes ranking,0.0,0.3589612998277583,0.0,0.0,0.4368670795652842,-0.430588878674771,0.0,0.0,0.0,-7.07162288319323

@@ -26,6 +26,13 @@ METRIC_DEFINITIONS = {
         direction="higher means more completed slot use",
         description="Completed visits divided by available measured slots.",
     ),
+    "booked_slot_utilization": MetricDefinition(
+        name="booked_slot_utilization",
+        label="Booked-slot utilization",
+        unit="rate",
+        direction="higher means more schedule capacity was occupied",
+        description="Booked appointment slots divided by available measured slots.",
+    ),
     "overall_percent_serviced": MetricDefinition(
         name="overall_percent_serviced",
         label="Overall percent serviced",
@@ -141,6 +148,7 @@ def result_metrics_from_result(
 
     return {
         "average_utilization": result.average_utilization,
+        "booked_slot_utilization": result.booked_slot_utilization,
         "overall_percent_serviced": result.overall_percent_serviced,
         **aggregate_delay_metrics(result),
         "class_1_percent_serviced": c1.percent_serviced,
@@ -150,6 +158,14 @@ def result_metrics_from_result(
         "class_2_balking_rate": class_2_balking_rate,
         "class_1_slot_utilization": safe_divide(c1.served, result.total_slots),
         "class_2_slot_utilization": safe_divide(c2.served, result.total_slots),
+        "class_1_booked_slot_utilization": safe_divide(
+            c1.served + c1.no_show,
+            result.total_slots,
+        ),
+        "class_2_booked_slot_utilization": safe_divide(
+            c2.served + c2.no_show,
+            result.total_slots,
+        ),
         "class_1_mean_offered_booking_delay": class_1_delay,
         "class_2_mean_offered_booking_delay": class_2_delay,
         "access_advantage_class_1": c1.percent_serviced - c2.percent_serviced,
@@ -165,7 +181,11 @@ def aggregate_result_row(
     totals = outcome_totals(result)
     row: dict[str, Any] = {
         "average_utilization": result.average_utilization,
+        "booked_slot_utilization": result.booked_slot_utilization,
         "overall_percent_serviced": result.overall_percent_serviced,
+        "total_booked_slots": result.slot_metrics.booked_slots,
+        "total_served_slots": result.slot_metrics.served_slots,
+        "total_no_show_slots": result.slot_metrics.no_show_slots,
         "total_served": result.total_served,
         "total_value": result.total_value,
         **aggregate_delay_metrics(result),
@@ -205,6 +225,10 @@ def class_result_rows(
                 "mean_offered_booking_delay": metrics.mean_offered_booking_delay,
                 "percent_serviced": metrics.percent_serviced,
                 "slot_utilization": safe_divide(metrics.served, result.total_slots),
+                "booked_slot_utilization": safe_divide(
+                    metrics.served + metrics.no_show,
+                    result.total_slots,
+                ),
                 "balking_rate": safe_divide(metrics.balked, metrics.offered),
                 "total_booking_delay": metrics.total_booking_delay,
                 "total_offered_booking_delay": metrics.total_offered_booking_delay,
