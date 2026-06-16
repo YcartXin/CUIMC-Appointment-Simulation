@@ -129,20 +129,17 @@ img {
     </tr>
     <tr>
       <td>H7</td>
-      <td>Pre-threshold balking rate produces a larger served-rate gap than the same difference in post-threshold rate.</td>
-      <td>With the between-class gap magnitude and Class 2 step size held constant, placing the gap below the threshold affects a larger share of the patient pool than placing the gap above the threshold.</td>
+      <td>Under the tested baseline, placing a between-class balking-rate difference below the threshold produces a larger served-rate gap than placing the same difference above the threshold.</td>
+      <td>The location of the between-class difference changes which delay groups are exposed to unequal balking behavior and therefore changes the resulting allocation of completed visits. The magnitude of this effect depends on the demand regime and the distribution of offered delays.</td>
       <td><a href="#h7-pre-vs-post-threshold-evidence">Pre-threshold vs. post-threshold evidence</a></td>
-      <td>Supported</td>
+      <td>Supported (tested regime)</td>
     </tr>
     <tr>
       <td>H8</td>
-      <td>Post-threshold level matters more to a class's served rate than pre-post step size.</td>
-      <td>The post-threshold balking level governs the high-mass delay region where many bookings concentrate. By comparison, the within-class step size can change without producing the same effect on the absolute rejection rate for long-delay offers.</td>
-      <td><a href="#h8-step-vs-level-evidence">Step size vs. post-threshold level evidence</a></td>
-      <td>Supported</td>
-    </tr>
-    <tr class="group-header">
-      <td colspan="5">C. Class Gap Drivers</td>
+      <td>Holding Class 1's post-threshold balking rate fixed, an equal increase in the between-class post-threshold balking gap has a larger absolute effect on Class 1 served rate than an equal increase in Class 1's within-class balking step.</td>
+      <td>The within-class step is increased by lowering Class 1's pre-threshold balking rate, while the between-class gap is increased independently by lowering Class 2's post-threshold balking rate. Equal 0.10 changes are compared from the same starting configuration and simulation seed.</td>
+      <td><a href="#h8-within-vs-between-balking-evidence">Within-class step vs. between-class gap evidence</a></td>
+      <td>Not supported</td>
     </tr>
     <tr>
       <td>H9</td>
@@ -325,63 +322,111 @@ However, the evidence does not prove that crossing `tau ≈ 11` specifically pro
 [Back to summary table](#summary-table)
 
 
-## H7 Evidence: Pre-Threshold vs. Post-Threshold Balking Rate {#h7-pre-vs-post-threshold-evidence}
+## H7 Evidence: Pre-Threshold vs. Post-Threshold Balking Difference {#h7-pre-vs-post-threshold-evidence}
 
-This experiment tests whether the location of a between-class balking rate difference — below or above the threshold — affects the served-rate gap. Class 1 is fixed at b₀=0.00, b₁=0.50 throughout. For each gap magnitude g (0.05 to 0.50), two scenarios are compared:
+This experiment tests whether the location of a between-class balking-rate difference affects the served-rate gap. Class 1 is fixed at \(b_0 = 0.00\) and \(b_1 = 0.50\). For each gap magnitude \(g\), two Class 2 parameterizations are compared.
 
-| Scenario | Class 2 (b₀, b₁) | Class 2 step | Gap location |
-|----------|-------------------|-------------|--------------|
-| Pre-threshold gap | (g, 0.50) | 0.50 − g | Below threshold |
-| Post-threshold gap | (0.00, 0.50 − g) | 0.50 − g | Above threshold |
+| Scenario | Class 2 \((b_0, b_1)\) | Class 2 step | Location of class difference |
+|----------|-------------------------|--------------|------------------------------|
+| Pre-threshold difference | \((g, 0.50)\) | \(0.50-g\) | Below the threshold |
+| Post-threshold difference | \((0.00, 0.50-g)\) | \(0.50-g\) | Above the threshold |
 
-At every value of g, the between-class gap magnitude and Class 2 step size are identical. The only difference is whether the gap sits below or above the threshold.
+At each value of \(g\), the magnitude of the between-class rate difference and the Class 2 step size are identical. The only difference is whether the unequal balking behavior occurs below or above the threshold.
 
-The hypothesis is supported if the pre-threshold gap produces a larger absolute served-rate gap than the post-threshold gap at every magnitude.
+The hypothesis is supported if the pre-threshold difference produces a larger absolute served-rate gap than the post-threshold difference across the tested values of \(g\).
 
 ### Served-Rate Gap Across Gap Magnitudes
 
-![Gap magnitude sweep](../../../outputs/pre_vs_post_threshold/figures/gap_magnitude_sweep.png)
+![Served-rate gap by difference location](../../../outputs/pre_vs_post_threshold/figures/gap_magnitude_sweep.png)
 
-The two lines go in opposite directions because the gap type reverses who is disadvantaged. In the pre-threshold scenario, Class 2 balks more (higher b₀), so Class 1 is advantaged (positive gap). In the post-threshold scenario, Class 2 balks less (lower b₁), so Class 2 is advantaged (negative gap).
+The two lines have opposite signs because the two scenarios disadvantage different classes. In the pre-threshold scenario, Class 2 has the higher pre-threshold balking rate, so Class 1 has the higher served rate. In the post-threshold scenario, Class 2 has the lower post-threshold balking rate, so Class 2 has the higher served rate.
 
-The comparison that matters is the absolute magnitude. At every gap magnitude from 0.05 to 0.50, the pre-threshold effect is larger: at g = 0.30, |0.065| versus |0.038|; at g = 0.50, |0.130| versus |0.060|. The ratio between the two widens as the gap grows, meaning the pre-threshold advantage is not just consistent but becomes more pronounced at larger between-class differences.
+The relevant comparison is therefore the absolute served-rate gap. Across every tested gap magnitude from 0.05 to 0.50, the pre-threshold difference produces the larger absolute gap. At \(g = 0.30\), the absolute gap is approximately 0.065 under the pre-threshold scenario and 0.038 under the post-threshold scenario. At \(g = 0.50\), the corresponding gaps are approximately 0.130 and 0.060.
+
+The difference between the two scenarios also grows as \(g\) increases. Under the tested baseline, unequal balking behavior below the threshold therefore has a stronger effect on class access than an equal-sized difference above the threshold.
+
+This result suggest that pre-threshold balking rate links more directly to served rate than post, possibly due to its impact on cancellation and no-shows.
 
 ### H7 Conclusion
 
-H7 is supported. Across all tested gap magnitudes, placing a between-class balking difference below the threshold produces a larger served-rate gap than placing it above. Pre-threshold balking acts on patients offered delays 1 through 9, affecting a wider share of the patient pool than post-threshold balking, which only acts on the subset offered delays above 9.
+H7 is supported within the tested regime. Placing a between-class balking-rate difference below the threshold produces a larger absolute served-rate gap than placing the same difference above the threshold across all tested gap magnitudes.
 
+The conclusion is regime-specific. The experiment does not establish that pre-threshold differences will dominate under every demand, capacity, horizon, or threshold configuration.
 
 [Back to summary table](#summary-table)
 
 
-## H8 Evidence: Step Size vs. Post-Threshold Level {#h8-step-vs-level-evidence}
+## H8 Evidence: Within-Class Step vs. Between-Class Post-Threshold Gap {#h8-within-vs-between-balking-evidence}
 
-This experiment isolates two factors that determine a class's balking behavior: the within-class step size, `b₁ − b₀`, and the absolute post-threshold level, `b₁`. Two controlled sweeps vary one factor while holding the other constant, both applied to Class 1 with Class 2 at baseline.
+This experiment compares two determinants of Class 1 served rate:
 
-| Sweep | Fixed factor | Varied factor | How it varies |
-|-------|-------------|---------------|---------------|
-| Purple | Step = 0.30 | Post-threshold (`b₁`) | `b₁` rises from 0.30 to 0.70; `b₀` rises with it from 0.00 to 0.40 to maintain the fixed step |
-| Green | Post-threshold (`b₁`) = 0.50 | Step (`b₁ − b₀`) | `b₀` decreases from 0.40 to 0.00, widening the step from 0.10 to 0.50 |
+$$
+S_1=b_{1,1}-b_{0,1},
+$$
 
-The hypothesis is supported if the post-threshold sweep produces a larger swing in Class 1 served rate than the step-size sweep.
+the size of Class 1's within-class balking step, and
 
-In the green sweep, increasing the step means lowering `b₀`, so a larger step corresponds to less pre-threshold balking, which improves served rate.
+$$
+G_1=b_{1,1}-b_{1,2},
+$$
 
-### Class 1 Served Rate Comparison
+the post-threshold balking-rate gap between Class 1 and Class 2.
 
-![Step vs. post-threshold level](../../../outputs/step_vs_post_level/figures/step_vs_post_level.png)
+Class 1's post-threshold balking rate is fixed at $b_{1,1}=0.50$. The within-class step is increased by lowering Class 1's pre-threshold balking rate, while the between-class post-threshold gap is increased independently by lowering Class 2's post-threshold balking rate.
 
-The post-threshold sweep (purple) produces a served-rate swing of 0.083, from 0.284 down to 0.201. The step-size sweep (green) produces a swing of 0.048, from 0.221 up to 0.269.
+Both $S_1$ and $G_1$ vary from 0.00 to 0.50 in increments of 0.10, producing 36 factorial configurations. Each configuration is run across the same 100 seeds.
 
-Per unit change, the post-threshold level has approximately 1.7 times more impact on served rate than step size. This follows from the delay distribution: post-threshold balking governs the `tau ≈ 10–12` region where roughly 55% of bookings concentrate, giving it more leverage than the pre-threshold rate, which acts on the flatter `tau ≤ 9` region.
+For each common starting configuration and seed, the experiment compares equal 0.10 increases:
 
-Note: this finding complements H7. H7 shows that pre-threshold differences drive between-class gaps more effectively. H8 shows that post-threshold levels drive a class's own served rate more effectively. The distinction arises because between-class gaps depend on differential population exposure, while within-class outcomes depend on where the delay distribution concentrates.
+$$
+\Delta_S
+=
+R_1(S_1+0.10,G_1)-R_1(S_1,G_1),
+$$
+
+and
+
+$$
+\Delta_G
+=
+R_1(S_1,G_1+0.10)-R_1(S_1,G_1),
+$$
+
+where $R_1$ is Class 1's served rate.
+
+Increasing $S_1$ lowers Class 1's pre-threshold balking rate, making Class 1 more likely to accept offers below the threshold. Increasing $G_1$ lowers Class 2's post-threshold balking rate, making Class 2 more likely to accept long-delay offers and increasing its competition with Class 1. Because these changes affect Class 1 served rate in opposite directions, the primary comparison uses their absolute magnitudes.
+
+### Equal 0.10 Marginal Effects
+
+![Absolute marginal effects on Class 1 served rate](../../../outputs/h8_within_vs_between_balking/figures/h8_marginal_effect_comparison.png)
+
+An equal 0.10 increase in Class 1's within-class step changes Class 1 served rate by an average absolute magnitude of 1.231 percentage points, with a 95% confidence interval of 1.223 to 1.238 percentage points. By comparison, an equal increase in the between-class post-threshold gap produces an average absolute change of 0.588 percentage points, with a 95% confidence interval of 0.581 to 0.594 percentage points.
+
+The within-class effect is therefore approximately 2.1 times as large as the between-class effect. In substantive terms, reducing Class 1's own pre-threshold balking rate has a considerably larger effect on its served rate than an equal change in Class 2's post-threshold balking rate.
+
+The effects also operate in opposite directions. Increasing the within-class step by lowering $b_{0,1}$ increases Class 1 served rate, whereas increasing the between-class gap by lowering $b_{1,2}$ reduces Class 1 served rate by allowing Class 2 to accept more long-delay offers.
+
+### Consistency Across Starting Configurations
+
+![Difference between the two absolute effects](../../../outputs/h8_within_vs_between_balking/figures/h8_effect_difference_heatmap.png)
+
+The heatmap reports
+
+$$
+|\Delta_G|-|\Delta_S|.
+$$
+
+Positive values would indicate that the between-class post-threshold gap has the larger effect, while negative values indicate that the within-class step has the larger effect.
+
+All 25 starting configurations are negative, ranging from approximately $-1.19$ to $-0.15$ percentage points. The within-class step therefore has the larger absolute effect throughout the entire tested grid, rather than only at a particular baseline configuration.
+
+The magnitude of the difference generally narrows as the starting within-class step increases. This suggests diminishing returns from further reductions in Class 1's pre-threshold balking rate, but the between-class post-threshold gap never becomes the dominant effect within the tested range.
 
 ### H8 Conclusion
 
-H8 is supported. The absolute post-threshold balking level has more influence on a class's own served rate than the within-class step size.
+H8 is not supported. Contrary to the proposed hypothesis, Class 1 served rate is more sensitive to an equal change in its own within-class balking step than to an equal change in the post-threshold balking gap between classes.
 
-For a clinic seeking to understand which aspect of patient balking behavior matters most for service outcomes, the rate at which patients reject long-delay offers is more consequential than the contrast between short-delay and long-delay rejection rates.
+The result indicates that Class 1 access is influenced more strongly by whether Class 1 accepts offers below its threshold than by an equivalent change in Class 2's willingness to accept offers above the threshold. This conclusion is consistent across all tested starting configurations, although the difference between the two effects becomes smaller when Class 1 already has a large within-class step.
 
 [Back to summary table](#summary-table)
 

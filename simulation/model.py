@@ -211,9 +211,6 @@ class SimulationResults:
             self.slot_metrics.daily_utilization_sum / self.slot_metrics.measured_days
             if self.slot_metrics.measured_days > 0
             else 0.0
-<<<<<<< HEAD
-        )
-=======
         )
 
     @property
@@ -223,4 +220,3 @@ class SimulationResults:
             if self.total_slots > 0
             else 0.0
         )
->>>>>>> 9d41f3c2626450165d763627062056884c2ac67a
