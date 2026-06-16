@@ -56,6 +56,10 @@ def load_config(path: str | Path) -> SimulationConfig:
             cancel_prob=float(class_cfg["cancel_prob"]),
             no_show_prob=_build_probability_rule(class_cfg["no_show_prob"]),
             value=float(class_cfg.get("value", 1.0)),
+            horizon_days=(
+                None if class_cfg.get("horizon_days") is None
+                else int(class_cfg["horizon_days"])
+            ),
         )
 
     return SimulationConfig(

@@ -103,24 +103,37 @@ class ClinicAppointmentSimulation:
     # Booking logic
     # -------------------------
 
+    def _class_horizon(self, class_id: int) -> int:
+        """
+        Return the effective booking horizon for a patient class.
+        Uses the per-class horizon if set, otherwise the global horizon.
+        The result is capped at the calendar size (config.horizon_days).
+        """
+        class_h = self.config.classes[class_id].horizon_days
+        if class_h is None:
+            return self.config.horizon_days
+        return min(class_h, self.config.horizon_days)
+
     def find_earliest_open_day(self, class_id: int) -> Optional[Tuple[int, bool]]:
         """
         Find the earliest day with available capacity.
 
         Same-day booking is allowed, so the search starts at r = 0.
+        The search is bounded by the class-specific horizon.
         """
         reserved_slots = self.config.reserved_slots_per_day
         reserved_class_id = self.config.reserved_class_id
+        horizon = self._class_horizon(class_id)
 
         if reserved_slots == 0 or reserved_class_id is None:
-            for r in range(self.config.horizon_days):
+            for r in range(horizon):
                 if len(self.calendar[r]) < self.config.slots_per_day:
                     return r, False
             return None
 
         general_slots = self.config.slots_per_day - reserved_slots
 
-        for r in range(self.config.horizon_days):
+        for r in range(horizon):
             reserved_used = sum(1 for b in self.calendar[r] if b.reserved_slot)
             general_used = len(self.calendar[r]) - reserved_used
 
