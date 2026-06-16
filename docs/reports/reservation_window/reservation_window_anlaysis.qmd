@@ -1,0 +1,99 @@
+---
+title: "Per-Class Reservation Windows Under Oversubscribed FCFS Scheduling"
+format:
+  html:
+    embed-resources: true
+---
+
+## Motivation
+
+This analysis explores per-class reservation windows for weighted patient classes under oversubscribed FCFS scheduling. The primary interest is the interaction between reservation window length and delay-dependent balking: when does a wider window help a class, and when does balking erode the benefit?
+
+## Objective Function
+
+The primary objective is the additive weighted served rate:
+
+$$U(w_1, w_2) = w_1 \frac{Y_1}{A_1} + w_2 \frac{Y_2}{A_2}$$
+
+where $Y_i$ is served patients and $A_i$ is arrivals for class $i$. When $w_1 = w_2 = 1$, this reduces to the sum of per-class served rates. When $w_1 > 1$, the objective values Class 1 access more heavily.
+
+Two diagnostics are reported alongside the objective: no-offer rate per class ($N_i / A_i$), which captures the direct access effect of the window, and mean offered delay per class, which captures the delay composition of offers received.
+
+A secondary objective — the pooled weighted served rate $(w_1 Y_1 + w_2 Y_2) / (w_1 A_1 + w_2 A_2)$ — is compared against the primary in the divergence section.
+
+## Experimental Design
+
+Each simulation run assigns per-class booking horizons ($H_1$, $H_2$), per-class balking thresholds ($\tau_1$, $\tau_2$), and a shared post-threshold balking rate ($b_1$). All other parameters are held at baseline. Each configuration is replicated across 50 seeds.
+
+| Parameter | Values |
+|-----------|--------|
+| Horizons ($H_1$, $H_2$) | 2, 5, 7, 10, 14 — all 25 pairs |
+| Balking thresholds ($\tau_1$, $\tau_2$) | (9,9), (5,9), (9,5), (12,12), (5,12) |
+| Post-threshold balking rate ($b_1$) | 0.3, 0.5, 0.7 |
+| Weight regimes | $w_1 = 1.0$ (equal), $w_1 = 2.0$ (priority) |
+| Total configurations | 375 × 50 seeds = 18,750 runs |
+
+## Equal Weights and Reservation Window
+
+[One-sentence summary of the main finding under equal weights to be written after reviewing full data.]
+
+![Objective under equal weights](../../../outputs/reservation_window/figures/fig1a_objective_equal.png)
+
+## Class 1 Higher Weighted
+
+[One to two sentences on how the optimal window configuration shifts when $w_1 = 2.0$ — to be written after reviewing full data.]
+
+![Objective under priority weights](../../../outputs/reservation_window/figures/fig1b_objective_priority.png)
+
+## Balking Interaction with Reservation Window
+
+### Balking Threshold
+
+[One-sentence summary: a delay-sensitive class does not benefit from a wider window because it balks on the long-delay offers the extra horizon provides.]
+
+![Symmetric baseline](../../../outputs/reservation_window/figures/fig2_symmetric.png)
+
+![Class 1 delay-sensitive](../../../outputs/reservation_window/figures/fig2_c1_sensitive.png)
+
+![Class 2 delay-sensitive](../../../outputs/reservation_window/figures/fig2_c2_sensitive.png)
+
+![Both tolerant](../../../outputs/reservation_window/figures/fig2_both_tolerant.png)
+
+![Maximum asymmetry](../../../outputs/reservation_window/figures/fig2_max_asymmetry.png)
+
+### Balking Rate
+
+[One-sentence summary: higher post-threshold balking rates amplify the diminishing returns of wider windows.]
+
+![Balking rate 0.3](../../../outputs/reservation_window/figures/fig6_balk_rate_0.3.png)
+
+![Balking rate 0.5](../../../outputs/reservation_window/figures/fig6_balk_rate_0.5.png)
+
+![Balking rate 0.7](../../../outputs/reservation_window/figures/fig6_balk_rate_0.7.png)
+
+## No-Offer Rate and Offered Delay Diagnostics
+
+The no-offer rate is the primary channel through which the window acts. Shorter windows produce lower mean offered delays, but this reflects a change in sample composition: patients who would have received long-delay offers instead receive no offer at all.
+
+![No-offer rate by class](../../../outputs/reservation_window/figures/fig3_no_offer_rate.png)
+
+![Offered delay by class](../../../outputs/reservation_window/figures/fig4_offered_delay.png)
+
+## Objective Function Divergence
+
+The secondary objective — the pooled weighted served rate — computes a single weighted ratio rather than summing per-class rates:
+
+$$U_{pooled}(w_1, w_2) = \frac{w_1 Y_1 + w_2 Y_2}{w_1 A_1 + w_2 A_2}$$
+
+[One to two sentences on where the two objectives agree and disagree — to be written after reviewing full data.]
+
+![Objective divergence](../../../outputs/reservation_window/figures/fig5_objective_divergence.png)
+
+## Conclusion
+
+1. [Finding on optimal symmetric window under equal weights.]
+2. [Finding on how priority weights shift the optimal window.]
+3. [Finding on balking threshold × window interaction.]
+4. [Finding on balking rate × window interaction.]
+5. [Finding on no-offer rate as the primary mechanism.]
+6. [Finding on when the two objective functions diverge.]

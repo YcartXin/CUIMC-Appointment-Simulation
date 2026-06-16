@@ -41,6 +41,9 @@ ProbabilityFn = Callable[[int], float]
 class PatientClassParams:
     """
     Parameters for one patient class i.
+
+    horizon_days: per-class maximum booking window.  When None the class
+    uses the global SimulationConfig.horizon_days (backward-compatible).
     """
     class_id: int
     lambda_per_day: float
@@ -48,6 +51,7 @@ class PatientClassParams:
     cancel_prob: float
     no_show_prob: ProbabilityFn
     value: float = 1.0
+    horizon_days: Optional[int] = None
 
     def __post_init__(self) -> None:
         if self.class_id <= 0:
@@ -56,6 +60,8 @@ class PatientClassParams:
             raise ValueError("Arrival rate must be nonnegative.")
         if not (0.0 <= self.cancel_prob <= 1.0):
             raise ValueError("Cancellation probability must lie in [0, 1].")
+        if self.horizon_days is not None and self.horizon_days <= 0:
+            raise ValueError("Per-class horizon_days must be positive.")
 
 
 @dataclass(frozen=True)
