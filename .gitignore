@@ -218,6 +218,13 @@ __marimo__/
 
 # Quarto / LaTeX transient render files
 .quarto/
+
+# Project generated analysis artifacts
+notebooks/temp/
+outputs/reservation_window/
+/reports/
+docs/reports/reservation_report/
+docs/reports/reservation_window/
 docs/.quarto/
 docs/**/.quarto/
 docs/*_cache/

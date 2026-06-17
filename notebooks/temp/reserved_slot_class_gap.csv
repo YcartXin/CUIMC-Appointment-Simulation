@@ -1,4 +1,0 @@
-policy,class_1_served_rate,class_2_served_rate,class_1_minus_class_2_served_rate,class_1_balking_rate,class_2_balking_rate,class_1_offered_delay,class_2_offered_delay
-Pooled FCFS,0.581167,0.579071,0.002096,0.0,0.0,5.459553,5.463508
-Strict C1 reservation,0.587854,0.572375,0.015479,0.0,0.0,5.382779,5.540535
-Class-1-first backfill reservation,0.336396,0.879178,-0.542782,0.252859,0.0,8.111781,2.245489

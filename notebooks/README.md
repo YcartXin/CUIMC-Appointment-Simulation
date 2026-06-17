@@ -22,4 +22,5 @@ They are for understanding and dynamic exploration. The metric report walkthroug
 
 All notebooks locate the repository root automatically, so they can be opened from either the repository root or this `notebooks/` directory. Outputs are intentionally cleared in version control; rerun the cells locally when exploring.
 
-For a shareable summary of the strict-reservation objective-function analysis, see `reservation_objective_analysis_handoff.md`.
+Current strict-reservation objective-function report artifacts are under `../docs/reports/reservation_visual_objectives/`.
+The old-utilization comparison is under `../docs/reports/reservation_visual_objectives_old_utilization/`.

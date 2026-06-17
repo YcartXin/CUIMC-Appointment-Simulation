@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import os
 from pathlib import Path
 
 import matplotlib.patches as mpatches
@@ -16,11 +17,48 @@ from docx.shared import Inches
 REPO_DIR = Path(__file__).resolve().parents[1]
 CACHE_DIR = REPO_DIR / "notebooks" / "temp" / "reservation_playground_cache" / "92a74cbf5416"
 CLASS_CACHE_PATH = CACHE_DIR / "class_df.pkl"
-OUTPUT_DIR = REPO_DIR / "reports" / "reservation_visual_objectives"
+
+
+def resolve_utilization_config() -> tuple[str, str, str, str, str, Path, Path]:
+    requested = os.environ.get("UTILIZATION_DEFINITION", "booked").strip().lower()
+    if requested in {"booked", "booked_slot", "booked-slot"}:
+        output_dir = REPO_DIR / "docs" / "reports" / "reservation_visual_objectives"
+        return (
+            "booked",
+            "booked_slot_utilization",
+            "booked-slot utilization",
+            "booked slots divided by available slots",
+            "strict_reservation_visual_objectives_memo",
+            output_dir,
+            output_dir / "strict_reservation_visual_objectives_memo.docx",
+        )
+    if requested in {"old", "served", "served_slot", "served-slot", "slot", "attended"}:
+        output_dir = REPO_DIR / "docs" / "reports" / "reservation_visual_objectives_old_utilization"
+        return (
+            "old",
+            "slot_utilization",
+            "old served-slot utilization",
+            "completed visits divided by available slots",
+            "strict_reservation_old_utilization_memo",
+            output_dir,
+            output_dir / "strict_reservation_old_utilization_memo.docx",
+        )
+    raise ValueError("UTILIZATION_DEFINITION must be 'booked' or 'old'.")
+
+
+(
+    UTILIZATION_DEFINITION,
+    UTILIZATION_COLUMN,
+    UTILIZATION_LABEL,
+    UTILIZATION_DEFINITION_TEXT,
+    OUTPUT_BASENAME,
+    OUTPUT_DIR,
+    DOCX_PATH,
+) = resolve_utilization_config()
 FIGURE_DIR = OUTPUT_DIR / "figures"
 TABLE_DIR = OUTPUT_DIR / "tables"
-DOCX_PATH = OUTPUT_DIR / "strict_reservation_visual_objectives_memo.docx"
-PDF_PATH = OUTPUT_DIR / "strict_reservation_visual_objectives_memo.pdf"
+PDF_PATH = OUTPUT_DIR / f"{OUTPUT_BASENAME}.pdf"
+WEIGHT_SUMMARY_PATH = OUTPUT_DIR / "weight_sensitivity" / "tables" / "weight_sensitivity_summary.csv"
 
 STRICT_POLICY = "Strict C1 reservation"
 FCFS_POLICY = "Pooled FCFS"
@@ -68,6 +106,38 @@ def load_baseline_class_data() -> pd.DataFrame:
     return subset
 
 
+def load_saved_summary() -> pd.DataFrame:
+    if not WEIGHT_SUMMARY_PATH.exists():
+        raise FileNotFoundError(
+            "Missing cached simulation data and saved summary table. "
+            f"Expected one of: {CLASS_CACHE_PATH} or {WEIGHT_SUMMARY_PATH}"
+        )
+
+    saved = pd.read_csv(WEIGHT_SUMMARY_PATH)
+    rows = saved[
+        saved["w1"].eq(CLASS_1_WEIGHT)
+        & saved["w2"].eq(CLASS_2_WEIGHT)
+        & saved["Q"].isin(Q_VALUES)
+    ].copy()
+    if rows.empty:
+        raise RuntimeError(
+            f"No rows in {WEIGHT_SUMMARY_PATH} for w1={CLASS_1_WEIGHT:g}, w2={CLASS_2_WEIGHT:g}."
+        )
+    rows = rows.sort_values("Q")
+    if rows["Q"].tolist() != Q_VALUES:
+        raise RuntimeError("Saved summary does not match the requested Q grid.")
+
+    rows = rows.rename(columns={"weighted_offered_wait": "weighted_wait"})
+    rows["policy"] = STRICT_POLICY
+    rows["offered_1"] = np.where(rows["tau_1"].isna(), 0.0, 1.0)
+    rows["offered_2"] = np.where(rows["tau_2"].isna(), 0.0, 1.0)
+    rows["served_rate_flag"] = rows["min_served_rate"] < SERVED_RATE_FLOOR
+
+    fcfs = rows[rows["Q"].eq(0)].iloc[0].copy()
+    fcfs["policy"] = FCFS_POLICY
+    return pd.concat([pd.DataFrame([fcfs]), rows], ignore_index=True, sort=False)
+
+
 def run_level_objectives(class_df: pd.DataFrame) -> pd.DataFrame:
     rows = []
     keys = ["policy", "seed", "Q"]
@@ -80,8 +150,8 @@ def run_level_objectives(class_df: pd.DataFrame) -> pd.DataFrame:
         c1 = class_1.iloc[0]
         c2 = class_2.iloc[0]
 
-        rho_1 = float(c1["booked_slot_utilization"])
-        rho_2 = float(c2["booked_slot_utilization"])
+        rho_1 = float(c1[UTILIZATION_COLUMN])
+        rho_2 = float(c2[UTILIZATION_COLUMN])
         weighted_utilization = CLASS_1_WEIGHT * rho_1 + CLASS_2_WEIGHT * rho_2
 
         offered_1 = float(c1["offered"])
@@ -227,7 +297,12 @@ def mark_class_served_rate_flags(ax: plt.Axes, strict: pd.DataFrame) -> None:
 def plot_weighted_utilization(summary: pd.DataFrame) -> Path:
     fcfs = fcfs_row(summary)
     strict = strict_rows(summary)
-    output_path = FIGURE_DIR / "figure_1_weighted_booked_slot_utilization.png"
+    figure_name = (
+        "figure_1_weighted_booked_slot_utilization.png"
+        if UTILIZATION_DEFINITION == "booked"
+        else "figure_1_weighted_old_utilization.png"
+    )
+    output_path = FIGURE_DIR / figure_name
 
     fig, ax = plt.subplots(figsize=(8.4, 4.8))
     ax.plot(strict["Q"], strict["rho_1"], marker="o", label="Class 1 utilization", color="tab:blue")
@@ -245,7 +320,7 @@ def plot_weighted_utilization(summary: pd.DataFrame) -> Path:
     ax.axhline(fcfs["weighted_utilization"], color="0.20", linestyle="--", linewidth=1.1, alpha=0.65)
     mark_flagged_points(ax, strict, "weighted_utilization")
 
-    ax.set_title("Weighted booked-slot utilization across Q")
+    ax.set_title(f"Weighted {UTILIZATION_LABEL} across Q")
     ax.set_xlabel("reserved Class 1 slots per day, Q")
     ax.set_ylabel("utilization / weighted value")
     ax.grid(axis="y", alpha=0.25)
@@ -413,12 +488,13 @@ def make_doc(
     doc.add_heading("Purpose", level=1)
     doc.add_paragraph(
         "This memo is exploratory and visual, not a policy recommendation. "
-        "It compares strict Class 1 reservation to pooled FCFS for different values of Q."
+        "It compares strict Class 1 reservation to pooled FCFS for different values of Q. "
+        f"It uses {UTILIZATION_LABEL}."
     )
 
     doc.add_heading("Objective Functions", level=1)
     doc.add_paragraph(
-        "In this memo, utilization means booked slots divided by available slots. "
+        f"In this memo, utilization means {UTILIZATION_DEFINITION_TEXT}. "
         "The first function is weighted utilization:"
     )
     doc.add_paragraph("U(Q) = w1 rho1(Q) + w2 rho2(Q)")
@@ -448,7 +524,7 @@ def make_doc(
         "A low offered waiting time is not necessarily good if it happens because one class stops receiving offers."
     )
 
-    doc.add_heading("Figure 1. Weighted booked-slot utilization", level=1)
+    doc.add_heading(f"Figure 1. Weighted {UTILIZATION_LABEL}", level=1)
     doc.add_picture(str(figures["utilization"]), width=Inches(6.7))
     doc.add_paragraph(
         "Class lines show raw utilization by class. The dark line shows U(Q). "
@@ -596,15 +672,19 @@ def print_summary(
     print(
         "Baseline slice: "
         f"{SCENARIO_TYPE}, {DEMAND_LABEL}, seeds {SEEDS[0]}-{SEEDS[-1]}, "
-        f"Q={Q_VALUES}, w1={CLASS_1_WEIGHT:g}, w2={CLASS_2_WEIGHT:g}"
+        f"Q={Q_VALUES}, w1={CLASS_1_WEIGHT:g}, w2={CLASS_2_WEIGHT:g}, "
+        f"utilization={UTILIZATION_COLUMN}"
     )
 
 
 def main() -> None:
     ensure_dirs()
-    class_df = load_baseline_class_data()
-    run_objectives = run_level_objectives(class_df)
-    summary = summarize(run_objectives)
+    if CLASS_CACHE_PATH.exists():
+        class_df = load_baseline_class_data()
+        run_objectives = run_level_objectives(class_df)
+        summary = summarize(run_objectives)
+    else:
+        summary = load_saved_summary()
     figures = {
         "utilization": plot_weighted_utilization(summary),
         "wait": plot_weighted_wait(summary),

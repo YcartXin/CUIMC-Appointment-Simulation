@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import matplotlib.patches as mpatches
@@ -11,7 +12,36 @@ import pandas as pd
 REPO_DIR = Path(__file__).resolve().parents[1]
 CACHE_DIR = REPO_DIR / "notebooks" / "temp" / "reservation_playground_cache" / "92a74cbf5416"
 CLASS_CACHE_PATH = CACHE_DIR / "class_df.pkl"
-OUTPUT_DIR = REPO_DIR / "reports" / "reservation_visual_objectives" / "weight_sensitivity"
+
+
+def resolve_utilization_config() -> tuple[str, str, str, str, Path]:
+    requested = os.environ.get("UTILIZATION_DEFINITION", "booked").strip().lower()
+    if requested in {"booked", "booked_slot", "booked-slot"}:
+        return (
+            "booked",
+            "booked_slot_utilization",
+            "booked-slot utilization",
+            "booked slots divided by available slots",
+            REPO_DIR / "docs" / "reports" / "reservation_visual_objectives" / "weight_sensitivity",
+        )
+    if requested in {"old", "served", "served_slot", "served-slot", "slot", "attended"}:
+        return (
+            "old",
+            "slot_utilization",
+            "old served-slot utilization",
+            "completed visits divided by available slots",
+            REPO_DIR / "docs" / "reports" / "reservation_visual_objectives_old_utilization" / "weight_sensitivity",
+        )
+    raise ValueError("UTILIZATION_DEFINITION must be 'booked' or 'old'.")
+
+
+(
+    UTILIZATION_DEFINITION,
+    UTILIZATION_COLUMN,
+    UTILIZATION_LABEL,
+    UTILIZATION_DEFINITION_TEXT,
+    OUTPUT_DIR,
+) = resolve_utilization_config()
 FIGURE_DIR = OUTPUT_DIR / "figures"
 TABLE_DIR = OUTPUT_DIR / "tables"
 README_PATH = OUTPUT_DIR / "README.md"
@@ -90,8 +120,8 @@ def base_run_rows(class_df: pd.DataFrame) -> pd.DataFrame:
                 "policy": policy,
                 "seed": int(seed),
                 "Q": int(q),
-                "rho_1": float(c1["booked_slot_utilization"]),
-                "rho_2": float(c2["booked_slot_utilization"]),
+                "rho_1": float(c1[UTILIZATION_COLUMN]),
+                "rho_2": float(c2[UTILIZATION_COLUMN]),
                 "tau_1": float(c1["mean_offered_booking_delay"]) if offered_1 > 0 else np.nan,
                 "tau_2": float(c2["mean_offered_booking_delay"]) if offered_2 > 0 else np.nan,
                 "offered_1": offered_1,
@@ -209,6 +239,21 @@ def save_tables(by_seed: pd.DataFrame, summary: pd.DataFrame) -> dict[str, Path]
     return table_paths
 
 
+def load_saved_tables() -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Path]]:
+    table_paths = {
+        "by_seed": TABLE_DIR / "weight_sensitivity_by_seed.csv",
+        "summary": TABLE_DIR / "weight_sensitivity_summary.csv",
+    }
+    missing = [path for path in table_paths.values() if not path.exists()]
+    if missing:
+        missing_text = ", ".join(str(path) for path in missing)
+        raise FileNotFoundError(
+            "Missing cached simulation data and saved weight-sensitivity tables. "
+            f"Expected cache at {CLASS_CACHE_PATH} or saved tables: {missing_text}"
+        )
+    return pd.read_csv(table_paths["by_seed"]), pd.read_csv(table_paths["summary"]), table_paths
+
+
 def shade_flagged_q(ax: plt.Axes, summary: pd.DataFrame) -> None:
     flagged_q = sorted(summary.loc[summary["served_rate_flag"], "Q"].unique().tolist())
     for q in flagged_q:
@@ -245,7 +290,12 @@ def mark_class_served_rate_flags(ax: plt.Axes, plot_df: pd.DataFrame) -> None:
 
 
 def plot_weighted_utilization(summary: pd.DataFrame) -> Path:
-    output_path = FIGURE_DIR / "weighted_utilization_by_weight.png"
+    figure_name = (
+        "weighted_utilization_by_weight.png"
+        if UTILIZATION_DEFINITION == "booked"
+        else "weighted_old_utilization_by_weight.png"
+    )
+    output_path = FIGURE_DIR / figure_name
     fig, ax = plt.subplots(figsize=(8.8, 5.0))
     shade_flagged_q(ax, summary)
 
@@ -255,7 +305,7 @@ def plot_weighted_utilization(summary: pd.DataFrame) -> Path:
         ax.plot(group["Q"], group["weighted_utilization"], marker="o", color=color, label=label)
         ax.axhline(group["fcfs_weighted_utilization"].iloc[0], color=color, linestyle="--", alpha=0.45, linewidth=1.0)
 
-    ax.set_title("Weighted utilization for different class weights")
+    ax.set_title(f"Weighted {UTILIZATION_LABEL} for different class weights")
     ax.set_xlabel("reserved Class 1 slots per day, Q")
     ax.set_ylabel("U(Q)")
     ax.grid(axis="y", alpha=0.25)
@@ -293,7 +343,12 @@ def plot_weighted_wait(summary: pd.DataFrame) -> Path:
 
 
 def plot_utilization_delta(summary: pd.DataFrame) -> Path:
-    output_path = FIGURE_DIR / "weighted_utilization_delta_vs_fcfs_by_weight.png"
+    figure_name = (
+        "weighted_utilization_delta_vs_fcfs_by_weight.png"
+        if UTILIZATION_DEFINITION == "booked"
+        else "weighted_old_utilization_delta_vs_fcfs_by_weight.png"
+    )
+    output_path = FIGURE_DIR / figure_name
     fig, ax = plt.subplots(figsize=(8.8, 5.0))
     shade_flagged_q(ax, summary)
 
@@ -302,7 +357,7 @@ def plot_utilization_delta(summary: pd.DataFrame) -> Path:
         ax.plot(group["Q"], group["delta_weighted_utilization"], marker="o", color=f"C{idx}", label=label)
 
     ax.axhline(0, color="0.20", linewidth=1.0)
-    ax.set_title("Strict minus FCFS weighted utilization")
+    ax.set_title(f"Strict minus FCFS weighted {UTILIZATION_LABEL}")
     ax.set_xlabel("reserved Class 1 slots per day, Q")
     ax.set_ylabel("U(Q) - U(FCFS)")
     ax.grid(axis="y", alpha=0.25)
@@ -407,6 +462,7 @@ def write_readme(figures: dict[str, Path], tables: dict[str, Path]) -> None:
                 "",
                 "This folder scores the same baseline simulation runs under several class-weight choices.",
                 "No new booking policy is introduced here; the weights only change the objective values.",
+                f"Here, utilization means {UTILIZATION_DEFINITION_TEXT}.",
                 "",
                 f"Baseline slice: `{SCENARIO_TYPE}`, `{DEMAND_LABEL}`, seeds `{SEEDS[0]}-{SEEDS[-1]}`, Q grid `{Q_VALUES}`.",
                 f"Weight sets: {weights}.",
@@ -434,6 +490,7 @@ def print_summary(figures: dict[str, Path], tables: dict[str, Path], summary: pd
         "Baseline slice: "
         f"{SCENARIO_TYPE}, {DEMAND_LABEL}, seeds {SEEDS[0]}-{SEEDS[-1]}, Q={Q_VALUES}"
     )
+    print(f"Utilization definition: {UTILIZATION_COLUMN} ({UTILIZATION_DEFINITION_TEXT})")
     print("Weight sets:")
     for w1, w2 in WEIGHT_SETS:
         print(f"  - {weight_label(w1, w2)}")
@@ -450,12 +507,15 @@ def print_summary(figures: dict[str, Path], tables: dict[str, Path], summary: pd
 
 def main() -> None:
     ensure_dirs()
-    class_df = load_baseline_class_data()
-    base_rows = base_run_rows(class_df)
-    scored = score_weight_sets(base_rows)
-    by_seed = strict_with_fcfs_deltas(scored)
-    summary = summarize(by_seed)
-    tables = save_tables(by_seed, summary)
+    if CLASS_CACHE_PATH.exists():
+        class_df = load_baseline_class_data()
+        base_rows = base_run_rows(class_df)
+        scored = score_weight_sets(base_rows)
+        by_seed = strict_with_fcfs_deltas(scored)
+        summary = summarize(by_seed)
+        tables = save_tables(by_seed, summary)
+    else:
+        by_seed, summary, tables = load_saved_tables()
     figures = make_figures(summary)
     write_readme(figures, tables)
     print_summary(figures, tables, summary)
