@@ -77,6 +77,10 @@ target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+notebooks/temp/
+
+# Resumable strict-reservation diagnostic shards
+outputs/strict_reservation_assumption_sweep/
 
 # IPython
 profile_default/

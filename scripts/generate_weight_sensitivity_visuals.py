@@ -22,7 +22,7 @@ def resolve_utilization_config() -> tuple[str, str, str, str, Path]:
             "booked_slot_utilization",
             "booked-slot utilization",
             "booked slots divided by available slots",
-            REPO_DIR / "docs" / "reports" / "reservation_visual_objectives" / "weight_sensitivity",
+            REPO_DIR / "docs" / "reports" / "reservation" / "visual_objectives" / "weight_sensitivity",
         )
     if requested in {"old", "served", "served_slot", "served-slot", "slot", "attended"}:
         return (
@@ -30,7 +30,7 @@ def resolve_utilization_config() -> tuple[str, str, str, str, Path]:
             "slot_utilization",
             "old served-slot utilization",
             "completed visits divided by available slots",
-            REPO_DIR / "docs" / "reports" / "reservation_visual_objectives_old_utilization" / "weight_sensitivity",
+            REPO_DIR / "docs" / "reports" / "reservation" / "old_utilization" / "weight_sensitivity",
         )
     raise ValueError("UTILIZATION_DEFINITION must be 'booked' or 'old'.")
 

@@ -22,7 +22,7 @@ CLASS_CACHE_PATH = CACHE_DIR / "class_df.pkl"
 def resolve_utilization_config() -> tuple[str, str, str, str, str, Path, Path]:
     requested = os.environ.get("UTILIZATION_DEFINITION", "booked").strip().lower()
     if requested in {"booked", "booked_slot", "booked-slot"}:
-        output_dir = REPO_DIR / "docs" / "reports" / "reservation_visual_objectives"
+        output_dir = REPO_DIR / "docs" / "reports" / "reservation" / "visual_objectives"
         return (
             "booked",
             "booked_slot_utilization",
@@ -33,7 +33,7 @@ def resolve_utilization_config() -> tuple[str, str, str, str, str, Path, Path]:
             output_dir / "strict_reservation_visual_objectives_memo.docx",
         )
     if requested in {"old", "served", "served_slot", "served-slot", "slot", "attended"}:
-        output_dir = REPO_DIR / "docs" / "reports" / "reservation_visual_objectives_old_utilization"
+        output_dir = REPO_DIR / "docs" / "reports" / "reservation" / "old_utilization"
         return (
             "old",
             "slot_utilization",
