@@ -3,6 +3,7 @@
 - `visual_objectives/`: current analysis using booked-slot utilization.
 - `old_utilization/`: comparison using served visits divided by available slots.
 - `assumption_diagnostics/`: hard invariant checks and empirical business-assumption checks for strict reservation under the historical reservation-window behavior regimes.
+- `policy_selection/`: objective-based Q selection across the historical behavior grid, two equal-demand levels, and two weight regimes.
 
 The visual-objective folders contain memos, figures, tables, and weight-sensitivity outputs. The diagnostics folder contains its Markdown report, compact CSV summaries, and plots.
 
@@ -13,3 +14,11 @@ python experiments/strict_reservation_assumption_sweep.py --profile standard --w
 ```
 
 The canonical result is `assumption_diagnostics/assumption_report.md`. Raw compressed task shards are kept under `outputs/strict_reservation_assumption_sweep/` and are ignored by Git.
+
+The policy-selection report is generated with:
+
+```bash
+python experiments/strict_reservation_policy_selection.py --profile standard --workers 8 --resume --generate-report
+```
+
+Its canonical result is `policy_selection/strict_reservation_policy_selection.md`. The report keeps only five conclusion-oriented figures; full run-level and scenario-level outputs remain under `outputs/strict_reservation_policy_selection/`.

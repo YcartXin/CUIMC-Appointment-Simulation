@@ -81,6 +81,7 @@ notebooks/temp/
 
 # Resumable strict-reservation diagnostic shards
 outputs/strict_reservation_assumption_sweep/
+outputs/strict_reservation_policy_selection/
 
 # IPython
 profile_default/
