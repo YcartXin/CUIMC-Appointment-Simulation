@@ -13,12 +13,13 @@ import tempfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import numpy as np
 import pandas as pd
 
@@ -59,7 +60,10 @@ BALK_HIGH_VALUES = (0.3, 0.5, 0.7)
 ARRIVAL_RATES = (25, 50)
 Q_VALUES = (0, 2, 4, 6, 8, 10, 12, 16, 20, 24, 28, 32)
 STANDARD_SEEDS = tuple(range(61001, 61021))
-WEIGHTS = ((1.0, 1.0), (2.0, 1.0))
+WEIGHTS = ((0.5, 1.0), (1.0, 1.0), (1.5, 1.0), (2.0, 1.0))
+# Weights only affect post-processing. Keep the historical task identity stable
+# so existing simulation shards remain reusable when report weights change.
+SIMULATION_TASK_ID_WEIGHTS = ((1.0, 1.0), (2.0, 1.0))
 NEAR_TIE_TOLERANCE = 0.01
 SHARD_SCHEMA_VERSION = 1
 
@@ -132,12 +136,16 @@ def source_fingerprint() -> str:
     return digest.hexdigest()
 
 
-def experiment_manifest(profile: Profile) -> dict[str, Any]:
+def experiment_manifest(
+    profile: Profile,
+    *,
+    include_report_weights: bool = True,
+) -> dict[str, Any]:
     manifest = {
         "schema_version": SHARD_SCHEMA_VERSION,
         "source_fingerprint": source_fingerprint(),
         "profile": asdict(profile),
-        "weights": WEIGHTS,
+        "weights": SIMULATION_TASK_ID_WEIGHTS,
         "slots_per_day": SLOTS_PER_DAY,
         "horizon_days": HORIZON_DAYS,
         "burn_in_days": BURN_IN_DAYS,
@@ -152,14 +160,26 @@ def experiment_manifest(profile: Profile) -> dict[str, Any]:
         },
         "near_tie_tolerance": NEAR_TIE_TOLERANCE,
     }
+    if include_report_weights:
+        manifest["report_weights"] = WEIGHTS
     return json.loads(json.dumps(manifest, sort_keys=True))
+
+
+def task_identity_manifest(profile: Profile) -> dict[str, Any]:
+    return experiment_manifest(profile, include_report_weights=False)
+
+
+def manifest_task_identity(manifest: Mapping[str, Any]) -> dict[str, Any]:
+    identity = dict(manifest)
+    identity.pop("report_weights", None)
+    return identity
 
 
 def build_tasks(profile: str | Profile) -> list[Task]:
     grid = profile_grid(profile) if isinstance(profile, str) else profile
     manifest_hash = hashlib.sha256(
         json.dumps(
-            experiment_manifest(grid),
+            task_identity_manifest(grid),
             sort_keys=True,
             default=list,
         ).encode("utf-8")
@@ -428,15 +448,15 @@ def consolidate(
 
 def _behavior_label(row: pd.Series) -> str:
     return (
-        f"({int(row['tau_1'])},{int(row['tau_2'])}), "
-        f"b={row['post_threshold_balking_rate']:.1f}"
+        f"C1={int(row['tau_1'])}d, C2={int(row['tau_2'])}d; "
+        f"high={row['post_threshold_balking_rate']:.1f}"
     )
 
 
 def _context_label(row: pd.Series) -> str:
     return (
         f"{int(row['arrival_rate_class_1'])}/class, "
-        f"w1={row['w1']:.0f}"
+        f"w1={row['w1']:g}"
     )
 
 
@@ -451,12 +471,12 @@ def plot_best_q_heatmap(
     data["behavior"] = data.apply(_behavior_label, axis=1)
     data["context"] = data.apply(_context_label, axis=1)
     behaviors = list(dict.fromkeys(data["behavior"]))
-    contexts = [
-        "25/class, w1=1",
-        "25/class, w1=2",
-        "50/class, w1=1",
-        "50/class, w1=2",
-    ]
+    context_frame = (
+        data[["arrival_rate_class_1", "w1", "context"]]
+        .drop_duplicates()
+        .sort_values(["arrival_rate_class_1", "w1"])
+    )
+    contexts = context_frame["context"].tolist()
     matrix = np.full((len(behaviors), len(contexts)), np.nan)
     labels = [["" for _ in contexts] for _ in behaviors]
     for _, row in data.iterrows():
@@ -464,16 +484,20 @@ def plot_best_q_heatmap(
         j = contexts.index(row["context"])
         q_values = [int(q) for q in str(row["near_tie_q_values"]).split(",")]
         matrix[i, j] = np.mean(q_values)
-        labels[i][j] = row["near_tie_q_ranges"]
+        labels[i][j] = str(row["near_tie_q_ranges"]).split(" ", 1)[0]
 
-    fig, ax = plt.subplots(figsize=(9, 7))
+    fig, ax = plt.subplots(figsize=(14, 7))
     image = ax.imshow(matrix, cmap="viridis", vmin=0, vmax=32, aspect="auto")
-    ax.set_xticks(range(len(contexts)), contexts)
+    arrivals = context_frame["arrival_rate_class_1"].tolist()
+    for index in range(1, len(arrivals)):
+        if arrivals[index] != arrivals[index - 1]:
+            ax.axvline(index - 0.5, color="black", linewidth=1.4)
+    ax.set_xticks(range(len(contexts)), contexts, rotation=25, ha="right")
     ax.set_yticks(range(len(behaviors)), behaviors)
     for i in range(len(behaviors)):
         for j in range(len(contexts)):
             ax.text(j, i, labels[i][j], ha="center", va="center", fontsize=7,
-                    color="white" if matrix[i, j] > 14 else "black")
+                    color="white" if matrix[i, j] <= 14 else "black")
     ax.set_title(title)
     ax.set_xlabel("Arrival and weight regime")
     ax.set_ylabel("Behavior regime")
@@ -484,33 +508,107 @@ def plot_best_q_heatmap(
     plt.close(fig)
 
 
-def plot_representative_deltas(q_summary: pd.DataFrame, path: Path) -> None:
-    data = q_summary[
-        (q_summary["tau_1"] == 9)
-        & (q_summary["tau_2"] == 9)
-        & np.isclose(q_summary["post_threshold_balking_rate"], 0.5)
-    ]
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4.5), sharex=True)
+def _safe_ratio(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
+    denominator = denominator.replace(0, np.nan)
+    return numerator / denominator
+
+
+def _weighted_objective_deltas_for_plot(
+    run_level: pd.DataFrame,
+    *,
+    w1_values: Sequence[float],
+) -> pd.DataFrame:
+    base = run_level[
+        (run_level["tau_1"] == 9)
+        & (run_level["tau_2"] == 9)
+        & np.isclose(run_level["post_threshold_balking_rate"], 0.5)
+        & np.isclose(run_level["w1"], 1.0)
+        & np.isclose(run_level["w2"], 1.0)
+    ].copy()
+    rows = []
+    for w1 in w1_values:
+        w2 = 1.0
+        denominator = w1 + w2
+        util = (w1 * base["Y1"] / base["S"] + w2 * base["Y2"] / base["S"]) / denominator
+        fcfs_util = (
+            w1 * base["fcfs_Y1"] / base["S"]
+            + w2 * base["fcfs_Y2"] / base["S"]
+        ) / denominator
+        service = (
+            w1 * _safe_ratio(base["Y1"], base["A1"])
+            + w2 * _safe_ratio(base["Y2"], base["A2"])
+        ) / denominator
+        fcfs_service = (
+            w1 * _safe_ratio(base["fcfs_Y1"], base["fcfs_A1"])
+            + w2 * _safe_ratio(base["fcfs_Y2"], base["fcfs_A2"])
+        ) / denominator
+        scored = base[
+            ["arrival_rate_class_1", "arrival_rate_class_2", "Q", "seed"]
+        ].copy()
+        scored["w1_plot"] = w1
+        scored["delta_Obj_util_norm"] = util - fcfs_util
+        scored["delta_Obj_service_norm"] = service - fcfs_service
+        rows.append(scored)
+    combined = pd.concat(rows, ignore_index=True)
+    return (
+        combined.groupby(["arrival_rate_class_1", "w1_plot", "Q"], as_index=False)
+        [["delta_Obj_util_norm", "delta_Obj_service_norm"]]
+        .mean()
+    )
+
+
+def plot_representative_deltas(run_level: pd.DataFrame, path: Path) -> None:
+    data = _weighted_objective_deltas_for_plot(
+        run_level,
+        w1_values=(0.5, 1.0, 1.5, 2.0),
+    )
+    colors = {
+        0.5: "#6a51a3",
+        1.0: "#2b8cbe",
+        1.5: "#31a354",
+        2.0: "#e6550d",
+    }
+    markers = {25: "o", 50: "s"}
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.8), sharex=True)
     for ax, metric, title in (
-        (axes[0], "Obj_util_norm", "Normalized weighted slot utilization"),
-        (axes[1], "Obj_service_norm", "Normalized weighted service rate"),
+        (axes[0], "delta_Obj_util_norm", "Normalized weighted slot utilization"),
+        (axes[1], "delta_Obj_service_norm", "Normalized weighted service rate"),
     ):
         for (arrival, w1), group in data.groupby(
-            ["arrival_rate_class_1", "w1"]
+            ["arrival_rate_class_1", "w1_plot"],
+            sort=True,
         ):
             group = group.sort_values("Q")
             ax.plot(
                 group["Q"],
-                group[f"delta_{metric}_mean"],
-                marker="o",
-                label=f"{int(arrival)}/class, w1={w1:g}",
+                group[metric],
+                marker=markers[int(arrival)],
+                color=colors[float(w1)],
+                linewidth=1.5,
+                markersize=4.5,
             )
         ax.axhline(0, color="black", linestyle="--", linewidth=0.9)
         ax.set_title(title)
         ax.set_xlabel("Reserved slots Q")
         ax.set_ylabel("Mean delta vs FCFS")
         ax.grid(alpha=0.2)
-    axes[0].legend(frameon=False, fontsize=8)
+    weight_handles = [
+        Line2D([0], [0], color=color, linewidth=1.8, label=f"w1={w1:g}")
+        for w1, color in colors.items()
+    ]
+    arrival_handles = [
+        Line2D(
+            [0],
+            [0],
+            marker=marker,
+            color="0.35",
+            linestyle="None",
+            label=f"{arrival}/class",
+        )
+        for arrival, marker in markers.items()
+    ]
+    axes[0].legend(handles=weight_handles, title="Class 1 weight", frameon=False, fontsize=8)
+    axes[1].legend(handles=arrival_handles, title="Arrival rate", frameon=False, fontsize=8)
     fig.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=180, bbox_inches="tight")
@@ -524,7 +622,13 @@ def plot_class_tradeoffs(q_summary: pd.DataFrame, path: Path) -> None:
         & np.isclose(q_summary["post_threshold_balking_rate"], 0.5)
         & np.isclose(q_summary["w1"], 1)
     ]
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4.5))
+    best_data = q_summary[
+        (q_summary["tau_1"] == 9)
+        & (q_summary["tau_2"] == 9)
+        & np.isclose(q_summary["post_threshold_balking_rate"], 0.5)
+        & np.isclose(q_summary["w1"], 2)
+    ]
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.8))
     for ax, (arrival, group) in zip(
         axes,
         data.groupby("arrival_rate_class_1", sort=True),
@@ -535,7 +639,72 @@ def plot_class_tradeoffs(q_summary: pd.DataFrame, path: Path) -> None:
             group["class_2_service_rate_mean"],
             marker="o",
             color="#3b667f",
+            label="Q sweep",
         )
+        best_group = best_data[best_data["arrival_rate_class_1"] == arrival]
+        best_row = best_group.loc[best_group["Obj_service_norm_mean"].idxmax()]
+        x_best = float(best_row["class_1_service_rate_mean"])
+        y_best = float(best_row["class_2_service_rate_mean"])
+        target_raw = 2.0 * x_best + y_best
+        xs = np.linspace(
+            max(0.0, float(group["class_1_service_rate_mean"].min()) - 0.02),
+            min(1.0, float(group["class_1_service_rate_mean"].max()) + 0.02),
+            100,
+        )
+        ys = target_raw - 2.0 * xs
+        mask = (ys >= 0) & (ys <= 1)
+        ax.plot(
+            xs[mask],
+            ys[mask],
+            linestyle="--",
+            linewidth=1.0,
+            color="0.35",
+            label="same service objective, w1=2",
+        )
+        ax.scatter(
+            [x_best],
+            [y_best],
+            marker="*",
+            s=150,
+            color="#d62728",
+            edgecolor="white",
+            linewidth=0.8,
+            zorder=5,
+            label=f"highest service objective: Q={int(best_row['Q'])}",
+        )
+        other_objectives = [
+            (
+                "Obj_util_norm_mean",
+                "max",
+                "highest utilization objective",
+                "D",
+                "#31a354",
+            ),
+            (
+                "T_wait_offered_mean",
+                "min",
+                "lowest offered-wait objective",
+                "X",
+                "#9467bd",
+            ),
+        ]
+        for metric, direction, label, marker, color in other_objectives:
+            if direction == "max":
+                row = best_group.loc[best_group[metric].idxmax()]
+            else:
+                row = best_group.loc[best_group[metric].idxmin()]
+            ax.scatter(
+                [float(row["class_1_service_rate_mean"])],
+                [float(row["class_2_service_rate_mean"])],
+                marker=marker,
+                s=95,
+                color=color,
+                alpha=0.42,
+                edgecolor="white",
+                linewidth=0.6,
+                zorder=4,
+                label=f"{label}: Q={int(row['Q'])}",
+            )
         for _, row in group.iterrows():
             ax.annotate(
                 str(int(row["Q"])),
@@ -548,6 +717,7 @@ def plot_class_tradeoffs(q_summary: pd.DataFrame, path: Path) -> None:
         ax.set_xlabel("Class 1 service rate")
         ax.set_ylabel("Class 2 service rate")
         ax.grid(alpha=0.2)
+        ax.legend(frameon=False, fontsize=7, loc="best")
     fig.suptitle("Service redistribution as Q increases")
     fig.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -644,9 +814,30 @@ def _markdown_table(frame: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
+def _arrival_utilization_table(
+    scenario_summary: pd.DataFrame,
+    *,
+    arrival_rate: int,
+) -> pd.DataFrame:
+    data = scenario_summary[
+        scenario_summary["arrival_rate_class_1"] == arrival_rate
+    ].copy()
+    data["behavior"] = data.apply(_behavior_label, axis=1)
+    data["weight"] = data["w1"].map(lambda value: f"w1={value:g}")
+    table = data.pivot(
+        index="behavior",
+        columns="weight",
+        values="util_near_tie_q_ranges",
+    )
+    ordered_columns = [f"w1={w1:g}" for w1, _ in WEIGHTS]
+    table = table.reindex(columns=ordered_columns)
+    return table.reset_index()
+
+
 def write_report(
     *,
     q_summary: pd.DataFrame,
+    run_level: pd.DataFrame,
     best_q: pd.DataFrame,
     scenario_summary: pd.DataFrame,
     near_ranges: pd.DataFrame,
@@ -655,6 +846,7 @@ def write_report(
     figures = report_dir / "figures"
     util_heatmap = figures / "best_q_obj_util_norm.png"
     service_heatmap = figures / "best_q_obj_service_norm.png"
+    wait_heatmap = figures / "best_q_t_wait_offered.png"
     delta_plot = figures / "representative_delta_vs_fcfs.png"
     tradeoff_plot = figures / "class_service_tradeoff.png"
     wait_plot = figures / "offered_wait_no_offer_diagnostic.png"
@@ -670,7 +862,13 @@ def write_report(
         path=service_heatmap,
         title="1% near-tie Q ranges for normalized weighted service rate",
     )
-    plot_representative_deltas(q_summary, delta_plot)
+    plot_best_q_heatmap(
+        best_q,
+        objective="T_wait_offered",
+        path=wait_heatmap,
+        title="1% near-tie Q ranges for lowest weighted offered wait",
+    )
+    plot_representative_deltas(run_level, delta_plot)
     plot_class_tradeoffs(q_summary, tradeoff_plot)
     plot_wait_no_offer(q_summary, wait_plot)
 
@@ -709,19 +907,14 @@ def write_report(
     util = util.assign(best_q_scalar=scalar_best(util))
     service = service.assign(best_q_scalar=scalar_best(service))
 
-    recommendation = scenario_summary.copy()
-    recommendation["behavior"] = recommendation.apply(_behavior_label, axis=1)
-    recommendation["context"] = recommendation.apply(_context_label, axis=1)
-    compact = recommendation.pivot(
-        index="behavior",
-        columns="context",
-        values=["util_near_tie_q_ranges", "service_near_tie_q_ranges"],
+    util_table_25 = _arrival_utilization_table(
+        scenario_summary,
+        arrival_rate=25,
     )
-    compact.columns = [
-        f"{'util' if metric.startswith('util') else 'service'}: {context}"
-        for metric, context in compact.columns
-    ]
-    compact = compact.reset_index()
+    util_table_50 = _arrival_utilization_table(
+        scenario_summary,
+        arrival_rate=50,
+    )
 
     composition_count = int(wait["composition_effect_likely"].sum())
     total_scenarios = len(util)
@@ -742,11 +935,11 @@ def write_report(
         "# Strict Class 1 Reservation: Policy-Selection Results",
         "",
         "> **Conclusion.** Strict reservation raises both normalized weighted "
-        "objectives in most tested cells, but the gains are produced by moving "
-        "service toward Class 1. At 50 arrivals per class, the mathematical "
-        "objective choice is always `Q=32`, which excludes Class 2 entirely. "
-        "The lowest offered waiting time is therefore not an overall access "
-        "improvement.",
+        "objectives in many tested cells, but the gains are produced by moving "
+        "service toward Class 1. The expanded weight sweep shows why the "
+        "chosen Class 1 weight matters: low `w1` keeps low-Q ranges competitive, "
+        "while `w1 >= 1` pushes high-demand settings toward `Q=32`. The lowest "
+        "offered waiting time is not an overall access improvement.",
         "",
         "## 1. Purpose",
         "",
@@ -760,18 +953,18 @@ def write_report(
         "- 5 balking-threshold pairs and 3 common post-threshold balking rates.",
         "- Equal Class 1 and Class 2 arrival rates of 25 or 50 per day.",
         "- `Q = [0,2,4,6,8,10,12,16,20,24,28,32]`.",
-        "- Weights `(1,1)` and `(2,1)`; 20 seeds per simulation cell.",
+        "- Class 1 weights `w1 = [0.5,1,1.5,2]` with `w2 = 1`; 20 seeds per simulation cell.",
         "- Capacity 32/day, horizon 14, burn-in 30, measurement 365, cooldown 14.",
         "",
         "## 3. Objective Definitions",
         "",
         "With `S = 32 × 365` measured slots:",
         "",
-        "$$Obj_{util,raw}=w_1Y_1/S+w_2Y_2/S,\\qquad "
-        "Obj_{util,norm}=Obj_{util,raw}/(w_1+w_2).$$",
+        "$$Obj_{util,raw}=w_1\\frac{Y_1}{S}+w_2\\frac{Y_2}{S},\\qquad "
+        "Obj_{util,norm}=\\frac{Obj_{util,raw}}{w_1+w_2}.$$",
         "",
-        "$$Obj_{service,raw}=w_1Y_1/A_1+w_2Y_2/A_2,\\qquad "
-        "Obj_{service,norm}=Obj_{service,raw}/(w_1+w_2).$$",
+        "$$Obj_{service,raw}=w_1\\frac{Y_1}{A_1}+w_2\\frac{Y_2}{A_2},\\qquad "
+        "Obj_{service,norm}=\\frac{Obj_{service,raw}}{w_1+w_2}.$$",
         "",
         "$$T_{wait,offered}=\\frac{w_1\\sum\\tau_{offered,1}+"
         "w_2\\sum\\tau_{offered,2}}{w_1\\,\\mathrm{offered}_1+"
@@ -793,50 +986,59 @@ def write_report(
         f"best-strict delta is {service_median_delta:+.3f}.",
         f"- Several Q values are effectively equivalent in {util_multiple} "
         f"utilization cells and {service_multiple} service-rate cells.",
-        "- At 25 arrivals per class, increasing `w1` from 1 to 2 moves both "
-        "primary objectives to `Q=24` in every behavior regime. With `w1=1`, "
-        "the selected range is more behavior-dependent and sometimes includes FCFS.",
-        "- At 50 arrivals per class, both primary objectives select `Q=32` in "
-        "every behavior and weight regime. This is full Class 1 protection and "
-        "complete Class 2 exclusion.",
+        "- At 25 arrivals per class, the utilization ranges are sensitive to "
+        "`w1`: lower Class 1 weights keep more low-Q and FCFS-equivalent "
+        "ranges, while larger weights move the range upward.",
+        "- At 50 arrivals per class, the utilization ranges concentrate at high "
+        "`Q`. These cells must be read with Class 2 access because high `Q` "
+        "approaches full Class 1 protection.",
         "",
-        "## 5. Best-Q Recommendations By Regime",
+        "## 5. Utilization Best-Q Ranges By Regime",
         "",
-        "The cells below are 1% near-tie ranges, not forced unique optima. "
-        "Bracketed lists show the tested Q values represented by each range.",
-        "These are objective-specific mathematical candidates, not access-"
-        "constrained policy recommendations.",
-        "",
-        _markdown_table(compact),
+        "The heatmap below shows 1% near-tie ranges for normalized weighted "
+        "slot utilization, not forced unique optima. These are mathematical "
+        "candidates, not access-constrained policy recommendations. The "
+        "detailed tables are moved to the appendix.",
+        "`C1` and `C2` are the class-specific balking thresholds in days; "
+        "`high` is the post-threshold balking probability. The solid vertical "
+        "line separates 25 arrivals per class from 50 arrivals per class.",
         "",
         "![Utilization best-Q ranges](figures/best_q_obj_util_norm.png)",
         "",
         "The utilization map shows how weighting Class 1 and increasing demand "
         "move the practically equivalent reservation region.",
         "",
-        "![Service-rate best-Q ranges](figures/best_q_obj_service_norm.png)",
-        "",
-        "The service-rate map separates access performance from capacity-based "
-        "performance; the two objectives need not choose the same range.",
-        "",
         "## 6. FCFS Comparison",
         "",
         "![Representative deltas](figures/representative_delta_vs_fcfs.png)",
         "",
         "Positive values indicate improvement over matched-seed FCFS. The "
-        "representative symmetric regime shows whether gains persist across "
-        "arrival and weight settings rather than relying on a single curve. "
-        "The improvement is weighted: it does not mean both classes improve.",
+        "representative symmetric regime sweeps `w1` from 0.5 to 2.0 in steps "
+        "of 0.5. Color shows the Class 1 weight; marker shape shows the "
+        "arrival rate. The improvement is weighted: it does not mean both "
+        "classes improve.",
         "",
         "## 7. Class Tradeoffs",
         "",
         "![Class service tradeoff](figures/class_service_tradeoff.png)",
         "",
         "Increasing Q generally moves service toward Class 1 and away from "
-        "Class 2. An objective improvement should therefore be read as a "
-        "weighted tradeoff, not as a simultaneous improvement for both classes.",
+        "Class 2. The star marks the highest service objective in this "
+        "representative slice for `w1=2`, and the dashed line shows an example "
+        "iso-objective line: points on it have the same weighted service value. "
+        "The lighter diamond and X show where the utilization and offered-wait "
+        "objectives point on the same service-rate tradeoff curve. "
+        "An objective improvement should therefore be read as a weighted "
+        "tradeoff, not as a simultaneous improvement for both classes.",
         "",
         "## 8. Offered Waiting Time And No-Offer Composition Effects",
+        "",
+        "![Offered-wait best-Q ranges](figures/best_q_t_wait_offered.png)",
+        "",
+        "The offered-wait heatmap shows the Q ranges that minimize "
+        "`T_wait_offered`. This heatmap must be read with the no-offer "
+        "diagnostic below, because lower offered wait can come from excluding "
+        "patients from offers.",
         "",
         "![Wait and no-offer diagnostic](figures/offered_wait_no_offer_diagnostic.png)",
         "",
@@ -866,6 +1068,31 @@ def write_report(
         "settings. A combined policy should be studied only after this direct "
         "comparison.",
         "",
+        "## Appendix: Detailed Utilization Tables",
+        "",
+        "These tables give the full 1% near-tie Q ranges behind the utilization "
+        "heatmap. Bracketed lists show the tested Q values represented by each "
+        "range.",
+        "",
+        "### Lambda = 25 arrivals per class",
+        "",
+        _markdown_table(util_table_25),
+        "",
+        "### Lambda = 50 arrivals per class",
+        "",
+        _markdown_table(util_table_50),
+        "",
+        "## Appendix: Service-Rate Heatmap",
+        "",
+        "The service-rate objective is retained as a secondary primary objective, "
+        "but its heatmap is placed here so the main body focuses on the "
+        "utilization view requested for visual selection.",
+        "",
+        "![Service-rate best-Q ranges](figures/best_q_obj_service_norm.png)",
+        "",
+        "The service-rate map separates access performance from capacity-based "
+        "performance; the two objectives need not choose the same range.",
+        "",
         "Data tables: `tables/scenario_level_summary.csv` and "
         "`tables/best_q_summary.csv`; explicit near-tie members are in "
         "`tables/near_tie_q_ranges.csv`. Full run-level outputs remain under "
@@ -894,7 +1121,7 @@ def run_sweep(
     manifest = experiment_manifest(profile)
     if manifest_path.exists():
         existing = json.loads(manifest_path.read_text(encoding="utf-8"))
-        if existing != manifest:
+        if manifest_task_identity(existing) != task_identity_manifest(profile):
             raise RuntimeError(
                 f"Manifest mismatch in {profile_dir}; use a clean output directory."
             )
@@ -926,11 +1153,13 @@ def run_sweep(
     paths = consolidate(profile=profile, output_dir=output_dir, tasks=tasks)
     if generate_report:
         q_summary = pd.read_csv(paths["q_summary"])
+        run_level = pd.read_csv(paths["run_level"])
         best_q = pd.read_csv(paths["best_q"])
         scenario_summary = pd.read_csv(paths["scenario_summary"])
         near_ranges = pd.read_csv(paths["near_ranges"])
         paths["report"] = write_report(
             q_summary=q_summary,
+            run_level=run_level,
             best_q=best_q,
             scenario_summary=scenario_summary,
             near_ranges=near_ranges,

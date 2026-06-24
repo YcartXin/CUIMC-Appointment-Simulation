@@ -1,0 +1,6 @@
+hypothesis,supported,inconclusive,contradicted
+Additive and pooled ordering match,30,1,29
+Balk 0.3 vs 0.7 little effect,31,1,0
+C1 not worse than FCFS,1256,4,0
+C2 not better than FCFS,1254,6,0
+Symmetric FCFS class rates match,24,0,0

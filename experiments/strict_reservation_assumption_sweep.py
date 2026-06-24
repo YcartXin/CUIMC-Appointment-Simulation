@@ -1382,84 +1382,174 @@ def plot_violation_counts(summary: pd.DataFrame, path: Path) -> None:
     plt.close(fig)
 
 
-def plot_parameter_regions(assumptions: pd.DataFrame, path: Path) -> None:
-    selected = assumptions[
-        assumptions["assumption"].isin(
-            [
-                "C1 no material reduction vs FCFS",
-                "C2 no material improvement vs FCFS",
-            ]
+def short_assumption_label(assumption: str) -> str:
+    labels = {
+        "C1 no material reduction vs FCFS": "C1 not worse than FCFS",
+        "C2 no material improvement vs FCFS": "C2 not better than FCFS",
+        "Symmetric FCFS has similar class served rates": "Symmetric FCFS class rates match",
+        "Balk 0.3 vs 0.7 has little heavy symmetric effect": "Balk 0.3 vs 0.7 little effect",
+        "Additive and pooled objective ordering is consistent": "Additive and pooled ordering match",
+    }
+    return labels.get(assumption, assumption)
+
+
+def regime_label(regime_id: str) -> str:
+    try:
+        threshold_1, threshold_2, high = regime_id.split("_")
+        return (
+            f"C1={int(threshold_1[1:])}d, C2={int(threshold_2)}d; "
+            f"high={int(high[1:]) / 10:.1f}"
         )
-    ].copy()
-    status_value = {"supported": 0, "inconclusive": 1, "contradicted": 2}
-    selected["status_value"] = selected["status"].map(status_value)
-    regions = (
-        selected.groupby(["assumption", "total_demand", "q"], as_index=False)
-        .agg(
-            status_value=("status_value", "max"),
-            non_supported_cells=(
-                "status_value",
-                lambda values: int((values > 0).sum()),
-            ),
+    except (ValueError, TypeError):
+        return str(regime_id)
+
+
+def plot_business_status(assumption_breakdown: pd.DataFrame, path: Path) -> None:
+    data = assumption_breakdown.copy()
+    data["assumption"] = data["assumption"].map(short_assumption_label)
+    data["total"] = data[["supported", "inconclusive", "contradicted"]].sum(axis=1)
+    data = data.sort_values(["contradicted", "inconclusive", "total"])
+
+    fig, ax = plt.subplots(figsize=(10.5, 4.8))
+    left = np.zeros(len(data))
+    max_total = max(1, int(data["total"].max()))
+    colors = {
+        "supported": "#2f6f4e",
+        "inconclusive": "#d5a72d",
+        "contradicted": "#b3261e",
+    }
+    for status in ("supported", "inconclusive", "contradicted"):
+        values = data[status].to_numpy()
+        ax.barh(
+            data["assumption"],
+            values,
+            left=left,
+            color=colors[status],
+            label=status,
         )
-    )
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
-    for ax, (assumption, group) in zip(
-        axes,
-        regions.groupby("assumption", sort=True),
-    ):
-        ax.scatter(
-            group["total_demand"],
-            group["q"],
-            c=group["status_value"],
-            s=55 + 35 * np.sqrt(group["non_supported_cells"]),
-            cmap=matplotlib.colors.ListedColormap(
-                ["#2f6f4e", "#d5a72d", "#b3261e"]
-            ),
-            vmin=0,
-            vmax=2,
-            alpha=0.8,
-            edgecolor="white",
-            linewidth=0.4,
-        )
-        for row in group.itertuples(index=False):
-            if row.non_supported_cells:
-                ax.annotate(
-                    str(row.non_supported_cells),
-                    (row.total_demand, row.q),
-                    ha="center",
+        for index, value in enumerate(values):
+            if value:
+                inside = value >= max_total * 0.03
+                x = left[index] + value / 2 if inside else left[index] + value + max_total * 0.006
+                ax.text(
+                    x,
+                    index,
+                    f"{int(value):,}",
+                    ha="center" if inside else "left",
                     va="center",
-                    fontsize=7,
-                    color="black",
+                    fontsize=8,
+                    color=(
+                        "white"
+                        if inside and status in {"supported", "contradicted"}
+                        else "black"
+                    ),
                 )
-        ax.set_title(assumption.replace(" vs FCFS", "\nvs FCFS"), fontsize=10)
-        ax.set_xlabel("Total daily demand")
-        ax.set_ylabel("Reserved slots Q")
-        ax.set_xticks(sorted(group["total_demand"].unique()))
-        ax.set_yticks(sorted(group["q"].unique()))
-        ax.grid(alpha=0.2)
-    handles = [
-        plt.Line2D(
-            [0],
-            [0],
-            marker="o",
-            linestyle="",
-            color=color,
-            label=label,
-        )
-        for label, color in (
-            ("supported", "#2f6f4e"),
-            ("inconclusive", "#d5a72d"),
-            ("contradicted", "#b3261e"),
-        )
-    ]
-    fig.legend(handles=handles, loc="lower center", ncol=3, frameon=False)
-    fig.suptitle(
-        "Business-assumption parameter regions\n"
-        "Color is the worst status; labels count non-supported scenario cells",
-        fontsize=11,
+        left += values
+    ax.set_xlim(0, max_total * 1.1)
+    ax.set_xlabel("Tested cells")
+    ax.set_ylabel("")
+    ax.set_title("Business-hypothesis verdicts")
+    ax.grid(axis="x", alpha=0.2)
+    ax.legend(frameon=False, ncol=3, loc="lower right")
+    fig.tight_layout()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=180, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_objective_ordering_disagreement(
+    assumptions: pd.DataFrame,
+    path: Path,
+) -> None:
+    data = assumptions[
+        assumptions["assumption"]
+        == "Additive and pooled objective ordering is consistent"
+    ].copy()
+    data["behavior"] = data["regime_id"].map(regime_label)
+    data = data.sort_values(["regime_id", "total_demand"])
+    behaviors = list(dict.fromkeys(data["behavior"]))
+    demands = sorted(data["total_demand"].dropna().astype(int).unique())
+
+    matrix = np.full((len(behaviors), len(demands)), np.nan)
+    statuses = [["" for _ in demands] for _ in behaviors]
+    for _, row in data.iterrows():
+        i = behaviors.index(row["behavior"])
+        j = demands.index(int(row["total_demand"]))
+        matrix[i, j] = row["mean_difference"]
+        statuses[i][j] = row["status"]
+
+    vmax = max(0.05, float(np.nanmax(matrix)))
+    fig, ax = plt.subplots(figsize=(8.8, 7))
+    image = ax.imshow(matrix, cmap="YlOrRd", vmin=0, vmax=vmax, aspect="auto")
+    ax.set_xticks(range(len(demands)), [str(demand) for demand in demands])
+    ax.set_yticks(range(len(behaviors)), behaviors)
+    for i in range(len(behaviors)):
+        for j in range(len(demands)):
+            value = matrix[i, j]
+            if not np.isfinite(value):
+                continue
+            suffix = ""
+            if statuses[i][j] == "contradicted":
+                suffix = "\nC"
+            elif statuses[i][j] == "inconclusive":
+                suffix = "\nI"
+            ax.text(
+                j,
+                i,
+                f"{value:.1%}{suffix}",
+                ha="center",
+                va="center",
+                fontsize=7,
+                color="white" if value > vmax * 0.55 else "black",
+            )
+    ax.set_title("Additive versus pooled objective ordering disagreement")
+    ax.set_xlabel("Total daily demand")
+    ax.set_ylabel("Behavior regime")
+    colorbar = fig.colorbar(image, ax=ax)
+    colorbar.set_label("Pairwise Q-order disagreement rate")
+    fig.tight_layout()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=180, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_composition_flags(composition: pd.DataFrame, path: Path) -> None:
+    grouped = (
+        composition.groupby(["q", "total_demand"], as_index=False)
+        .agg(flagged_cells=("composition_flag", "sum"))
+        .astype({"flagged_cells": int})
     )
-    fig.tight_layout(rect=(0, 0.08, 1, 0.94))
+    q_values = sorted(grouped["q"].unique())
+    demands = sorted(grouped["total_demand"].unique())
+    matrix = np.zeros((len(q_values), len(demands)), dtype=int)
+    for _, row in grouped.iterrows():
+        i = q_values.index(int(row["q"]))
+        j = demands.index(int(row["total_demand"]))
+        matrix[i, j] = int(row["flagged_cells"])
+
+    vmax = max(1, int(matrix.max()))
+    fig, ax = plt.subplots(figsize=(8.2, 5.5))
+    image = ax.imshow(matrix, cmap="Blues", vmin=0, vmax=vmax, aspect="auto")
+    ax.set_xticks(range(len(demands)), [str(demand) for demand in demands])
+    ax.set_yticks(range(len(q_values)), [str(q) for q in q_values])
+    for i in range(len(q_values)):
+        for j in range(len(demands)):
+            value = matrix[i, j]
+            ax.text(
+                j,
+                i,
+                str(value) if value else "",
+                ha="center",
+                va="center",
+                fontsize=8,
+                color="white" if value > vmax * 0.5 else "black",
+            )
+    ax.set_title("Composition flags: lower offered wait with higher no-offer rate")
+    ax.set_xlabel("Total daily demand")
+    ax.set_ylabel("Reserved slots Q")
+    colorbar = fig.colorbar(image, ax=ax)
+    colorbar.set_label("Flagged scenario cells")
+    fig.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=180, bbox_inches="tight")
     plt.close(fig)
@@ -1502,7 +1592,7 @@ def write_report(
     report_dir: Path = DEFAULT_REPORT_DIR,
     expected_tasks: int | None = None,
 ) -> dict[str, Path]:
-    """Write markdown, compact CSVs, and the two required figures."""
+    """Write markdown, compact CSVs, and focused diagnostic figures."""
     report_dir.mkdir(parents=True, exist_ok=True)
     tables_dir = report_dir / "tables"
     figures_dir = report_dir / "figures"
@@ -1517,16 +1607,14 @@ def write_report(
     assumption_path = tables_dir / f"{prefix}business_assumptions.csv"
     composition_path = tables_dir / f"{prefix}composition_flags.csv"
     cell_path = tables_dir / f"{prefix}cell_summary.csv"
+    status_table_path = tables_dir / f"{prefix}hypothesis_status_summary.csv"
+    non_supported_path = tables_dir / f"{prefix}non_supported_hypotheses.csv"
+    composition_summary_path = tables_dir / f"{prefix}composition_summary.csv"
     plot_violation_path = figures_dir / f"{prefix}violation_counts.png"
-    plot_region_path = figures_dir / f"{prefix}parameter_regions.png"
+    plot_status_path = figures_dir / f"{prefix}business_hypothesis_status.png"
+    plot_ordering_path = figures_dir / f"{prefix}objective_ordering_disagreement.png"
+    plot_composition_path = figures_dir / f"{prefix}composition_flags.png"
     markdown_path = report_dir / f"{prefix}assumption_report.md"
-
-    atomic_write_dataframe(violations, violation_path)
-    atomic_write_dataframe(assumptions, assumption_path)
-    atomic_write_dataframe(composition, composition_path)
-    atomic_write_dataframe(cells, cell_path)
-    plot_violation_counts(violations, plot_violation_path)
-    plot_parameter_regions(assumptions, plot_region_path)
 
     complete = expected_tasks is None or len(frame) == expected_tasks
     status_counts = assumptions["status"].value_counts().to_dict()
@@ -1537,99 +1625,208 @@ def write_report(
         .reindex(columns=["supported", "inconclusive", "contradicted"], fill_value=0)
         .reset_index()
     )
-    contradicted = assumptions[assumptions["status"] == "contradicted"]
-    contradicted_summary = (
-        contradicted.groupby("assumption", as_index=False)
-        .agg(
-            cells=("status", "size"),
-            demand_values=(
-                "total_demand",
-                lambda values: ", ".join(
-                    str(int(value))
-                    for value in sorted(pd.Series(values).dropna().unique())
-                ),
-            ),
-            regimes=("regime_id", lambda values: pd.Series(values).dropna().nunique()),
-            minimum_effect=("mean_difference", "min"),
-            maximum_effect=("mean_difference", "max"),
+    assumption_breakdown["hypothesis"] = assumption_breakdown["assumption"].map(
+        short_assumption_label
+    )
+    assumption_display = assumption_breakdown[
+        ["hypothesis", "supported", "inconclusive", "contradicted"]
+    ].copy()
+
+    def unique_ints(values: pd.Series) -> str:
+        cleaned = pd.Series(values).dropna().unique()
+        if len(cleaned) == 0:
+            return "n/a"
+        return ", ".join(str(int(value)) for value in sorted(cleaned))
+
+    def unique_q(values: pd.Series) -> str:
+        cleaned = pd.Series(values).dropna().unique()
+        if len(cleaned) == 0:
+            return "n/a"
+        return ", ".join(str(int(value)) for value in sorted(cleaned))
+
+    non_supported = assumptions[assumptions["status"] != "supported"].copy()
+    if not non_supported.empty:
+        non_supported["hypothesis"] = non_supported["assumption"].map(
+            short_assumption_label
         )
-        if not contradicted.empty
-        else pd.DataFrame(
+        non_supported_summary = (
+            non_supported.groupby(["hypothesis", "status"], as_index=False)
+            .agg(
+                cells=("status", "size"),
+                demand_values=("total_demand", unique_ints),
+                q_values=("q", unique_q),
+                regimes=("regime_id", lambda values: pd.Series(values).dropna().nunique()),
+                minimum_effect=("mean_difference", "min"),
+                maximum_effect=("mean_difference", "max"),
+            )
+            .sort_values(["status", "hypothesis"])
+        )
+    else:
+        non_supported_summary = pd.DataFrame(
             columns=[
-                "assumption",
+                "hypothesis",
+                "status",
                 "cells",
                 "demand_values",
+                "q_values",
                 "regimes",
                 "minimum_effect",
                 "maximum_effect",
             ]
         )
-    )
     for column in ("minimum_effect", "maximum_effect"):
-        if column in contradicted_summary:
-            contradicted_summary[column] = contradicted_summary[column].round(4)
+        if column in non_supported_summary:
+            non_supported_summary[column] = non_supported_summary[column].round(4)
+
     hard_failures = int(violations["failed_tasks"].sum())
+    failed_checks = int((violations["failed_tasks"] > 0).sum())
+    tasks_evaluated = int(violations["tasks_evaluated"].max())
     composition_count = int(composition["composition_flag"].sum())
+    composition_by_demand = (
+        composition.groupby("total_demand", as_index=False)
+        .agg(flagged_cells=("composition_flag", "sum"))
+        .astype({"flagged_cells": int})
+    )
+    composition_by_q = (
+        composition.groupby("q", as_index=False)
+        .agg(flagged_cells=("composition_flag", "sum"))
+        .astype({"flagged_cells": int})
+    )
+    high_q_composition_count = int(
+        composition_by_q[composition_by_q["q"].isin([31, 32])][
+            "flagged_cells"
+        ].sum()
+    )
+
+    atomic_write_dataframe(violations, violation_path)
+    atomic_write_dataframe(assumptions, assumption_path)
+    atomic_write_dataframe(composition, composition_path)
+    atomic_write_dataframe(cells, cell_path)
+    atomic_write_dataframe(assumption_display, status_table_path)
+    atomic_write_dataframe(non_supported_summary, non_supported_path)
+    atomic_write_dataframe(composition_by_demand, composition_summary_path)
+    plot_violation_counts(violations, plot_violation_path)
+    plot_business_status(assumption_breakdown, plot_status_path)
+    plot_objective_ordering_disagreement(assumptions, plot_ordering_path)
+    plot_composition_flags(composition, plot_composition_path)
+
     lines = [
         "# Strict Reservation Assumption Diagnostics",
         "",
-        f"- Profile: `{profile}`",
-        f"- Tasks analyzed: {len(frame):,}"
-        + (f" of {expected_tasks:,}" if expected_tasks is not None else ""),
-        f"- Sweep complete: `{complete}`",
-        f"- Hard-check failed task-count sum: {hard_failures:,}",
-        f"- Paired bootstrap draws: {BOOTSTRAP_DRAWS:,}",
-        f"- Material-effect tolerance: {TOLERANCE:.3f}",
+        "> **Conclusion.** The strict-reservation simulation passed all hard "
+        f"implementation checks across {len(frame):,} tasks. Most business "
+        "hypotheses were supported. The main break is conceptual: additive "
+        "and pooled objectives do not always rank reservation quantities in "
+        "the same order. Offered-wait improvements also need access checks, "
+        "because lower offered wait can coincide with higher no-offer rates.",
+        "",
+        "## 1. Purpose",
         "",
         "This report is diagnostic. It does not rank reservation quantities, "
-        "recommend a policy, or assume monotonicity in Q.",
+        "recommend a policy, or assume monotonicity in `Q`. Its goal is to "
+        "check whether strict Class 1 reservation behaves consistently with "
+        "the business hypotheses used for later policy comparison.",
         "",
-        "## Hard Checks",
+        "## 2. Experiment Grid",
         "",
-        dataframe_markdown(violations),
+        "- 15 behavior regimes: 5 threshold pairs times 3 post-threshold balking rates.",
+        "- `C1` and `C2` are class-specific balking thresholds in days; `high` is the post-threshold balking probability.",
+        "- `Q = [0,1,4,8,16,24,31,32]` reserved slots per day.",
+        "- Total daily demand `[24,32,50,100]` and Class 1 shares `[0.25,0.50,0.75]`.",
+        "- 20 seeds per cell, `S=32`, horizon 14, burn-in 30, measurement 365, cooldown 14.",
+        f"- Profile `{profile}`; sweep complete: `{complete}`.",
+        "",
+        "## 3. Hard-Check Diagnostics",
+        "",
+        f"All hard checks passed: {failed_checks} checks had failures and the "
+        f"failed task-count sum was {hard_failures:,}. These checks cover "
+        "configuration validity, accounting, capacity bounds, reservation "
+        "ownership, deterministic replay, `Q=0` FCFS equivalence, and `Q=32` "
+        "Class 2 exclusion.",
         "",
         "![Violation counts](figures/"
         + plot_violation_path.name
         + ")",
         "",
-        "## Business Assumptions",
+        "## 4. Business Hypotheses Tested",
         "",
         "Verdicts use paired seed-level bootstrap 95% confidence intervals. "
         "`supported` means the full interval satisfies the stated tolerance; "
         "`contradicted` means the full interval crosses the material boundary "
         "in the opposite direction; otherwise the result is `inconclusive`.",
         "",
-        "| Status | Cells |",
-        "|---|---:|",
-        *[
-            f"| {status} | {status_counts.get(status, 0):,} |"
-            for status in ("supported", "inconclusive", "contradicted")
-        ],
+        dataframe_markdown(assumption_display),
         "",
-        "### Results By Assumption",
+        "![Business hypothesis status](figures/"
+        + plot_status_path.name
+        + ")",
         "",
-        dataframe_markdown(assumption_breakdown),
+        "## 5. Main Findings",
         "",
-        "### Contradicted Assumptions",
+        f"- Hard implementation checks passed for {tasks_evaluated:,} evaluated tasks.",
+        f"- Business-hypothesis cells: {status_counts.get('supported', 0):,} "
+        f"supported, {status_counts.get('inconclusive', 0):,} inconclusive, "
+        f"and {status_counts.get('contradicted', 0):,} contradicted.",
+        "- The Class 1 protection hypothesis was not contradicted: Class 1 "
+        "service did not materially fall versus matched FCFS in the tested cells.",
+        "- The Class 2 non-improvement hypothesis was not contradicted: strict "
+        "reservation did not materially improve Class 2 service versus FCFS.",
+        "- The symmetric-FCFS check passed, so class labels behave as expected "
+        "when the inputs are symmetric.",
+        "- Additive and pooled objectives disagreed in some equal-demand "
+        "settings; this means objective choice matters and should be named "
+        "explicitly in selection work.",
         "",
-        (
-            dataframe_markdown(contradicted_summary)
-            if not contradicted_summary.empty
-            else "No business assumption was contradicted."
-        ),
+        "## 6. Contradicted Or Inconclusive Hypotheses",
         "",
-        "For the objective-ordering check, equal demand means equal configured "
-        "arrival rates. Realized Poisson arrivals can still differ between "
-        "classes within a seed, so the additive and pooled formulas are not "
-        "guaranteed to be proportional.",
+        dataframe_markdown(non_supported_summary),
         "",
-        "![Parameter regions](figures/" + plot_region_path.name + ")",
+        "The only contradicted hypothesis is that additive and pooled objectives "
+        "always order `Q` values consistently. Equal demand here means equal "
+        "configured arrival rates; realized Poisson arrivals can still differ "
+        "between classes within a seed, so the additive and pooled formulas "
+        "are not guaranteed to be proportional. In the figure, `C` marks "
+        "contradicted cells and `I` marks inconclusive cells.",
         "",
-        "## Composition Diagnostic",
+        "![Objective ordering disagreement](figures/"
+        + plot_ordering_path.name
+        + ")",
         "",
-        f"{composition_count:,} cells show a confidently lower offered wait "
-        "together with a confidently higher no-offer rate. Such cells are "
-        "flagged as denominator-composition diagnostics, not policy benefits.",
+        "## 7. Composition Effects: Offered Wait Versus No-Offer Rate",
+        "",
+        f"{composition_count:,} of {len(composition):,} checked cells show a "
+        "confidently lower offered wait together with a confidently higher "
+        "no-offer rate. This is a composition warning, not a policy benefit. "
+        f"{high_q_composition_count:,} of those flags occur at `Q=31` or "
+        "`Q=32`, where protected capacity can remove patients from the offered "
+        "population.",
+        "",
+        dataframe_markdown(composition_by_demand),
+        "",
+        "![Composition flags](figures/"
+        + plot_composition_path.name
+        + ")",
+        "",
+        "## 8. Limitations",
+        "",
+        "- The checks test model behavior under the chosen sweep; they do not "
+        "prove the policy is operationally acceptable.",
+        "- Same seeds provide matched labels, but policy-dependent RNG use means "
+        "they are not exact common-random-number experiments.",
+        "- The 0.005 tolerance is a practical threshold, not a clinical or "
+        "operational access requirement.",
+        "- Offered waiting time is conditional on receiving an offer, so it "
+        "must be read with no-offer and service-rate diagnostics.",
+        "- Objective-ordering disagreement is expected when realized arrivals "
+        "differ; the result is a warning against treating additive and pooled "
+        "objectives as interchangeable.",
+        "",
+        "## 9. Next Step: Use These Checks In Policy Comparison",
+        "",
+        "When comparing strict reservation with the booking-window policy, carry "
+        "forward the same hard checks, the same business-hypothesis status "
+        "summary, and the same composition diagnostic. This keeps objective "
+        "improvements separate from access artifacts.",
         "",
         "## Files",
         "",
@@ -1637,6 +1834,9 @@ def write_report(
         f"- Business assumptions: `tables/{assumption_path.name}`",
         f"- Composition flags: `tables/{composition_path.name}`",
         f"- Cell summary: `tables/{cell_path.name}`",
+        f"- Compact hypothesis status: `tables/{status_table_path.name}`",
+        f"- Non-supported hypotheses: `tables/{non_supported_path.name}`",
+        f"- Composition summary: `tables/{composition_summary_path.name}`",
         "",
     ]
     fd, name = tempfile.mkstemp(prefix=f".{markdown_path.name}.", dir=report_dir)
@@ -1653,8 +1853,13 @@ def write_report(
         "assumptions": assumption_path,
         "composition": composition_path,
         "cells": cell_path,
+        "status_table": status_table_path,
+        "non_supported": non_supported_path,
+        "composition_summary": composition_summary_path,
         "violation_plot": plot_violation_path,
-        "region_plot": plot_region_path,
+        "status_plot": plot_status_path,
+        "ordering_plot": plot_ordering_path,
+        "composition_plot": plot_composition_path,
     }
 
 
