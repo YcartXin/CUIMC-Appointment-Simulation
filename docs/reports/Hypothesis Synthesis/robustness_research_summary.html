@@ -3160,6 +3160,25 @@ background: #f7f7f7;
 margin-top: 1rem;
 font-size: 0.92rem;
 }
+.table-scroll {
+width: 100%;
+overflow-x: auto;
+margin: 0.8rem 0 1.2rem 0;
+}
+.parameter-table {
+min-width: 900px;
+}
+.parameter-table td:first-child {
+min-width: 190px;
+font-weight: 650;
+}
+.parameter-table td:nth-child(2) {
+min-width: 185px;
+white-space: nowrap;
+}
+.parameter-table td:nth-child(3) {
+min-width: 460px;
+}
 </style>
 <section id="purpose" class="level2">
 <h2 class="anchored" data-anchor-id="purpose">Purpose</h2>
@@ -3173,19 +3192,88 @@ font-size: 0.92rem;
 </section>
 <section id="operating-scenario-design" class="level3">
 <h3 class="anchored" data-anchor-id="operating-scenario-design">2. Operating-scenario design</h3>
-<p>The broad scenario design contained 384 operating environments:</p>
-<ul>
-<li>256 symmetric scenarios, consisting of 32 anchor configurations and 224 Sobol-sampled configurations; and</li>
-<li>128 asymmetric stress scenarios.</li>
-</ul>
-<p>The design varied demand relative to capacity, Class 1 arrival share, daily capacity, booking horizons, cancellation probabilities, balking thresholds and rates, and no-show thresholds and rates.</p>
+<p>The Stage 1 scenario bank contained 384 operating environments. Of these, 256 were <strong>behaviorally symmetric</strong>, meaning that both classes shared the same booking-horizon, cancellation, balking, and no-show parameters, although their arrival shares could differ. The symmetric bank combined 32 deliberately selected anchor configurations with 224 scrambled Sobol configurations. The anchors guaranteed coverage of important load, capacity, horizon, and behavioral extremes, while the Sobol design provided broader and more even coverage of the multidimensional parameter space than ordinary random sampling.</p>
+<p>The remaining 128 scenarios were <strong>asymmetric stress scenarios</strong> derived from symmetric parent configurations. Each changed one, two, or three class-specific behavioral dimensions while retaining the remaining parent values. These scenarios tested whether the hypotheses continued to hold when the two classes differed in their booking horizons, cancellation behavior, balking behavior, or no-show behavior.</p>
+<p>The following table gives the parameter values available to the scenario generator. These values define the design space; the 384 scenarios are a structured subset of the full Cartesian product rather than every possible combination.</p>
+<div id="47001ba4" class="cell" data-execution_count="2">
+<div class="cell-output cell-output-display">
+<div class="table-scroll">
+<table class="dataframe evidence-table parameter-table table table-sm table-striped small" data-quarto-postprocess="true">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th">Parameter</th>
+<th data-quarto-table-cell-role="th">Values used</th>
+<th data-quarto-table-cell-role="th">How it was varied</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Demand-to-capacity ratio (ρ)</td>
+<td><code>0.8, 1.25, 2.0, 3.1, 4.0</code></td>
+<td>Controlled system load. Total daily arrivals were set as <code>λ_total = ρ × daily capacity</code>.</td>
+</tr>
+<tr class="even">
+<td>Class 1 arrival share</td>
+<td><code>0.1, 0.3, 0.5, 0.7, 0.9</code></td>
+<td>Split total demand between the two classes: <code>λ₁ = share × λ_total</code> and <code>λ₂ = (1 − share) × λ_total</code>.</td>
+</tr>
+<tr class="odd">
+<td>Daily capacity</td>
+<td><code>16, 32, 64 slots</code></td>
+<td>Changed the absolute scale of the clinic while ρ controlled demand relative to capacity.</td>
+</tr>
+<tr class="even">
+<td>Booking horizon</td>
+<td><code>7, 14, 21, 28 days</code></td>
+<td>Set the maximum future booking window. Both classes shared the horizon in symmetric scenarios; horizons could differ in asymmetric stress scenarios.</td>
+</tr>
+<tr class="odd">
+<td>Cancellation probability</td>
+<td><code>0, 0.1, 0.3, 0.5</code></td>
+<td>Applied to future accepted bookings. The classes shared the rate in symmetric scenarios and could receive different rates in asymmetric scenarios.</td>
+</tr>
+<tr class="even">
+<td>Balking threshold</td>
+<td><code>4, 6, 9, 12 days</code></td>
+<td>Separated pre-threshold and post-threshold balking behavior. Only thresholds satisfying <code>τ_b &lt; H − 1</code> were valid.</td>
+</tr>
+<tr class="odd">
+<td>Pre-threshold balking probability (b₀)</td>
+<td><code>0, 0.1, 0.3, 0.5, 0.7</code></td>
+<td>Set the probability of rejecting an offered appointment at or below the balking threshold.</td>
+</tr>
+<tr class="even">
+<td>Post-threshold balking probability (b₁)</td>
+<td><code>0, 0.1, 0.3, 0.5, 0.7</code></td>
+<td>Set the probability of rejecting an offer above the threshold. Only combinations satisfying <code>b₁ ≥ b₀</code> were retained.</td>
+</tr>
+<tr class="odd">
+<td>No-show threshold</td>
+<td><code>4, 6, 9, 12 days</code></td>
+<td>Separated pre-threshold and post-threshold no-show behavior. Only thresholds satisfying <code>τ_n &lt; H − 1</code> were valid.</td>
+</tr>
+<tr class="even">
+<td>Pre-threshold no-show probability (n₀)</td>
+<td><code>0, 0.3, 0.5, 0.7</code></td>
+<td>Set the no-show probability for accepted bookings at or below the no-show threshold.</td>
+</tr>
+<tr class="odd">
+<td>Post-threshold no-show probability (n₁)</td>
+<td><code>0, 0.1, 0.3, 0.5, 0.7</code></td>
+<td>Set the no-show probability for accepted bookings above the threshold. Only combinations satisfying <code>n₁ ≥ n₀</code> were retained.</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
 <p>For each hypothesis, the parameter being tested was treated as the focal variable. That focal variable was removed from the background definition, and backgrounds that became identical were deduplicated. This produced approximately 360–383 distinct backgrounds per hypothesis.</p>
 </section>
 <section id="stage-1-robustness-screen" class="level3">
 <h3 class="anchored" data-anchor-id="stage-1-robustness-screen">3. Stage 1 robustness screen</h3>
 <p>Each background was combined with the hypothesis-specific experimental arms or parameter levels. Every arm was then run with 20 paired seeds, numbered 1000–1019. Pairing means that the same seed was used across the arms being compared, which reduces simulation noise in the estimated treatment difference.</p>
 <p>The number of raw simulation executions therefore followed:</p>
-<p>[ . ]</p>
+<p><strong>Number of raw runs = backgrounds × arms or parameter levels × seeds.</strong></p>
 <p>This is why a hypothesis could require roughly 30,000 individual simulation runs but still produce only about 300–380 final background classifications.</p>
 <p>Stage 1 classified each background as:</p>
 <ul>
@@ -3208,8 +3296,9 @@ font-size: 0.92rem;
 </section>
 <section id="summary-table" class="level2">
 <h2 class="anchored" data-anchor-id="summary-table">Overall conclusions</h2>
-<div id="0573fa3a" class="cell" data-execution_count="2">
+<div id="7d248c1b" class="cell" data-execution_count="3">
 <div class="cell-output cell-output-display">
+<div class="table-scroll">
 <table class="dataframe summary-table table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
 <tr class="header">
@@ -3288,6 +3377,7 @@ font-size: 0.92rem;
 </table>
 </div>
 </div>
+</div>
 <p>The strongest conclusions are H3 and H9. H2 also has a stable predicted direction because no reversal remained after confirmation, although many active cases did not meet all practical and precision criteria. H1 and H6 are directionally useful but conditional. H4 and H5 describe mechanisms that occur only in restricted regions. H7 is genuinely regime-dependent, while H8 is contradicted more often than it is supported.</p>
 </section>
 <section id="evidence-for-conditional-and-contested-hypotheses" class="level1">
@@ -3297,8 +3387,9 @@ font-size: 0.92rem;
 <p>H1 is best stated as a <strong>high-demand rebooking result</strong>, not a universal cancellation result. Final support was 49.4% across active backgrounds, with 10.9% confirmed reversals and 39.6% inconclusive results. All 37 Stage 1 reversals remained reversed after 100 new seeds.</p>
 <section id="evidence-by-demand-to-capacity-ratio" class="level3">
 <h3 class="anchored" data-anchor-id="evidence-by-demand-to-capacity-ratio">Evidence by demand-to-capacity ratio</h3>
-<div id="327f2243" class="cell" data-execution_count="3">
+<div id="d6ddbc72" class="cell" data-execution_count="4">
 <div class="cell-output cell-output-display">
+<div class="table-scroll">
 <table class="dataframe evidence-table table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
 <tr class="header">
@@ -3349,12 +3440,14 @@ font-size: 0.92rem;
 </table>
 </div>
 </div>
+</div>
 <p>No background at demand ratios 0.8 or 1.25 supported the full hypothesis. Support became common once demand reached 2.0 and was strongest at 4.0. The mechanism therefore depends on having enough demand to refill capacity released by cancellations.</p>
 </section>
 <section id="evidence-by-class-1-arrival-share" class="level3">
 <h3 class="anchored" data-anchor-id="evidence-by-class-1-arrival-share">Evidence by Class 1 arrival share</h3>
-<div id="bebad348" class="cell" data-execution_count="4">
+<div id="4c042a1f" class="cell" data-execution_count="5">
 <div class="cell-output cell-output-display">
+<div class="table-scroll">
 <table class="dataframe evidence-table table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
 <tr class="header">
@@ -3405,6 +3498,7 @@ font-size: 0.92rem;
 </table>
 </div>
 </div>
+</div>
 <p>Reversals were concentrated when Class 1 represented most arrivals: 35 of the 37 confirmed reversals occurred at Class 1 shares of 0.7 or 0.9. At a 0.9 share, only 24.2% of active backgrounds supported H1, while 33.3% reversed it.</p>
 <p><strong>Conclusion.</strong> Retain H1, but explicitly limit it to sufficiently oversubscribed systems and avoid assuming that the rebooking effect holds when the high-cancellation class dominates demand.</p>
 <p class="back-link">
@@ -3418,8 +3512,9 @@ font-size: 0.92rem;
 <p>The hypothesis-specific curve diagnostic showed 26 hump-shaped curves, compared with 57 decreasing, 46 flat, 6 increasing, and 16 irregular high-demand curves before inactive cases were excluded.</p>
 <section id="evidence-by-class-1-booking-horizon" class="level3">
 <h3 class="anchored" data-anchor-id="evidence-by-class-1-booking-horizon">Evidence by Class 1 booking horizon</h3>
-<div id="8d114b63" class="cell" data-execution_count="5">
+<div id="245e0a93" class="cell" data-execution_count="6">
 <div class="cell-output cell-output-display">
+<div class="table-scroll">
 <table class="dataframe evidence-table table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
 <tr class="header">
@@ -3463,12 +3558,14 @@ font-size: 0.92rem;
 </table>
 </div>
 </div>
+</div>
 <p>The hump was most visible at 7- and 14-day horizons. No active 28-day-horizon background supported H4.</p>
 </section>
 <section id="evidence-by-scenario-family" class="level3">
 <h3 class="anchored" data-anchor-id="evidence-by-scenario-family">Evidence by scenario family</h3>
-<div id="e08adf72" class="cell" data-execution_count="6">
+<div id="1ac52959" class="cell" data-execution_count="7">
 <div class="cell-output cell-output-display">
+<div class="table-scroll">
 <table class="dataframe evidence-table table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
 <tr class="header">
@@ -3505,6 +3602,7 @@ font-size: 0.92rem;
 </table>
 </div>
 </div>
+</div>
 <p>Support was much higher among anchor configurations than among the broader Sobol and asymmetric stress scenarios. This indicates that a baseline sweep can display the mechanism clearly even when it is uncommon across the full parameter space.</p>
 <p><strong>Conclusion.</strong> Narrow H4 to state that a hump can occur under heavy demand and shorter-to-moderate horizons, rather than claiming that it is the typical heavy-demand response.</p>
 <p class="back-link">
@@ -3518,8 +3616,9 @@ font-size: 0.92rem;
 <p>The step-level Stage 1 evidence was also uneven. No 0.10-step comparison met all support criteria, 28 comparisons supported the 0.30 step, and 49 supported the diagnostic 0.50 step. The selection mechanism therefore became clearer as the balking contrast increased, contrary to a broad claim focused on low-to-moderate steps.</p>
 <section id="evidence-by-class-1-arrival-share-1" class="level3">
 <h3 class="anchored" data-anchor-id="evidence-by-class-1-arrival-share-1">Evidence by Class 1 arrival share</h3>
-<div id="37a7d9ab" class="cell" data-execution_count="7">
+<div id="8e0a48f8" class="cell" data-execution_count="8">
 <div class="cell-output cell-output-display">
+<div class="table-scroll">
 <table class="dataframe evidence-table table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
 <tr class="header">
@@ -3570,12 +3669,14 @@ font-size: 0.92rem;
 </table>
 </div>
 </div>
+</div>
 <p>No active background with a Class 1 share of 0.9 supported H5, and 24.0% reversed it. The clearest support occurred near a balanced class mix.</p>
 </section>
 <section id="evidence-by-demand-to-capacity-ratio-1" class="level3">
 <h3 class="anchored" data-anchor-id="evidence-by-demand-to-capacity-ratio-1">Evidence by demand-to-capacity ratio</h3>
-<div id="105ba645" class="cell" data-execution_count="8">
+<div id="ed701000" class="cell" data-execution_count="9">
 <div class="cell-output cell-output-display">
+<div class="table-scroll">
 <table class="dataframe evidence-table table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
 <tr class="header">
@@ -3619,6 +3720,7 @@ font-size: 0.92rem;
 </table>
 </div>
 </div>
+</div>
 <p>At demand ratio 1.25, reversals outnumbered support. At higher demand, most backgrounds were still inconclusive rather than supported.</p>
 <p><strong>Conclusion.</strong> Do not retain H5 as a general low-to-moderate-step statement. A narrower conclusion is that selection can lower accepted delay, but it becomes reliably detectable only in a subset of sufficiently exposed backgrounds and often at larger balking-step changes.</p>
 <p class="back-link">
@@ -3631,8 +3733,9 @@ font-size: 0.92rem;
 <p>H6 received moderate support. It was supported in 62.6% of active backgrounds, reversed in only 1.9%, and inconclusive in 35.5%. Stage 2 confirmed four of the five original reversals.</p>
 <section id="evidence-by-demand-to-capacity-ratio-2" class="level3">
 <h3 class="anchored" data-anchor-id="evidence-by-demand-to-capacity-ratio-2">Evidence by demand-to-capacity ratio</h3>
-<div id="2a6d5f24" class="cell" data-execution_count="9">
+<div id="e3969efb" class="cell" data-execution_count="10">
 <div class="cell-output cell-output-display">
+<div class="table-scroll">
 <table class="dataframe evidence-table table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
 <tr class="header">
@@ -3683,12 +3786,14 @@ font-size: 0.92rem;
 </table>
 </div>
 </div>
+</div>
 <p>Support was strongest at demand ratio 1.25. At ratios 3.1 and 4.0, only about half of active backgrounds supported the relationship and the remainder were mostly inconclusive. All four confirmed reversals occurred at demand ratio 4.0.</p>
 </section>
 <section id="the-four-confirmed-reversal-cases" class="level3">
 <h3 class="anchored" data-anchor-id="the-four-confirmed-reversal-cases">The four confirmed reversal cases</h3>
-<div id="1677ff85" class="cell" data-execution_count="10">
+<div id="303342c3" class="cell" data-execution_count="11">
 <div class="cell-output cell-output-display">
+<div class="table-scroll">
 <table class="dataframe evidence-table table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
 <tr class="header">
@@ -3747,6 +3852,7 @@ font-size: 0.92rem;
 </table>
 </div>
 </div>
+</div>
 <p><strong>Conclusion.</strong> Retain H6 as a moderate, directionally robust result, while noting that the bucket-mass relationship weakens under the heaviest demand and is not deterministic.</p>
 <p class="back-link">
 <a href="#summary-table">Back to the overall conclusions</a>
@@ -3758,8 +3864,9 @@ font-size: 0.92rem;
 <p>H7 is genuinely contested. It was supported in 62.7% of active backgrounds but reversed in 28.4%. All 29 Stage 1 reversals remained reversed after the 100-seed confirmation.</p>
 <section id="evidence-by-demand-to-capacity-ratio-3" class="level3">
 <h3 class="anchored" data-anchor-id="evidence-by-demand-to-capacity-ratio-3">Evidence by demand-to-capacity ratio</h3>
-<div id="be85a006" class="cell" data-execution_count="11">
+<div id="89e1d5f3" class="cell" data-execution_count="12">
 <div class="cell-output cell-output-display">
+<div class="table-scroll">
 <table class="dataframe evidence-table table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
 <tr class="header">
@@ -3803,12 +3910,14 @@ font-size: 0.92rem;
 </table>
 </div>
 </div>
+</div>
 <p>Reversals occurred at every active demand level, ranging from 23.5% to 38.5% of backgrounds. The reversal region is therefore not confined to a single demand regime.</p>
 </section>
 <section id="evidence-by-class-1-arrival-share-2" class="level3">
 <h3 class="anchored" data-anchor-id="evidence-by-class-1-arrival-share-2">Evidence by Class 1 arrival share</h3>
-<div id="0f671439" class="cell" data-execution_count="12">
+<div id="a2c73ccb" class="cell" data-execution_count="13">
 <div class="cell-output cell-output-display">
+<div class="table-scroll">
 <table class="dataframe evidence-table table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
 <tr class="header">
@@ -3859,6 +3968,7 @@ font-size: 0.92rem;
 </table>
 </div>
 </div>
+</div>
 <p>Both support and reversal also occurred across every class mix. Reversal rates were highest at Class 1 shares of 0.7 and 0.9.</p>
 <p><strong>Conclusion.</strong> H7 should not be presented as a universal ranking of pre-threshold and post-threshold differences. The location that matters more depends on how the offered-delay distribution places each class relative to the threshold.</p>
 <p class="back-link">
@@ -3871,8 +3981,9 @@ font-size: 0.92rem;
 <p>H8 is not supported by the robustness analysis. Only 13.0% of active backgrounds supported the predicted dominance of the between-class gap, while 46.3% showed a confirmed reversal and 40.7% remained inconclusive. Of the 61 Stage 1 reversals, 57 remained reversed after Stage 2.</p>
 <section id="evidence-by-demand-to-capacity-ratio-4" class="level3">
 <h3 class="anchored" data-anchor-id="evidence-by-demand-to-capacity-ratio-4">Evidence by demand-to-capacity ratio</h3>
-<div id="6ab096cc" class="cell" data-execution_count="13">
+<div id="8a5c0495" class="cell" data-execution_count="14">
 <div class="cell-output cell-output-display">
+<div class="table-scroll">
 <table class="dataframe evidence-table table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
 <tr class="header">
@@ -3916,12 +4027,14 @@ font-size: 0.92rem;
 </table>
 </div>
 </div>
+</div>
 <p>Reversals were especially common at demand ratio 2.0 and remained much more common than support at 3.1 and 4.0.</p>
 </section>
 <section id="evidence-by-class-1-arrival-share-3" class="level3">
 <h3 class="anchored" data-anchor-id="evidence-by-class-1-arrival-share-3">Evidence by Class 1 arrival share</h3>
-<div id="b62ef68c" class="cell" data-execution_count="14">
+<div id="7a12858a" class="cell" data-execution_count="15">
 <div class="cell-output cell-output-display">
+<div class="table-scroll">
 <table class="dataframe evidence-table table table-sm table-striped small" data-quarto-postprocess="true">
 <thead>
 <tr class="header">
@@ -3970,6 +4083,7 @@ font-size: 0.92rem;
 </tr>
 </tbody>
 </table>
+</div>
 </div>
 </div>
 <p>The strongest reversal concentration occurred at a Class 1 share of 0.3, where 73.1% of active backgrounds reversed H8. No active background at a 0.9 share supported it.</p>

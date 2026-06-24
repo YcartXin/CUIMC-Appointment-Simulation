@@ -89,16 +89,13 @@ def classification_by(hypothesis, dimension, dimension_label=None):
     return output.reset_index(drop=True)
 
 def show_table(frame, classes="evidence-table"):
-    display(
-        HTML(
-            frame.to_html(
-                index=False,
-                escape=False,
-                classes=classes,
-                border=0,
-            )
-        )
+    table_html = frame.to_html(
+        index=False,
+        escape=False,
+        classes=classes,
+        border=0,
     )
+    display(HTML(f'<div class="table-scroll">{table_html}</div>'))
 ```
 
 <style>
@@ -153,6 +150,30 @@ body {
   margin-top: 1rem;
   font-size: 0.92rem;
 }
+
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  margin: 0.8rem 0 1.2rem 0;
+}
+
+.parameter-table {
+  min-width: 900px;
+}
+
+.parameter-table td:first-child {
+  min-width: 190px;
+  font-weight: 650;
+}
+
+.parameter-table td:nth-child(2) {
+  min-width: 185px;
+  white-space: nowrap;
+}
+
+.parameter-table td:nth-child(3) {
+  min-width: 460px;
+}
 </style>
 
 ## Purpose
@@ -167,12 +188,110 @@ The model represents a rolling clinic booking calendar with two patient classes,
 
 ### 2. Operating-scenario design
 
-The broad scenario design contained 384 operating environments:
+The Stage 1 scenario bank contained 384 operating environments. Of these, 256 were **behaviorally symmetric**, meaning that both classes shared the same booking-horizon, cancellation, balking, and no-show parameters, although their arrival shares could differ. The symmetric bank combined 32 deliberately selected anchor configurations with 224 scrambled Sobol configurations. The anchors guaranteed coverage of important load, capacity, horizon, and behavioral extremes, while the Sobol design provided broader and more even coverage of the multidimensional parameter space than ordinary random sampling.
 
-- 256 symmetric scenarios, consisting of 32 anchor configurations and 224 Sobol-sampled configurations; and
-- 128 asymmetric stress scenarios.
+The remaining 128 scenarios were **asymmetric stress scenarios** derived from symmetric parent configurations. Each changed one, two, or three class-specific behavioral dimensions while retaining the remaining parent values. These scenarios tested whether the hypotheses continued to hold when the two classes differed in their booking horizons, cancellation behavior, balking behavior, or no-show behavior.
 
-The design varied demand relative to capacity, Class 1 arrival share, daily capacity, booking horizons, cancellation probabilities, balking thresholds and rates, and no-show thresholds and rates.
+The following table gives the parameter values available to the scenario generator. These values define the design space; the 384 scenarios are a structured subset of the full Cartesian product rather than every possible combination.
+
+```{python}
+parameter_design = pd.DataFrame([
+    {
+        "Parameter": "Demand-to-capacity ratio (ρ)",
+        "Values used": "<code>0.8, 1.25, 2.0, 3.1, 4.0</code>",
+        "How it was varied": (
+            "Controlled system load. Total daily arrivals were set as "
+            "<code>λ_total = ρ × daily capacity</code>."
+        ),
+    },
+    {
+        "Parameter": "Class 1 arrival share",
+        "Values used": "<code>0.1, 0.3, 0.5, 0.7, 0.9</code>",
+        "How it was varied": (
+            "Split total demand between the two classes: "
+            "<code>λ₁ = share × λ_total</code> and "
+            "<code>λ₂ = (1 − share) × λ_total</code>."
+        ),
+    },
+    {
+        "Parameter": "Daily capacity",
+        "Values used": "<code>16, 32, 64 slots</code>",
+        "How it was varied": (
+            "Changed the absolute scale of the clinic while ρ controlled "
+            "demand relative to capacity."
+        ),
+    },
+    {
+        "Parameter": "Booking horizon",
+        "Values used": "<code>7, 14, 21, 28 days</code>",
+        "How it was varied": (
+            "Set the maximum future booking window. Both classes shared the "
+            "horizon in symmetric scenarios; horizons could differ in "
+            "asymmetric stress scenarios."
+        ),
+    },
+    {
+        "Parameter": "Cancellation probability",
+        "Values used": "<code>0, 0.1, 0.3, 0.5</code>",
+        "How it was varied": (
+            "Applied to future accepted bookings. The classes shared the rate "
+            "in symmetric scenarios and could receive different rates in "
+            "asymmetric scenarios."
+        ),
+    },
+    {
+        "Parameter": "Balking threshold",
+        "Values used": "<code>4, 6, 9, 12 days</code>",
+        "How it was varied": (
+            "Separated pre-threshold and post-threshold balking behavior. "
+            "Only thresholds satisfying <code>τ_b &lt; H − 1</code> were valid."
+        ),
+    },
+    {
+        "Parameter": "Pre-threshold balking probability (b₀)",
+        "Values used": "<code>0, 0.1, 0.3, 0.5, 0.7</code>",
+        "How it was varied": (
+            "Set the probability of rejecting an offered appointment at or "
+            "below the balking threshold."
+        ),
+    },
+    {
+        "Parameter": "Post-threshold balking probability (b₁)",
+        "Values used": "<code>0, 0.1, 0.3, 0.5, 0.7</code>",
+        "How it was varied": (
+            "Set the probability of rejecting an offer above the threshold. "
+            "Only combinations satisfying <code>b₁ ≥ b₀</code> were retained."
+        ),
+    },
+    {
+        "Parameter": "No-show threshold",
+        "Values used": "<code>4, 6, 9, 12 days</code>",
+        "How it was varied": (
+            "Separated pre-threshold and post-threshold no-show behavior. "
+            "Only thresholds satisfying <code>τ_n &lt; H − 1</code> were valid."
+        ),
+    },
+    {
+        "Parameter": "Pre-threshold no-show probability (n₀)",
+        "Values used": "<code>0, 0.3, 0.5, 0.7</code>",
+        "How it was varied": (
+            "Set the no-show probability for accepted bookings at or below "
+            "the no-show threshold."
+        ),
+    },
+    {
+        "Parameter": "Post-threshold no-show probability (n₁)",
+        "Values used": "<code>0, 0.1, 0.3, 0.5, 0.7</code>",
+        "How it was varied": (
+            "Set the no-show probability for accepted bookings above the "
+            "threshold. Only combinations satisfying <code>n₁ ≥ n₀</code> "
+            "were retained."
+        ),
+    },
+])
+
+show_table(parameter_design, classes="evidence-table parameter-table")
+```
 
 For each hypothesis, the parameter being tested was treated as the focal variable. That focal variable was removed from the background definition, and backgrounds that became identical were deduplicated. This produced approximately 360–383 distinct backgrounds per hypothesis.
 
@@ -182,9 +301,7 @@ Each background was combined with the hypothesis-specific experimental arms or p
 
 The number of raw simulation executions therefore followed:
 
-\[
-\text{backgrounds}\times\text{arms or levels}\times\text{seeds}.
-\]
+**Number of raw runs = backgrounds × arms or parameter levels × seeds.**
 
 This is why a hypothesis could require roughly 30,000 individual simulation runs but still produce only about 300–380 final background classifications.
 
