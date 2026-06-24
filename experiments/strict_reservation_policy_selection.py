@@ -1060,13 +1060,10 @@ def write_report(
         "- The reported best Q values maximize the stated weighted objectives; "
         "they should not be adopted without a Class 2 access requirement.",
         "",
-        "## 10. Next Step: Comparison With Booking-Window Policy",
+        "## 10. Next Steps",
         "",
-        "Apply the same normalized objectives and access diagnostics to the "
-        "historical booking-window policy, then compare each policy's best "
-        "near-tie region under identical behavior, demand, weight, and seed "
-        "settings. A combined policy should be studied only after this direct "
-        "comparison.",
+        "Next steps are tracked in the shared reservation note: "
+        "[Reservation Analysis Next Steps](../next_steps.md).",
         "",
         "## Appendix: Detailed Utilization Tables",
         "",
