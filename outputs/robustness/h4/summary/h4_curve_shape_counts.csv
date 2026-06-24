@@ -1,0 +1,11 @@
+demand_regime,curve_shape,n_scenarios
+boundary,decreasing,34
+boundary,flat,33
+boundary,irregular,1
+high,decreasing,57
+high,flat,46
+high,hump,26
+high,increasing,6
+high,irregular,16
+low,decreasing,23
+low,flat,118

@@ -1,0 +1,10 @@
+demand_regime,classification,n_scenarios
+boundary,inconclusive,17
+boundary,reversed,6
+boundary,supported,47
+high,inconclusive,16
+high,reversed,26
+high,supported,120
+low,inactive,45
+low,inconclusive,101
+low,reversed,5

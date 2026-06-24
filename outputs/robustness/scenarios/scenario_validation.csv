@@ -1,0 +1,21 @@
+check,status,detail
+symmetric_count,PASS,"observed=256, expected=256"
+asymmetric_count,PASS,"observed=128, expected=128"
+unique_scenario_ids,PASS,"unique=384, total=384"
+unique_parameter_rows,PASS,duplicate_parameter_rows=0
+row_constraints,PASS,all rows valid
+symmetric_rows_are_symmetric,PASS,non_symmetric_rows=0
+stress_rows_are_asymmetric,PASS,still_symmetric_rows=0
+valid_parent_ids,PASS,all parents valid
+coverage_rho,PASS,complete
+coverage_class1_share,PASS,complete
+coverage_capacity,PASS,complete
+coverage_horizon,PASS,complete
+coverage_cancellation,PASS,complete
+coverage_balk_threshold,PASS,complete
+coverage_balk_low,PASS,complete
+coverage_balk_high,PASS,complete
+coverage_noshow_threshold,PASS,complete
+coverage_noshow_low,PASS,complete
+coverage_noshow_high,PASS,complete
+rho_capacity_cross_coverage,PASS,complete
