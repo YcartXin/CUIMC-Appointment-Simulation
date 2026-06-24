@@ -4,6 +4,7 @@
 - `old_utilization/`: comparison using served visits divided by available slots.
 - `assumption_diagnostics/`: hard invariant checks and empirical business-assumption checks for strict reservation under the historical reservation-window behavior regimes.
 - `policy_selection/`: objective-based Q selection across the historical behavior grid, two equal-demand levels, and two weight regimes.
+- `next_steps.md`: shared synthesis and next actions across the reservation reports.
 
 The visual-objective folders contain memos, figures, tables, and weight-sensitivity outputs. The diagnostics folder contains its Markdown report, compact CSV summaries, and plots.
 

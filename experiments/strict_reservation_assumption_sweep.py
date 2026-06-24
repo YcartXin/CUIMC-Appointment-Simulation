@@ -73,6 +73,14 @@ CANCEL_PROB = 0.1
 TOLERANCE = 0.005
 BOOTSTRAP_DRAWS = 4000
 SHARD_SCHEMA_VERSION = 1
+POLICY_ORDERING_CLASS_1_WEIGHTS = (0.5, 1.0, 1.5, 2.0)
+POLICY_ORDERING_CLASS_2_WEIGHT = 1.0
+POLICY_OBJECTIVE_ORDERING_ASSUMPTION = (
+    "Utilization and service objective ordering is consistent"
+)
+MATERIAL_OBJECTIVE_CONFLICT_ASSUMPTION = (
+    "Material utilization-service ordering conflicts are rare"
+)
 
 HARD_CHECK_NAMES = (
     "configuration_probabilities",
@@ -1080,6 +1088,39 @@ def paired_vs_fcfs(frame: pd.DataFrame) -> pd.DataFrame:
     return paired
 
 
+def _safe_series_rate(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
+    denominator = denominator.astype(float).replace(0.0, np.nan)
+    return numerator.astype(float) / denominator
+
+
+def policy_objective_scores(frame: pd.DataFrame) -> pd.DataFrame:
+    """Derive current policy-selection objectives from cached shard columns."""
+    measured_slots = frame["slots_per_day"] * frame["measure_days"]
+    scored_frames: list[pd.DataFrame] = []
+    for w1 in POLICY_ORDERING_CLASS_1_WEIGHTS:
+        w2 = POLICY_ORDERING_CLASS_2_WEIGHT
+        weight_sum = w1 + w2
+        scored = frame.copy()
+        scored["w1"] = w1
+        scored["w2"] = w2
+        scored["Obj_util_norm"] = (
+            w1 * _safe_series_rate(scored["class_1_served"], measured_slots)
+            + w2 * _safe_series_rate(scored["class_2_served"], measured_slots)
+        ) / weight_sum
+        scored["Obj_service_norm"] = (
+            w1
+            * _safe_series_rate(
+                scored["class_1_served"], scored["class_1_arrivals"]
+            )
+            + w2
+            * _safe_series_rate(
+                scored["class_2_served"], scored["class_2_arrivals"]
+            )
+        ) / weight_sum
+        scored_frames.append(scored)
+    return pd.concat(scored_frames, ignore_index=True)
+
+
 def business_assumption_summary(frame: pd.DataFrame) -> pd.DataFrame:
     """Evaluate the specified assumptions without ranking Q values."""
     records: list[dict[str, Any]] = []
@@ -1118,24 +1159,24 @@ def business_assumption_summary(frame: pd.DataFrame) -> pd.DataFrame:
             )
         )
 
-    symmetric_fcfs = frame[
+    q0_symmetric = frame[
         (frame["q"] == 0)
         & (frame["class_1_threshold"] == frame["class_2_threshold"])
         & np.isclose(frame["class_1_share"], 0.5)
     ].copy()
-    symmetric_fcfs["class_rate_gap"] = (
-        symmetric_fcfs["class_1_served_rate"]
-        - symmetric_fcfs["class_2_served_rate"]
+    q0_symmetric["class_rate_gap"] = (
+        q0_symmetric["class_1_served_rate"]
+        - q0_symmetric["class_2_served_rate"]
     )
     symmetric_keys = ["regime_id", "total_demand"]
-    for keys, group in symmetric_fcfs.groupby(symmetric_keys, sort=True):
+    for keys, group in q0_symmetric.groupby(symmetric_keys, sort=True):
         metadata = dict(zip(symmetric_keys, keys))
         records.append(
             _bootstrap_record(
-                assumption="Symmetric FCFS has similar class served rates",
+                assumption="Q0 reservation behaves like FCFS under symmetric inputs",
                 metric="class_1_minus_class_2_served_rate",
                 comparison=(
-                    f"FCFS; demand={metadata['total_demand']}; "
+                    f"Q=0; symmetric inputs; demand={metadata['total_demand']}; "
                     f"regime={metadata['regime_id']}"
                 ),
                 differences=group["class_rate_gap"].to_numpy(),
@@ -1189,64 +1230,78 @@ def business_assumption_summary(frame: pd.DataFrame) -> pd.DataFrame:
             )
         )
 
-    equal_demand = frame[np.isclose(frame["class_1_share"], 0.5)].copy()
+    equal_demand = policy_objective_scores(
+        frame[np.isclose(frame["class_1_share"], 0.5)].copy()
+    )
     objective_columns = [
         "regime_id",
         "total_demand",
         "seed",
         "q",
-        "additive_equal_weight_objective",
-        "pooled_objective",
+        "w1",
+        "w2",
+        "Obj_util_norm",
+        "Obj_service_norm",
     ]
-    left = equal_demand[objective_columns].rename(
+    objective_rows = equal_demand[objective_columns].dropna(
+        subset=["Obj_util_norm", "Obj_service_norm"]
+    )
+    left = objective_rows.rename(
         columns={
             "q": "q_left",
-            "additive_equal_weight_objective": "additive_left",
-            "pooled_objective": "pooled_left",
+            "Obj_util_norm": "util_left",
+            "Obj_service_norm": "service_left",
         }
     )
-    right = equal_demand[objective_columns].rename(
+    right = objective_rows.rename(
         columns={
             "q": "q_right",
-            "additive_equal_weight_objective": "additive_right",
-            "pooled_objective": "pooled_right",
+            "Obj_util_norm": "util_right",
+            "Obj_service_norm": "service_right",
         }
     )
     objective_pairs = left.merge(
         right,
-        on=["regime_id", "total_demand", "seed"],
+        on=["regime_id", "total_demand", "seed", "w1", "w2"],
         validate="many_to_many",
     )
     objective_pairs = objective_pairs[
         objective_pairs["q_left"] < objective_pairs["q_right"]
     ].copy()
-    objective_pairs["additive_order"] = np.sign(
-        objective_pairs["additive_left"] - objective_pairs["additive_right"]
+    objective_pairs["util_diff"] = (
+        objective_pairs["util_left"] - objective_pairs["util_right"]
     )
-    objective_pairs["pooled_order"] = np.sign(
-        objective_pairs["pooled_left"] - objective_pairs["pooled_right"]
+    objective_pairs["service_diff"] = (
+        objective_pairs["service_left"] - objective_pairs["service_right"]
     )
+    objective_pairs["util_order"] = np.sign(objective_pairs["util_diff"])
+    objective_pairs["service_order"] = np.sign(objective_pairs["service_diff"])
     objective_pairs["ordering_disagreement"] = (
-        objective_pairs["additive_order"] != objective_pairs["pooled_order"]
+        objective_pairs["util_order"] != objective_pairs["service_order"]
+    ).astype(float)
+    objective_pairs["material_ordering_conflict"] = (
+        (objective_pairs["util_diff"].abs() > TOLERANCE)
+        & (objective_pairs["service_diff"].abs() > TOLERANCE)
+        & (objective_pairs["util_order"] != objective_pairs["service_order"])
     ).astype(float)
     seed_disagreement = (
         objective_pairs.groupby(
-            ["regime_id", "total_demand", "seed"],
+            ["regime_id", "total_demand", "w1", "w2", "seed"],
             as_index=False,
         )["ordering_disagreement"]
         .mean()
     )
     for keys, group in seed_disagreement.groupby(
-        ["regime_id", "total_demand"], sort=True
+        ["regime_id", "total_demand", "w1", "w2"], sort=True
     ):
-        regime_id, demand = keys
+        regime_id, demand, w1, w2 = keys
         records.append(
             _bootstrap_record(
-                assumption="Additive and pooled objective ordering is consistent",
+                assumption=POLICY_OBJECTIVE_ORDERING_ASSUMPTION,
                 metric="pairwise_ordering_disagreement_rate",
                 comparison=(
                     f"equal demand; all pairwise Q comparisons; "
-                    f"demand={demand}; regime={regime_id}"
+                    f"demand={demand}; regime={regime_id}; w1={w1}; w2={w2}"
                 ),
                 differences=group["ordering_disagreement"].to_numpy(),
                 status_kind="nonsuperiority",
@@ -1254,6 +1309,38 @@ def business_assumption_summary(frame: pd.DataFrame) -> pd.DataFrame:
                     "regime_id": regime_id,
                     "total_demand": demand,
                     "class_1_share": 0.5,
+                    "w1": w1,
+                    "w2": w2,
+                },
+            )
+        )
+    seed_material_conflict = (
+        objective_pairs.groupby(
+            ["regime_id", "total_demand", "w1", "w2", "seed"],
+            as_index=False,
+        )["material_ordering_conflict"]
+        .mean()
+    )
+    for keys, group in seed_material_conflict.groupby(
+        ["regime_id", "total_demand", "w1", "w2"], sort=True
+    ):
+        regime_id, demand, w1, w2 = keys
+        records.append(
+            _bootstrap_record(
+                assumption=MATERIAL_OBJECTIVE_CONFLICT_ASSUMPTION,
+                metric="material_pairwise_ordering_conflict_rate",
+                comparison=(
+                    f"equal demand; materially separated pairwise Q comparisons; "
+                    f"demand={demand}; regime={regime_id}; w1={w1}; w2={w2}"
+                ),
+                differences=group["material_ordering_conflict"].to_numpy(),
+                status_kind="nonsuperiority",
+                metadata={
+                    "regime_id": regime_id,
+                    "total_demand": demand,
+                    "class_1_share": 0.5,
+                    "w1": w1,
+                    "w2": w2,
                 },
             )
         )
@@ -1386,9 +1473,10 @@ def short_assumption_label(assumption: str) -> str:
     labels = {
         "C1 no material reduction vs FCFS": "C1 not worse than FCFS",
         "C2 no material improvement vs FCFS": "C2 not better than FCFS",
-        "Symmetric FCFS has similar class served rates": "Symmetric FCFS class rates match",
+        "Q0 reservation behaves like FCFS under symmetric inputs": "Q=0 behaves like FCFS",
         "Balk 0.3 vs 0.7 has little heavy symmetric effect": "Balk 0.3 vs 0.7 little effect",
-        "Additive and pooled objective ordering is consistent": "Additive and pooled ordering match",
+        POLICY_OBJECTIVE_ORDERING_ASSUMPTION: "Utilization and service ordering match",
+        MATERIAL_OBJECTIVE_CONFLICT_ASSUMPTION: "Clear objective conflicts are rare",
     }
     return labels.get(assumption, assumption)
 
@@ -1462,29 +1550,33 @@ def plot_objective_ordering_disagreement(
     path: Path,
 ) -> None:
     data = assumptions[
-        assumptions["assumption"]
-        == "Additive and pooled objective ordering is consistent"
+        assumptions["assumption"] == POLICY_OBJECTIVE_ORDERING_ASSUMPTION
     ].copy()
     data["behavior"] = data["regime_id"].map(regime_label)
-    data = data.sort_values(["regime_id", "total_demand"])
+    data = data.sort_values(["regime_id", "total_demand", "w1"])
     behaviors = list(dict.fromkeys(data["behavior"]))
     demands = sorted(data["total_demand"].dropna().astype(int).unique())
+    weights = sorted(data["w1"].dropna().astype(float).unique())
+    columns = [(demand, weight) for demand in demands for weight in weights]
 
-    matrix = np.full((len(behaviors), len(demands)), np.nan)
-    statuses = [["" for _ in demands] for _ in behaviors]
+    matrix = np.full((len(behaviors), len(columns)), np.nan)
+    statuses = [["" for _ in columns] for _ in behaviors]
     for _, row in data.iterrows():
         i = behaviors.index(row["behavior"])
-        j = demands.index(int(row["total_demand"]))
+        j = columns.index((int(row["total_demand"]), float(row["w1"])))
         matrix[i, j] = row["mean_difference"]
         statuses[i][j] = row["status"]
 
     vmax = max(0.05, float(np.nanmax(matrix)))
-    fig, ax = plt.subplots(figsize=(8.8, 7))
+    fig, ax = plt.subplots(figsize=(13, 7))
     image = ax.imshow(matrix, cmap="YlOrRd", vmin=0, vmax=vmax, aspect="auto")
-    ax.set_xticks(range(len(demands)), [str(demand) for demand in demands])
+    ax.set_xticks(
+        range(len(columns)),
+        [f"{demand}\nw={weight:g}" for demand, weight in columns],
+    )
     ax.set_yticks(range(len(behaviors)), behaviors)
     for i in range(len(behaviors)):
-        for j in range(len(demands)):
+        for j in range(len(columns)):
             value = matrix[i, j]
             if not np.isfinite(value):
                 continue
@@ -1502,11 +1594,143 @@ def plot_objective_ordering_disagreement(
                 fontsize=7,
                 color="white" if value > vmax * 0.55 else "black",
             )
-    ax.set_title("Additive versus pooled objective ordering disagreement")
-    ax.set_xlabel("Total daily demand")
+    for boundary in range(len(weights), len(columns), len(weights)):
+        ax.axvline(boundary - 0.5, color="#333333", linewidth=0.8)
+    ax.set_title("Utilization versus service objective ordering disagreement")
+    ax.set_xlabel("Total daily demand and Class 1 weight")
     ax.set_ylabel("Behavior regime")
     colorbar = fig.colorbar(image, ax=ax)
     colorbar.set_label("Pairwise Q-order disagreement rate")
+    fig.tight_layout()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=180, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _objective_example_contexts(assumptions: pd.DataFrame) -> pd.DataFrame:
+    data = assumptions[
+        assumptions["assumption"] == POLICY_OBJECTIVE_ORDERING_ASSUMPTION
+    ].copy()
+    selected: list[pd.Series] = []
+    seen: set[tuple[str, int, float, float]] = set()
+
+    def add_first(candidates: pd.DataFrame, label: str) -> None:
+        for _, row in candidates.iterrows():
+            key = (
+                str(row["regime_id"]),
+                int(row["total_demand"]),
+                float(row["w1"]),
+                float(row["w2"]),
+            )
+            if key in seen:
+                continue
+            row = row.copy()
+            row["example_label"] = label
+            selected.append(row)
+            seen.add(key)
+            return
+
+    contradicted = data[data["status"] == "contradicted"].sort_values(
+        "mean_difference",
+        ascending=False,
+    )
+    add_first(contradicted, "largest disagreement")
+    add_first(
+        contradicted[contradicted["total_demand"] == data["total_demand"].max()],
+        "high-demand disagreement",
+    )
+    add_first(
+        data[data["status"] == "supported"].sort_values("mean_difference"),
+        "low-disagreement contrast",
+    )
+    while len(selected) < 3:
+        before = len(selected)
+        add_first(
+            data.sort_values("mean_difference", ascending=len(selected) % 2 == 0),
+            "additional example",
+        )
+        if len(selected) == before:
+            break
+    return pd.DataFrame(selected)
+
+
+def plot_objective_ordering_examples(
+    frame: pd.DataFrame,
+    assumptions: pd.DataFrame,
+    path: Path,
+) -> None:
+    examples = _objective_example_contexts(assumptions)
+    fig, axes = plt.subplots(
+        1,
+        max(1, len(examples)),
+        figsize=(4.8 * max(1, len(examples)), 3.8),
+        sharey=True,
+    )
+    axes = np.atleast_1d(axes)
+
+    if examples.empty:
+        axes[0].text(
+            0.5,
+            0.5,
+            "No objective-ordering examples available",
+            ha="center",
+            va="center",
+            transform=axes[0].transAxes,
+        )
+        axes[0].set_axis_off()
+    else:
+        scored = policy_objective_scores(
+            frame[np.isclose(frame["class_1_share"], 0.5)].copy()
+        )
+        for ax, (_, example) in zip(axes, examples.iterrows()):
+            subset = scored[
+                (scored["regime_id"] == example["regime_id"])
+                & (scored["total_demand"] == example["total_demand"])
+                & np.isclose(scored["w1"], example["w1"])
+                & np.isclose(scored["w2"], example["w2"])
+            ].copy()
+            by_q = (
+                subset.groupby("q", as_index=False)[
+                    ["Obj_util_norm", "Obj_service_norm"]
+                ]
+                .mean()
+                .sort_values("q")
+            )
+            ax.plot(
+                by_q["q"],
+                by_q["Obj_util_norm"],
+                marker="o",
+                color="#2f6f4e",
+                label="Obj_util_norm",
+            )
+            ax.plot(
+                by_q["q"],
+                by_q["Obj_service_norm"],
+                marker="s",
+                color="#315f9f",
+                label="Obj_service_norm",
+            )
+            ax.set_title(
+                "\n".join(
+                    [
+                        str(example["example_label"]),
+                        regime_label(str(example["regime_id"])),
+                        (
+                            f"demand={int(example['total_demand'])}, "
+                            f"w1={float(example['w1']):g}, "
+                            f"{example['status']}: "
+                            f"{float(example['mean_difference']):.1%}"
+                        ),
+                    ]
+                ),
+                fontsize=9,
+            )
+            ax.set_xlabel("Q reserved slots/day")
+            ax.grid(alpha=0.25)
+        axes[0].set_ylabel("Mean normalized objective")
+        axes[0].legend(frameon=False, fontsize=8)
+
+    fig.suptitle("Representative objective curves behind the disagreement map")
     fig.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=180, bbox_inches="tight")
@@ -1613,6 +1837,9 @@ def write_report(
     plot_violation_path = figures_dir / f"{prefix}violation_counts.png"
     plot_status_path = figures_dir / f"{prefix}business_hypothesis_status.png"
     plot_ordering_path = figures_dir / f"{prefix}objective_ordering_disagreement.png"
+    plot_ordering_examples_path = (
+        figures_dir / f"{prefix}objective_ordering_examples.png"
+    )
     plot_composition_path = figures_dir / f"{prefix}composition_flags.png"
     markdown_path = report_dir / f"{prefix}assumption_report.md"
 
@@ -1631,6 +1858,21 @@ def write_report(
     assumption_display = assumption_breakdown[
         ["hypothesis", "supported", "inconclusive", "contradicted"]
     ].copy()
+    hypothesis_order = {
+        "Balk 0.3 vs 0.7 little effect": 0,
+        "C1 not worse than FCFS": 1,
+        "C2 not better than FCFS": 2,
+        "Q=0 behaves like FCFS": 3,
+        "Utilization and service ordering match": 4,
+        "Clear objective conflicts are rare": 5,
+    }
+    assumption_display = (
+        assumption_display.assign(
+            _order=assumption_display["hypothesis"].map(hypothesis_order).fillna(99)
+        )
+        .sort_values(["_order", "hypothesis"])
+        .drop(columns="_order")
+    )
 
     def unique_ints(values: pd.Series) -> str:
         cleaned = pd.Series(values).dropna().unique()
@@ -1708,6 +1950,11 @@ def write_report(
     plot_violation_counts(violations, plot_violation_path)
     plot_business_status(assumption_breakdown, plot_status_path)
     plot_objective_ordering_disagreement(assumptions, plot_ordering_path)
+    plot_objective_ordering_examples(
+        frame,
+        assumptions,
+        plot_ordering_examples_path,
+    )
     plot_composition_flags(composition, plot_composition_path)
 
     lines = [
@@ -1715,10 +1962,11 @@ def write_report(
         "",
         "> **Conclusion.** The strict-reservation simulation passed all hard "
         f"implementation checks across {len(frame):,} tasks. Most business "
-        "hypotheses were supported. The main break is conceptual: additive "
-        "and pooled objectives do not always rank reservation quantities in "
-        "the same order. Offered-wait improvements also need access checks, "
-        "because lower offered wait can coincide with higher no-offer rates.",
+        "hypotheses were supported. The objective-ordering checks now use "
+        "the same primary objectives as the policy-selection report: "
+        "`Obj_util_norm` and `Obj_service_norm`. Offered-wait improvements "
+        "also need access checks, because lower offered wait can coincide "
+        "with higher no-offer rates.",
         "",
         "## 1. Purpose",
         "",
@@ -1757,6 +2005,24 @@ def write_report(
         "",
         dataframe_markdown(assumption_display),
         "",
+        "Different hypotheses have different numbers of tested cells because "
+        "they are checked at different aggregation levels. The Class 1 and "
+        "Class 2 FCFS comparisons are tested for every strict-reservation "
+        "`Q > 0`, demand level, Class 1 share, and behavior regime. The "
+        "`Q=0` sanity check only applies when there are no reserved slots, "
+        "the arrival mix is 50/50, and the class thresholds are symmetric. "
+        "In that case the reservation rule should reduce to pooled FCFS, so "
+        "the two class served rates should be similar. The balking-rate "
+        "check only applies to heavy symmetric-demand settings comparing "
+        "`high=0.3` with `high=0.7`. The two objective-ordering checks only "
+        "apply to equal-demand cells, and each is repeated for every tested "
+        "Class 1 weight. A tested cell is therefore one bootstrap verdict "
+        "for one hypothesis context, not one simulation run. With this grid, "
+        "that gives 1,260 Class 1 FCFS-comparison cells, 1,260 Class 2 "
+        "FCFS-comparison cells, 24 `Q=0` sanity-check cells, 32 balking-rate "
+        "cells, 240 exact objective-ordering cells, and 240 material-conflict "
+        "objective cells.",
+        "",
         "![Business hypothesis status](figures/"
         + plot_status_path.name
         + ")",
@@ -1771,25 +2037,51 @@ def write_report(
         "service did not materially fall versus matched FCFS in the tested cells.",
         "- The Class 2 non-improvement hypothesis was not contradicted: strict "
         "reservation did not materially improve Class 2 service versus FCFS.",
-        "- The symmetric-FCFS check passed, so class labels behave as expected "
-        "when the inputs are symmetric.",
-        "- Additive and pooled objectives disagreed in some equal-demand "
-        "settings; this means objective choice matters and should be named "
-        "explicitly in selection work.",
+        "- The `Q=0` sanity check passed: with no reserved slots and symmetric "
+        "inputs, the reservation implementation did not create an artificial "
+        "class difference.",
+        "- The exact objective-ordering check asks whether the utilization "
+        "objective and the service-rate objective rank every pair of `Q` "
+        "values in the same way. This is intentionally strict and can flag "
+        "flat or near-flat regions where the mean curves look visually "
+        "similar.",
+        "- The clear-conflict check asks the more practical question: when "
+        "both objectives see a real difference between two `Q` values, do "
+        "they clearly pull in opposite directions? No cells contradicted "
+        "that narrower assumption.",
         "",
         "## 6. Contradicted Or Inconclusive Hypotheses",
         "",
         dataframe_markdown(non_supported_summary),
         "",
-        "The only contradicted hypothesis is that additive and pooled objectives "
-        "always order `Q` values consistently. Equal demand here means equal "
-        "configured arrival rates; realized Poisson arrivals can still differ "
-        "between classes within a seed, so the additive and pooled formulas "
-        "are not guaranteed to be proportional. In the figure, `C` marks "
-        "contradicted cells and `I` marks inconclusive cells.",
+        "The exact objective-ordering rows compare `Obj_util_norm` with "
+        "`Obj_service_norm`, the two primary objectives from the "
+        "policy-selection report. A disagreement means the two objectives "
+        "rank at least one pair of `Q` values differently within the same "
+        "seed, demand, behavior regime, and weight. This can happen even when "
+        "the plotted means do not cross, because the check is pairwise and "
+        "seed-level. The clear-conflict rows are easier to read with the "
+        "plots: they ignore tiny differences and only ask whether the two "
+        "objectives clearly prefer opposite `Q` values. In this run, that "
+        "narrower check had no contradicted cells, so the objectives often "
+        "differ in detailed ordering but rarely give a strong visual conflict. "
+        "`T_wait_offered` is not included in either ordering hypothesis "
+        "because it is conditional on receiving an offer and can look better "
+        "when access worsens. In the figure, `C` marks contradicted cells and "
+        "`I` marks inconclusive cells.",
         "",
         "![Objective ordering disagreement](figures/"
         + plot_ordering_path.name
+        + ")",
+        "",
+        "The example lines below show a few cells from the heatmap. They plot "
+        "seed-averaged `Obj_util_norm` and `Obj_service_norm` against `Q`, "
+        "so the disagreement is easier to see: the two curves can be flat, "
+        "peak at different reservation quantities, or move at different "
+        "rates.",
+        "",
+        "![Objective ordering examples](figures/"
+        + plot_ordering_examples_path.name
         + ")",
         "",
         "## 7. Composition Effects: Offered Wait Versus No-Offer Rate",
@@ -1817,16 +2109,14 @@ def write_report(
         "operational access requirement.",
         "- Offered waiting time is conditional on receiving an offer, so it "
         "must be read with no-offer and service-rate diagnostics.",
-        "- Objective-ordering disagreement is expected when realized arrivals "
-        "differ; the result is a warning against treating additive and pooled "
-        "objectives as interchangeable.",
+        "- Objective-ordering disagreement, if present, means normalized "
+        "utilization and normalized service rate should not be treated as "
+        "interchangeable objectives.",
         "",
-        "## 9. Next Step: Use These Checks In Policy Comparison",
+        "## 9. Next Steps",
         "",
-        "When comparing strict reservation with the booking-window policy, carry "
-        "forward the same hard checks, the same business-hypothesis status "
-        "summary, and the same composition diagnostic. This keeps objective "
-        "improvements separate from access artifacts.",
+        "Next steps are tracked in the shared reservation note: "
+        "[Reservation Analysis Next Steps](../next_steps.md).",
         "",
         "## Files",
         "",
@@ -1859,6 +2149,7 @@ def write_report(
         "violation_plot": plot_violation_path,
         "status_plot": plot_status_path,
         "ordering_plot": plot_ordering_path,
+        "ordering_examples_plot": plot_ordering_examples_path,
         "composition_plot": plot_composition_path,
     }
 
