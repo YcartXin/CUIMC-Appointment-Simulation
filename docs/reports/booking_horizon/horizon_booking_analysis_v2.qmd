@@ -3,7 +3,7 @@ title: "Class-Specific Booking Horizons Under Oversubscribed FCFS Scheduling"
 format:
   html:
     embed-resources: true
-    self-contained-math: true
+    html-math-method: mathml
 ---
 
 ## Motivation
@@ -17,47 +17,86 @@ Two additive objectives are evaluated, both applied as post-processing over the 
 Service rate:
 
 $$
-U_{\text{service}}(H_1,H_2) = w_1\frac{Y_1}{A_1} + w_2\frac{Y_2}{A_2}.
+U_{\text{service}}(H_1,H_2)
+=
+w_1\frac{Y_1}{A_1}
++
+w_2\frac{Y_2}{A_2}.
 $$
 
-Slot utilization:
+Average slot utilization:
 
 $$
-U_{\text{slot}}(H_1,H_2) = w_1\frac{Y_1}{S} + w_2\frac{Y_2}{S},
+U_{\text{slot}}(H_1,H_2)
+=
+w_1U_1+w_2U_2
+=
+w_1\frac{Y_1}{SD}
++
+w_2\frac{Y_2}{SD},
 $$
 
-where $H_i$ is the booking horizon, $Y_i$ the served count, $A_i$ the arrivals for class $i$, $S$ the number of slots per day, and $w_i$ the class weight. The slot-utilization objective is unbounded and scales with the measurement window; only the preferred configuration within a weight regime is compared, not objective levels across regimes.
+where $D$ is the number of measurement days and $U_i=Y_i/(SD)$ is the average share of daily slot capacity used by served patients from class $i$.
+
+Here, $H_i$ is the booking horizon for class $i$, $Y_i$ is the served count, $A_i$ is the arrival count, $S$ is the number of slots per day, and $w_i$ is the class weight.
+
+Because the objective is normalized by the full measurement-window capacity, it does not scale with the number of simulated days. Under equal weights, it is bounded above by 1.
 
 ## Experimental Design
 
-Each run assigns separate booking horizons $(H_1,H_2)$ and balking thresholds $(\tau_1,\tau_2)$ to the two classes. Weights are applied in post-processing. Each configuration is repeated across 30 seeds (169 horizon pairs × 5 thresholds × 3 balking rates × 2 arrival rates × 30 seeds = 152,100 runs). Baseline figures use arrival rate 50 and balking rate 0.5 unless stated.
+Each run assigns separate booking horizons $(H_1,H_2)$ and balking thresholds $(\tau_1,\tau_2)$ to the two classes. Class weights are applied during post-processing.
+
+Each configuration is repeated across 30 seeds:
+
+$$
+169
+\times 5
+\times 3
+\times 2
+\times 30
+=
+152{,}100
+\text{ runs}.
+$$
+
+The baseline figures use an arrival rate of 50 patients per class per day and a post-threshold balking probability of 0.5 unless otherwise stated.
 
 Problem parameters:
 
 | Parameter | Values |
-|-----------|--------|
-| Balking thresholds $(\tau_1,\tau_2)$ | (9,9), (5,9), (9,5), (12,12), (5,12) |
-| Post-threshold balking rate | 0.3, 0.5, 0.7 |
-| Arrival rate (per class) | 25, 50 |
+|---|---|
+| Balking thresholds $(\tau_1,\tau_2)$ | $(9,9)$, $(5,9)$, $(9,5)$, $(12,12)$, $(5,12)$ |
+| Post-threshold balking probability | $0.3$, $0.5$, $0.7$ |
+| Arrival rate per class | $25$, $50$ |
 
 Policy parameters:
 
 | Parameter | Values |
-|-----------|--------|
-| Booking horizons $(H_1,H_2)$ | 2–14, all 169 pairs |
-| Weight regimes ($w_2=1$) | $w_1 \in \{0.25, 1, 2, 3\}$; 0.5-step grid for the counterbalance figure |
+|---|---|
+| Booking horizons $(H_1,H_2)$ | $2$–$14$; all 169 horizon pairs |
+| Weight regimes, with $w_2=1$ | $w_1 \in \{0.25,1,2,3\}$; 0.5-step grid for the counterbalance figure |
 
 ## Equal Weights and Booking Horizons
 
-![Service-rate objective under equal weights](../../../outputs/booking_horizon/figures/service_rate/fig1a_objective_equal.png)
+![Service-rate objective under equal weights, arrival rate 50 per class](../../../outputs/booking_horizon/figures/service_rate/fig1a_objective_equal.png)
 
-Under equal weights the objective is maximized across the entire region where both horizons are seven days or shorter; differences within that block are within seed noise. Extending either horizon past seven reduces completed service by entering the elevated no-show-risk region.
+![Service-rate objective under equal weights, arrival rate 25 per class](../../../outputs/booking_horizon/figures/service_rate/fig1a_objective_equal_arrival25.png)
+
+Under equal weights, the objective is maximized across the entire region in which both booking horizons are seven days or shorter at both tested arrival rates. Differences within this block are within seed noise. Reducing the arrival rate from 50 to 25 patients per class raises the achievable service-rate objective but does not change the preferred horizon region. Extending either horizon past seven days reduces completed service because accepted bookings enter the elevated no-show-risk region.
 
 ## Class 1 Higher Weighted
 
-![Service-rate objective under priority weights](../../../outputs/booking_horizon/figures/service_rate/fig1b_objective_priority.png)
+![Service-rate objective under priority weights ($w_1=2$), arrival rate 50 per class](../../../outputs/booking_horizon/figures/service_rate/fig1b_objective_priority.png)
 
-With $w_1=2$ the optimum is asymmetric: the Class 2 horizon collapses to 2 while the Class 1 horizon sits in the 3–7 range. A short Class 2 window frees future capacity for the prioritized class.
+![Service-rate objective under priority weights ($w_1=2$), arrival rate 25 per class](../../../outputs/booking_horizon/figures/service_rate/fig1b_objective_priority_arrival25.png)
+
+![Service-rate objective under stronger priority weights ($w_1=3$), arrival rate 50 per class](../../../outputs/booking_horizon/figures/service_rate/fig1c_objective_priority_w3.png)
+
+![Service-rate objective under stronger priority weights ($w_1=3$), arrival rate 25 per class](../../../outputs/booking_horizon/figures/service_rate/fig1c_objective_priority_w3_arrival25.png)
+
+When $w_1=2$, the preferred policy becomes asymmetric at both tested arrival rates. The Class 2 horizon falls to its minimum value of 2 days, while the Class 1 horizon lies between 3 and 7 days. Reducing the arrival rate from 50 to 25 patients per class changes the objective level but not this preferred configuration. Restricting the Class 2 horizon preserves more future capacity for the prioritized class.
+
+The $w_1=3$ figures show whether further increasing the priority assigned to Class 1 changes the preferred horizon region at either arrival rate.
 
 ## Balking Interaction with Booking Horizons
 
@@ -73,70 +112,81 @@ With $w_1=2$ the optimum is asymmetric: the Class 2 horizon collapses to 2 while
 
 ![Maximum threshold asymmetry](../../../outputs/booking_horizon/figures/service_rate/fig2_max_asymmetry.png)
 
-With symmetric or tolerant thresholds the high-objective region is both horizons ≤ 7. When one class has the lower threshold (5), the near-optimal region extends along that class's horizon axis out to 14, with the other horizon held ≤ 7. The lower threshold filters long-delay offers through balking before they book, so a longer nominal horizon for that class is not harmful.
+With symmetric or tolerant balking thresholds, the high-objective region is concentrated where both horizons are seven days or shorter.
+
+When one class has the lower threshold of 5 days, the near-optimal region extends along that class's horizon axis to 14 days, while the competing class's horizon remains at seven days or shorter. The lower threshold causes more patients to reject long-delay offers before those offers become bookings. Consequently, a longer nominal horizon for that class does not create the same number of long-delay booked appointments that would otherwise be exposed to elevated no-show risk.
 
 ### Class 1 Weight Counterbalance
 
-![Counterbalance at τ=(9,5)](../../../outputs/booking_horizon/figures/service_rate/fig7_counterbalance.png)
+![Counterbalance at tau = (9, 5)](../../../outputs/booking_horizon/figures/service_rate/fig7_counterbalance.png)
 
-![Optimal horizon vs Class 1 weight](../../../outputs/booking_horizon/figures/service_rate/fig7b_counterbalance_optimum.png)
+![Optimal horizon versus Class 1 weight](../../../outputs/booking_horizon/figures/service_rate/fig7b_counterbalance_optimum.png)
 
-At $\tau=(9,5)$, the extended Class 2 horizon is counterbalanced by weighting Class 1. The optimal Class 2 horizon falls from 4 at $w_1=1$ to 2 at $w_1=1.5$ and remains at 2 above it. A Class 1 weight of about 1.5 is sufficient to pull the Class 2 horizon back to its minimum.
+For the threshold configuration $\tau=(9,5)$, the extended Class 2 horizon is counterbalanced by increasing the weight assigned to Class 1.
+
+The optimal Class 2 horizon falls from 4 days when $w_1=1$ to 2 days when $w_1=1.5$, and it remains at 2 days for larger Class 1 weights. Thus, a Class 1 weight of approximately 1.5 is sufficient to return the Class 2 horizon to its minimum.
 
 ### Balking Rate
 
-![Post-threshold balking rate 0.3](../../../outputs/booking_horizon/figures/service_rate/fig6_balk_rate_0.3.png)
+![Post-threshold balking probability 0.3](../../../outputs/booking_horizon/figures/service_rate/fig6_balk_rate_0.3.png)
 
-![Post-threshold balking rate 0.5](../../../outputs/booking_horizon/figures/service_rate/fig6_balk_rate_0.5.png)
+![Post-threshold balking probability 0.5](../../../outputs/booking_horizon/figures/service_rate/fig6_balk_rate_0.5.png)
 
-![Post-threshold balking rate 0.7](../../../outputs/booking_horizon/figures/service_rate/fig6_balk_rate_0.7.png)
+![Post-threshold balking probability 0.7](../../../outputs/booking_horizon/figures/service_rate/fig6_balk_rate_0.7.png)
 
-Varying the common balking rate from 0.3 to 0.7 leaves the objective surface and the preferred horizon region unchanged. Under heavy oversubscription a balking patient is replaced by another arrival.
+Varying the common post-threshold balking probability from 0.3 to 0.7 does not meaningfully change the objective surface or the preferred horizon region. Under heavy oversubscription, capacity rejected by one balking patient can generally be taken by another arrival.
 
-### Balking Rate × Weight
+### Balking Rate and Class Weight
 
-![Balking rate by Class 1 weight](../../../outputs/booking_horizon/figures/service_rate/fig8_balk_weight.png)
+![Balking probability by Class 1 weight](../../../outputs/booking_horizon/figures/service_rate/fig8_balk_weight.png)
 
-The optimum is identical across all three balking rates at every weight. Balking rate does not interact with weight: the optimal horizon policy is set by the weight alone ($w_1=0.25$ favors a short Class 1 / longer Class 2 window, $w_1=1$ the symmetric ≤ 7 block, $w_1 \ge 2$ a Class 2 horizon of 2) and is invariant to the balking rate.
+The preferred horizon configuration is unchanged across all three post-threshold balking probabilities at every weight considered.
+
+The horizon policy is instead determined by the class weights:
+
+- $w_1=0.25$ favors a shorter Class 1 horizon and a longer Class 2 horizon.
+- $w_1=1$ produces the symmetric region where both horizons are seven days or shorter.
+- $w_1 \geq 2$ produces a Class 2 horizon of 2 days.
+
+Within the tested oversubscribed regime, the post-threshold balking probability does not meaningfully interact with the class weight.
 
 ## Arrival Rate
 
 ![Service-rate objective by arrival rate](../../../outputs/booking_horizon/figures/service_rate/fig9_arrival_rate.png)
 
-Halving the arrival rate raises the achievable served rate but leaves the ≤ 7 preferred region unchanged. Arrival rate scales the objective without altering the horizon policy.
-
-## No-Offer Rate and Offered Delay Diagnostics
-
-![No-offer rate by class](../../../outputs/booking_horizon/figures/fig3_no_offer_rate.png)
-
-![Offered delay by class](../../../outputs/booking_horizon/figures/fig4_offered_delay.png)
-
-A class's no-offer rate falls as its own horizon increases and rises as the competing class's horizon increases. A longer own horizon also raises mean offered delay. Where extending the competing class's horizon lowers observed delay, this is a composition effect from receiving fewer offers, not improved access; offered delay must be read together with the no-offer rate.
+Reducing the arrival rate from 50 to 25 patients per class raises the achievable served rate but leaves the preferred region—both horizons at seven days or shorter—unchanged. Arrival rate changes the level of the objective without altering the preferred horizon policy within the tested demand regimes.
 
 ## Slot-Utilization Objective
 
-![Slot utilization under equal weights](../../../outputs/booking_horizon/figures/slot_utilization/fig1a_objective_equal.png)
+![Slot-utilization objective under equal weights, arrival rate 50 per class](../../../outputs/booking_horizon/figures/slot_utilization/fig1a_objective_equal.png)
 
-![Slot utilization under priority weights](../../../outputs/booking_horizon/figures/slot_utilization/fig1b_objective_priority.png)
+![Slot-utilization objective under equal weights, arrival rate 25 per class](../../../outputs/booking_horizon/figures/slot_utilization/fig1a_objective_equal_arrival25.png)
 
-The slot-utilization objective yields the same horizon policy as the service-rate objective: the ≤ 7 block under equal weights and a Class 2 horizon of 2 under $w_1 \ge 2$. Under equal weights it sits at the capacity ceiling (≈ 365, full annual utilization) across the entire block, so it is less discriminating than the service-rate objective; the threshold, counterbalance, balking-rate, and arrival-rate results match those above.
+![Slot-utilization objective under priority weights, arrival rate 50 per class](../../../outputs/booking_horizon/figures/slot_utilization/fig1b_objective_priority.png)
+
+![Slot-utilization objective under priority weights, arrival rate 25 per class](../../../outputs/booking_horizon/figures/slot_utilization/fig1b_objective_priority_arrival25.png)
+
+The average slot-utilization objective produces the same preferred horizon policy at both tested arrival rates:
+
+- Under equal weights, both horizons are seven days or shorter.
+- When $w_1 \geq 2$, the preferred Class 2 horizon is 2 days.
+
+Under equal weights, the average slot-utilization objective is close to 1 throughout the preferred block, corresponding to nearly full average use of the available daily slots. It is therefore less discriminating than the service-rate objective. Reducing the arrival rate from 50 to 25 patients per class changes the objective surface but does not change the preferred horizon policy. The threshold, counterbalance, and balking-rate results are otherwise consistent with the service-rate analysis.
 
 ## Conclusion
 
-1. **Under equal weights, horizons of seven days or less perform best.** The optimum is the full block with both horizons ≤ 7.
+1. **Under equal weights, horizons of seven days or less perform best.** The preferred region is the full block in which both class horizons are seven days or shorter.
 
-2. **Weighting Class 1 produces an asymmetric policy.** At $w_1=2$ the Class 2 horizon drops to 2 and the Class 1 horizon sits at 3–7.
+2. **Weighting Class 1 produces an asymmetric policy.** When $w_1=2$, the Class 2 horizon falls to 2 days, while the Class 1 horizon lies between 3 and 7 days.
 
-3. **Extending a horizon beyond seven days reduces completed service** by exposing bookings to elevated no-show risk.
+3. **Extending a horizon beyond seven days reduces completed service.** These additional booking days expose accepted appointments to elevated no-show risk.
 
-4. **A lower balking threshold extends that class's near-optimal horizon to 14**, because long-delay offers are balked before booking.
+4. **A lower balking threshold can extend that class's near-optimal nominal horizon.** Long-delay offers are more frequently rejected before they become bookings.
 
-5. **A Class 1 weight of about 1.5 counterbalances a low Class 2 threshold**, pulling the optimal Class 2 horizon back to its minimum.
+5. **A Class 1 weight of approximately 1.5 counterbalances a low Class 2 balking threshold.** At this weight, the preferred Class 2 horizon returns to its minimum of 2 days.
 
-6. **The post-threshold balking rate does not affect the objective or interact with weight.** The optimal policy is set by the weight alone and is invariant across balking rates.
+6. **The post-threshold balking probability does not meaningfully affect the preferred policy or interact with class weight.** Under the tested oversubscribed conditions, the preferred horizon is determined primarily by the weight regime.
 
-7. **Arrival rate scales the objective but not the horizon policy.** The ≤ 7 region holds at both arrival rates.
+7. **Arrival rate changes the objective level but not the preferred horizon policy.** The region in which both horizons are seven days or shorter remains preferred at both tested arrival rates.
 
-8. **A longer own-class horizon lowers the no-offer rate but raises offered delay**, and offered delay must be interpreted with the no-offer rate.
-
-9. **The two objectives produce the same horizon policy.** Slot utilization is pinned at the capacity ceiling under equal weights and is less discriminating than the service rate.
+8. **The two objectives produce the same preferred horizon policy.** The average slot-utilization objective is less discriminating because it approaches its equal-weight ceiling of 1 across much of the preferred region.

@@ -1,21 +1,22 @@
 # H5 Stage 2 Confirmation Summary
 
-Background scenarios classified: **1**
-Low-to-moderate step comparisons classified: **2**
+Background scenarios classified: **17**
+Low-to-moderate step comparisons classified: **34**
 
 ## Scenario classification counts
 
 | classification   |   n_scenarios |
 |:-----------------|--------------:|
-| inconclusive     |             1 |
+| inconclusive     |             3 |
+| reversed         |            14 |
 
 ## Step-level classification counts
 
-|   balk_step_class1_focal |   inconclusive |
-|-------------------------:|---------------:|
-|                      0.1 |              1 |
-|                      0.3 |              1 |
-|                      0.5 |              1 |
+|   balk_step_class1_focal |   inconclusive |   reversed |
+|-------------------------:|---------------:|-----------:|
+|                      0.1 |              9 |          8 |
+|                      0.3 |              3 |         14 |
+|                      0.5 |              4 |         10 |
 
 ## Interpretation
 

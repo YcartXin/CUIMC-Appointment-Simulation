@@ -1,21 +1,24 @@
 # H7 Stage 2 Confirmation Summary
 
-Background scenarios classified: **1**
-Gap-location comparisons classified: **3**
+Background scenarios classified: **30**
+Gap-location comparisons classified: **117**
 
 ## Scenario classification counts
 
 | classification   |   n_scenarios |
 |:-----------------|--------------:|
-| reversed         |             1 |
+| inconclusive     |             1 |
+| reversed         |            29 |
 
 ## Gap-level classification counts
 
-|   gap_magnitude_focal |   inconclusive |   reversed |
-|----------------------:|---------------:|-----------:|
-|                  0.05 |              0 |          1 |
-|                  0.1  |              1 |          0 |
-|                  0.2  |              0 |          1 |
+|   gap_magnitude_focal |   inconclusive |   reversed |   supported |
+|----------------------:|---------------:|-----------:|------------:|
+|                  0.05 |              3 |         27 |           0 |
+|                  0.1  |              1 |         29 |           0 |
+|                  0.2  |              1 |         27 |           0 |
+|                  0.3  |              0 |         13 |           4 |
+|                  0.5  |              0 |          9 |           3 |
 
 ## Interpretation
 

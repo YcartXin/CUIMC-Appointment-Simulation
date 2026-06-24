@@ -1,25 +1,26 @@
 # H2 Stage 2 Confirmation Summary
 
-Background scenarios classified: **1**
-Target-level comparisons classified: **3**
+Background scenarios classified: **6**
+Target-level comparisons classified: **18**
 
 ## Scenario classification counts
 
 | classification   |   n_scenarios |
 |:-----------------|--------------:|
-| inconclusive     |             1 |
+| inconclusive     |             5 |
+| supported        |             1 |
 
 ## Target-level classification counts
 
-|   target_loss_share |   inconclusive |
-|--------------------:|---------------:|
-|                0.05 |              1 |
-|                0.1  |              1 |
-|                0.2  |              1 |
+|   target_loss_share |   inconclusive |   reversed |   supported |
+|--------------------:|---------------:|-----------:|------------:|
+|                0.05 |              6 |          0 |           0 |
+|                0.1  |              4 |          1 |           1 |
+|                0.2  |              4 |          0 |           2 |
 
 ## Matching diagnostics
 
-- Target comparisons meeting the realized-loss matching rule: **0/3**.
+- Target comparisons meeting the realized-loss matching rule: **17/18**.
 - Matching requires a between-arm loss-share gap no greater than 0.01 and each arm to be within 0.02 of its target.
 
 ## Interpretation

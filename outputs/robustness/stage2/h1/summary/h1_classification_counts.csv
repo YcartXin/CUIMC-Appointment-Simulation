@@ -1,2 +1,4 @@
 demand_regime,classification,n_scenarios
-low,inconclusive,1
+boundary,reversed,6
+high,reversed,26
+low,reversed,5

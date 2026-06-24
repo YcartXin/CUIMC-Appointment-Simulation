@@ -1,24 +1,28 @@
 # H9 Stage 2 Confirmation Summary
 
-Background scenarios classified: **1**
+Background scenarios classified: **6**
 
 ## Scenario classification counts
 
 | classification   |   n_scenarios |
 |:-----------------|--------------:|
-| inconclusive     |             1 |
+| reversed         |             6 |
 
 ## Active component combinations
 
 | utilization_component   | served_gap_component   |   n_scenarios |
 |:------------------------|:-----------------------|--------------:|
-| supported               | inconclusive           |             1 |
+| supported               | reversed               |             6 |
 
 ## Classification by equal baseline probability
 
-|   baseline_equal_noshow_high |   inconclusive |
-|-----------------------------:|---------------:|
-|                          0.5 |              1 |
+|   baseline_equal_noshow_high |   reversed |
+|-----------------------------:|-----------:|
+|                          0.1 |          1 |
+|                          0.3 |          1 |
+|                          0.5 |          2 |
+|                          0.7 |          1 |
+|                          0.8 |          1 |
 
 ## Interpretation
 

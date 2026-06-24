@@ -1,2 +1,7 @@
 stage,background_id,source_scenario_ids,scenario_type,rho,class1_share,slots_per_day,horizon_class1,horizon_class2,cancel_class1,cancel_class2,n_supported_targets,n_reversed_targets,n_inconclusive_targets,n_inactive_targets,n_loss_matched_targets,failure_component,classification
-2,H2B0001,A001,anchor,0.8,0.1,16,14,14,0.1,0.1,0,0,3,0,0,loss_matching_failed,inconclusive
+2,H2B0001,A001,anchor,0.8,0.1,16,14,14,0.1,0.1,0,0,3,0,2,loss_matching_failed;utilization,inconclusive
+2,H2B0114,S082,sobol_symmetric,0.8,0.7,16,14,14,0.3,0.3,0,0,3,0,3,utilization,inconclusive
+2,H2B0191,S159,sobol_symmetric,0.8,0.3,16,28,28,0.1,0.1,0,0,3,0,3,utilization,inconclusive
+2,H2B0254,S222,sobol_symmetric,1.25,0.9,16,28,28,0.3,0.3,2,0,1,0,3,balk_served,supported
+2,H2B0294,X044,asymmetric_stress,4.0,0.3,32,28,21,0.0,0.0,1,1,1,0,3,balk_served,inconclusive
+2,H2B0346,X112,asymmetric_stress,0.8,0.7,16,28,14,0.3,0.3,0,0,3,0,3,utilization,inconclusive

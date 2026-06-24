@@ -1,13 +1,14 @@
 # H6 Stage 2 Confirmation Summary
 
-Background scenarios classified: **1**
-Adjacent threshold transitions evaluated: **12**
+Background scenarios classified: **5**
+Adjacent threshold transitions evaluated: **46**
 
 ## Scenario classification counts
 
 | classification   |   n_scenarios |
 |:-----------------|--------------:|
 | inconclusive     |             1 |
+| reversed         |             4 |
 
 ## Interpretation
 

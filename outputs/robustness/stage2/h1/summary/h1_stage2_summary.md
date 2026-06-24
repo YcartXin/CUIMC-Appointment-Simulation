@@ -1,12 +1,14 @@
 # H1 Stage 2 Confirmation Summary
 
-Background scenarios classified: **1**
+Background scenarios classified: **37**
 
 ## Classification counts
 
-| demand_regime   |   inconclusive |
-|:----------------|---------------:|
-| low             |              1 |
+| demand_regime   |   reversed |
+|:----------------|-----------:|
+| boundary        |          6 |
+| high            |         26 |
+| low             |          5 |
 
 ## Interpretation
 

@@ -1,2 +1,7 @@
 background_id,scenario_id,scenario_type,parent_scenario_id,design_note,rho,class1_share,slots_per_day,lambda_total,lambda_class1,lambda_class2,horizon_class1,horizon_class2,cancel_class1,cancel_class2,balk_threshold_class1,balk_threshold_class2,balk_low_class1,balk_low_class2,balk_high_class1,balk_high_class2,noshow_threshold_class1,noshow_threshold_class2,noshow_low_class1,noshow_low_class2,noshow_high_class1,noshow_high_class2,asymmetric_dimensions,source_scenario_id,source_scenario_ids,source_scenario_count
 H2B0001,A001,anchor,,rho_capacity_grid_rho_0.8_capacity_16,0.8,0.1,16,12.8,1.2800000000000002,11.52,14,14,0.1,0.1,0,9,0.0,0.0,0.0,0.5,0,6,0.0,0.0,0.0,0.3,,A001,A001,1
+H2B0114,S082,sobol_symmetric,,scrambled_sobol,0.8,0.7,16,12.8,8.959999999999999,3.8400000000000007,14,14,0.3,0.3,0,12,0.0,0.1,0.0,0.3,0,9,0.0,0.0,0.0,0.7,,S082,S082,1
+H2B0191,S159,sobol_symmetric,,scrambled_sobol,0.8,0.3,16,12.8,3.84,8.959999999999999,28,28,0.1,0.1,0,6,0.0,0.1,0.0,0.5,0,12,0.0,0.3,0.0,0.5,,S159,S159,1
+H2B0254,S222,sobol_symmetric,,scrambled_sobol,1.25,0.9,16,20.0,18.0,2.0,28,28,0.3,0.3,0,6,0.0,0.5,0.0,0.7,0,9,0.0,0.3,0.0,0.3,,S222,S222,1
+H2B0294,X044,asymmetric_stress,S069,sparse_asymmetry_2_dimension,4.0,0.3,32,128.0,38.4,89.6,28,21,0.0,0.0,0,9,0.0,0.0,0.0,0.0,0,4,0.0,0.0,0.0,0.0,class2:noshow_high;class1:horizon,X044,X044,1
+H2B0346,X112,asymmetric_stress,S082,sparse_asymmetry_2_dimension,0.8,0.7,16,12.8,8.959999999999999,3.8400000000000007,28,14,0.3,0.3,0,12,0.0,0.1,0.0,0.3,0,9,0.0,0.0,0.0,0.7,class1:balk_high;class1:horizon,X112,X112,1
