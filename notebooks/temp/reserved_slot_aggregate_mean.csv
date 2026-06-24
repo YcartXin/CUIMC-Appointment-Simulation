@@ -1,4 +1,0 @@
-policy,measured_booked_slot_utilization,measured_served_slot_utilization,average_utilization,served_rate,booked_arrival_rate,offered_rate,mean_offered_booking_delay,mean_accepted_booking_delay,balked_rate,no_offer_rate,canceled_rate,no_show_rate,total_arrivals,total_booked,total_balked,total_no_offer,total_canceled,total_no_show,total_served
-Pooled FCFS,1.0,0.907637,0.907637,0.580113,1.0,1.0,5.461528,5.461528,0.0,0.0,0.360284,0.059603,18265.733333,18265.733333,0.0,0.0,6581.3,1089.4,10595.033333
-Strict C1 reservation,1.0,0.907643,0.907643,0.580119,1.0,1.0,5.461539,5.461539,0.0,0.0,0.360284,0.059597,18265.733333,18265.733333,0.0,0.0,6581.3,1089.3,10595.133333
-Class-1-first backfill reservation,1.0,0.950243,0.950243,0.608038,0.873684,1.0,5.175957,4.463558,0.126316,0.0,0.233779,0.031864,18258.833333,15952.233333,2306.6,0.0,4268.833333,581.766667,11101.566667

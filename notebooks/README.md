@@ -14,12 +14,15 @@ Open these notebooks in order:
 10. `10_reservation_objective_functions.ipynb` defines strict-reservation objective functions, including booked-slot utilization, and checks them on a small paired FCFS comparison.
 11. `11_reservation_objective_sweeps.ipynb` maps where strict reservation beats FCFS across `Q`, equal class arrival rates (`lambda_1=lambda_2`), behavior, weight, and slot-cost sweeps.
 12. `12_reservation_experiment_playground.ipynb` is a parameter-driven playground for running strict-reservation experiments, caching the data, and making custom booked-slot utilization plots.
-13. `appointment_simulation_analysis.ipynb` is the broader scenario walkthrough, now adapted to the cleaned `simulation/` package layout.
-14. `parameter_sensitivity_analysis.ipynb` is the larger exploratory sweep workbook, using the shared metric and plot-style helpers.
+13. `13_strict_reservation_behavior_playground.ipynb` applies strict reservation under the historical reservation-window behavior regimes, compares the two historical served-rate objectives with paired FCFS runs, and exposes access, waiting-time, accounting, and seed-level diagnostics without selecting a preferred `Q`.
+14. `appointment_simulation_analysis.ipynb` is the broader scenario walkthrough, now adapted to the cleaned `simulation/` package layout.
+15. `parameter_sensitivity_analysis.ipynb` is the larger exploratory sweep workbook, using the shared metric and plot-style helpers.
 
 The first two notebooks are intentionally smaller than `scripts/generate_metric_analysis_figures.py`.
 They are for understanding and dynamic exploration. The metric report walkthrough is the notebook version of the rendered report plus its generated-figure appendix.
 
 All notebooks locate the repository root automatically, so they can be opened from either the repository root or this `notebooks/` directory. Outputs are intentionally cleared in version control; rerun the cells locally when exploring.
 
-For a shareable summary of the strict-reservation objective-function analysis, see `reservation_objective_analysis_handoff.md`.
+Current strict-reservation objective-function report artifacts are under `../docs/reports/reservation/visual_objectives/`.
+The old-utilization comparison is under `../docs/reports/reservation/old_utilization/`.
+Strict-reservation assumption diagnostics are under `../docs/reports/reservation/assumption_diagnostics/`.

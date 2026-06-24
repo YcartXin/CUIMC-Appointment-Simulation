@@ -77,6 +77,11 @@ target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+notebooks/temp/
+
+# Resumable strict-reservation diagnostic shards
+outputs/strict_reservation_assumption_sweep/
+outputs/strict_reservation_policy_selection/
 
 # IPython
 profile_default/
@@ -218,6 +223,13 @@ __marimo__/
 
 # Quarto / LaTeX transient render files
 .quarto/
+
+# Project generated analysis artifacts
+notebooks/temp/
+outputs/reservation_window/
+/reports/
+docs/reports/reservation_report/
+docs/reports/reservation_window/
 docs/.quarto/
 docs/**/.quarto/
 docs/*_cache/

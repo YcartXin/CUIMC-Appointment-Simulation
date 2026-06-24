@@ -1,0 +1,6 @@
+hypothesis,status,cells,demand_values,q_values,regimes,minimum_effect,maximum_effect
+Additive and pooled ordering match,contradicted,29,"50, 100",n/a,15,0.0125,0.2304
+Additive and pooled ordering match,inconclusive,1,100,n/a,1,0.0089,0.0089
+Balk 0.3 vs 0.7 little effect,inconclusive,1,100,31,0,0.003,0.003
+C1 not worse than FCFS,inconclusive,4,50,1,4,-0.0032,0.0013
+C2 not better than FCFS,inconclusive,6,"50, 100","1, 4, 8",5,-0.0006,0.0032
