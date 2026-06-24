@@ -1,4 +1,5 @@
 classification,n_scenarios
-inactive,1
-inconclusive,1
-supported,1
+inactive,164
+inconclusive,75
+reversed,5
+supported,134

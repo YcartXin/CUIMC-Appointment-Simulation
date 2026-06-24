@@ -1,15 +1,16 @@
 # H6 Stage 1 Robustness Summary
 
-Background scenarios classified: **3**
-Adjacent threshold transitions evaluated: **24**
+Background scenarios classified: **378**
+Adjacent threshold transitions evaluated: **4237**
 
 ## Scenario classification counts
 
 | classification   |   n_scenarios |
 |:-----------------|--------------:|
-| inactive         |             1 |
-| inconclusive     |             1 |
-| supported        |             1 |
+| inactive         |           164 |
+| inconclusive     |            75 |
+| reversed         |             5 |
+| supported        |           134 |
 
 ## Interpretation
 
