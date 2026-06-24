@@ -1,0 +1,2 @@
+stage,background_id,source_scenario_ids,scenario_type,rho,class1_share,slots_per_day,horizon_class1,horizon_class2,cancel_class1,cancel_class2,n_supported_targets,n_reversed_targets,n_inconclusive_targets,n_inactive_targets,n_loss_matched_targets,failure_component,classification
+2,H2B0001,A001,anchor,0.8,0.1,16,14,14,0.1,0.1,0,0,3,0,0,loss_matching_failed,inconclusive

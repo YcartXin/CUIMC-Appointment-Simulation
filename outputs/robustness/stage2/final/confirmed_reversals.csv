@@ -1,0 +1,2 @@
+hypothesis,background_id,selection_reason,stage1_classification,stage2_classification,transition,confirmed_reversal,resolved_after_stage2
+H7,H7B0019,stage1_reversed,reversed,reversed,reversed_to_reversed,True,True
