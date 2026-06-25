@@ -103,7 +103,7 @@ Class 1 no-show behavior is fixed at threshold 6 days and post-threshold probabi
 ![Best Q by Class 2 no-show threshold and probability](figures/best_q_class2_no_show_threshold_probability_surface.png)
 
 ## 8. Interpretation Notes
-
+ 
 - These plots show mathematical best Q values for `Obj_util_norm`; they are not access-constrained recommendations.
 - Small changes from `w1=0.9` to `w1=1.1` are useful for detecting whether the equal-weight case is fragile.
 - Service-rate objective results are saved in `tables/best_q_summary.csv` but not plotted here to keep the report compact.
