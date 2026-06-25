@@ -2,7 +2,7 @@
 
 May 2026 — Two-class discrete-event FCFS appointment simulation.
 
-This package contains the slide deck, supporting figures, and audit trail for the five main conclusions from the FCFS simulation work. It is self-contained: every number and figure is traceable to a source file listed in the audit.
+This package contains the slide deck and supporting figures for the five main conclusions from the FCFS simulation work. The key numbers below list their source files.
 
 ---
 
@@ -12,7 +12,6 @@ This package contains the slide deck, supporting figures, and audit trail for th
 deck/
 ├── fcfs_conclusions_deck.pdf        ← compiled slide deck (5 slides, 16:9)
 ├── fcfs_conclusions_deck.tex        ← LaTeX source (beamer 18pt)
-├── fcfs_conclusions_deck_audit.md   ← number sources, figure map, compile log
 ├── README.md                        ← this file
 └── figures/
     ├── s1_outcome_decomposition.png       ← Slide 1: arrival outcome breakdown
@@ -44,7 +43,7 @@ deck/
 
 ---
 
-## Key Numbers (all verified against source CSVs)
+## Key Numbers
 
 | Metric | Value | Source |
 |--------|-------|--------|
