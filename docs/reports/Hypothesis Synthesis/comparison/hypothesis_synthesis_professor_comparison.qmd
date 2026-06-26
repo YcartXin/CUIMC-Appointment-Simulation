@@ -235,8 +235,7 @@ Regression coefficients cited below are standardized associations over sampled p
 
 1. Mechanics source of truth: [`fcfs_research_note_final.tex`](../../metric_analysis/research_style/final/note/fcfs_research_note_final.tex)
 2. Lab partner conclusion package: [`fcfs_conclusion_sheet.tex`](../../conclusions/paper/fcfs_conclusion_sheet.tex), [`fcfs_supervisor_brief_final.tex`](../../conclusions/paper/fcfs_supervisor_brief_final.tex), and [`fcfs_conclusions_deck.tex`](../../conclusions/deck/fcfs_conclusions_deck.tex)
-3. New conclusion update: [`UPDATE.md`](../../conclusions/deck/UPDATE.md)
-4. Raw result files in `outputs/`, `results/`, and `docs/reports/metric_analysis/data/`
+3. Raw result files in `outputs/`, `results/`, and `docs/reports/metric_analysis/data/`
 
 ## Verdict Key
 

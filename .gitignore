@@ -82,6 +82,23 @@ notebooks/temp/
 # Resumable strict-reservation diagnostic shards
 outputs/strict_reservation_assumption_sweep/
 outputs/strict_reservation_policy_selection/
+outputs/strict_reservation_weight_local_sensitivity/
+
+# Local assistant/tool settings
+.claude/
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.nav
+*.out
+*.snm
+*.synctex.gz
+*.toc
 
 # IPython
 profile_default/
