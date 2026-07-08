@@ -1174,3 +1174,4 @@ The robustness analysis separates mechanisms that are broadly reliable from mech
 - **Weak:** H5.
 
 The principal contribution of the robustness analysis is therefore not simply a support rate. It identifies which mechanisms can be treated as general features of the simulated booking system and which require explicit operating-condition qualifications.
+i
