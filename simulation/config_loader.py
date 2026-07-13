@@ -60,6 +60,15 @@ def load_config(path: str | Path) -> SimulationConfig:
                 None if class_cfg.get("horizon_days") is None
                 else int(class_cfg["horizon_days"])
             ),
+            standby_prob=float(class_cfg.get("standby_prob", 0.0)),
+            max_standby_days=(
+                None if class_cfg.get("max_standby_days") is None
+                else int(class_cfg["max_standby_days"])
+            ),
+            standby_eligible_after_days=(
+                None if class_cfg.get("standby_eligible_after_days") is None
+                else int(class_cfg["standby_eligible_after_days"])
+            ),
         )
 
     return SimulationConfig(
@@ -76,4 +85,9 @@ def load_config(path: str | Path) -> SimulationConfig:
             else int(raw["reserved_class_id"])
         ),
         reserved_slots_per_day=int(raw.get("reserved_slots_per_day", 0)),
+        reserved_window_days=(
+            None
+            if raw.get("reserved_window_days") is None
+            else int(raw["reserved_window_days"])
+        ),
     )

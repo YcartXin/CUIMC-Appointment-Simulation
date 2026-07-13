@@ -83,6 +83,9 @@ notebooks/temp/
 outputs/strict_reservation_assumption_sweep/
 outputs/strict_reservation_policy_selection/
 outputs/strict_reservation_weight_local_sensitivity/
+outputs/hypotheses/h1_short_horizon_reservation/
+outputs/hypotheses/h2_reject_and_requeue/
+outputs/hypotheses/background_scenarios.csv
 
 # Local assistant/tool settings
 .claude/

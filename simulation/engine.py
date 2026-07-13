@@ -9,6 +9,7 @@ from .model import (
     SimulationConfig,
     SimulationResults,
     SlotMetrics,
+    StandbyEntry,
 )
 
 
@@ -30,6 +31,11 @@ class ClinicAppointmentSimulation:
     - no rebooking of no-show slots
     - day-level calendar state with booking audit records
     - derived summary state at the start of each measured day
+    - optional windowed reservation: a class-specific slot reservation that
+      only applies within a near-term residual-day window
+    - optional standby/requeue: patients who would otherwise balk a
+      far-out offer can instead wait off-calendar for an earlier opening
+      freed by a cancellation
 
     Internal calendar representation:
         self.calendar[r] is a list of Booking objects scheduled for day D + r
@@ -52,6 +58,11 @@ class ClinicAppointmentSimulation:
         }
         self.slot_metrics = SlotMetrics()
         self.total_value: float = 0.0
+
+        # One standby queue per class, FIFO by join order.
+        self.standby_queue: Dict[int, List[StandbyEntry]] = {
+            class_id: [] for class_id in config.classes
+        }
 
         # One summary state per measured day, recorded after start-of-day cancellations
         self.daily_summary_states: List[Dict[int, List[int]]] = []
@@ -114,6 +125,52 @@ class ClinicAppointmentSimulation:
             return self.config.horizon_days
         return min(class_h, self.config.horizon_days)
 
+    def _reservation_window(self) -> int:
+        """
+        Return the number of leading residual days (r = 0 .. window-1)
+        over which the configured reservation applies. Defaults to the
+        full calendar when no window is set, which reproduces the
+        original whole-horizon strict-reservation behavior exactly.
+        """
+        window = self.config.reserved_window_days
+        if window is None:
+            return self.config.horizon_days
+        return min(window, self.config.horizon_days)
+
+    def _slot_offer_at(self, r: int, class_id: int) -> Optional[bool]:
+        """
+        Return whether class_id can be offered/booked into day r right
+        now, and if so, whether that would consume reserved capacity.
+
+        Returns:
+            True  -> capacity available, and it is reserved capacity
+            False -> capacity available, and it is general capacity
+            None  -> no capacity available for class_id at day r
+
+        This is shared by new-offer search (find_earliest_open_day) and
+        standby recall (process_standby_recalls) so both respect the same
+        capacity/reservation rules.
+        """
+        reserved_slots = self.config.reserved_slots_per_day
+        reserved_class_id = self.config.reserved_class_id
+
+        if reserved_slots == 0 or reserved_class_id is None or r >= self._reservation_window():
+            if len(self.calendar[r]) < self.config.slots_per_day:
+                return False
+            return None
+
+        general_slots = self.config.slots_per_day - reserved_slots
+        reserved_used = sum(1 for b in self.calendar[r] if b.reserved_slot)
+        general_used = len(self.calendar[r]) - reserved_used
+
+        if class_id == reserved_class_id and reserved_used < reserved_slots:
+            return True
+
+        if general_used < general_slots:
+            return False
+
+        return None
+
     def find_earliest_open_day(self, class_id: int) -> Optional[Tuple[int, bool]]:
         """
         Find the earliest day with available capacity.
@@ -121,30 +178,12 @@ class ClinicAppointmentSimulation:
         Same-day booking is allowed, so the search starts at r = 0.
         The search is bounded by the class-specific horizon.
         """
-        reserved_slots = self.config.reserved_slots_per_day
-        reserved_class_id = self.config.reserved_class_id
         horizon = self._class_horizon(class_id)
 
-        if reserved_slots == 0 or reserved_class_id is None:
-            for r in range(horizon):
-                if len(self.calendar[r]) < self.config.slots_per_day:
-                    return r, False
-            return None
-
-        general_slots = self.config.slots_per_day - reserved_slots
-
         for r in range(horizon):
-            reserved_used = sum(1 for b in self.calendar[r] if b.reserved_slot)
-            general_used = len(self.calendar[r]) - reserved_used
-
-            if (
-                class_id == reserved_class_id
-                and reserved_used < reserved_slots
-            ):
-                return r, True
-
-            if general_used < general_slots:
-                return r, False
+            offer = self._slot_offer_at(r, class_id)
+            if offer is not None:
+                return r, offer
 
         return None
 
@@ -191,13 +230,37 @@ class ClinicAppointmentSimulation:
 
             tau = offered_day  # offered booking delay in days; tau = 0 is allowed
 
-            # Record the offered delay including balk.
-            if track_patients:
-                metrics.total_offered_booking_delay += tau
-
             # Balking decision
             if self.rng.random() < params.balk_prob(tau):
+                # standby_prob defaults to 0.0, and the short-circuit below
+                # skips the extra RNG draw entirely in that case, so
+                # existing configs replay with an identical RNG stream.
+                if params.standby_prob > 0.0 and self.rng.random() < params.standby_prob:
+                    # This far-out offer is deliberately NOT counted as an
+                    # offer yet, and the patient is NOT counted as balked.
+                    # Joining the standby queue defers the decision: if a
+                    # later day frees up and this entry is recalled, THAT
+                    # day becomes their real offer (booked, counted in
+                    # offered_delay/accepted_delay). If they expire
+                    # unresolved, they are counted as no_offer instead,
+                    # exactly as if the system never had a slot for them.
+                    # See process_standby_recalls and age_standby_queue.
+                    self.standby_queue[class_id].append(
+                        StandbyEntry(
+                            patient_class=class_id,
+                            original_offered_delay=tau,
+                            days_waited=0,
+                            tracked=track_patients,
+                        )
+                    )
+                    if track_patients:
+                        metrics.standby_joined += 1
+                    return True
+
+                # True immediate balk: this offer is real and rejected for
+                # good, so it counts toward offered_delay and balked.
                 if track_patients:
+                    metrics.total_offered_booking_delay += tau
                     metrics.balked += 1
                 return True
 
@@ -212,6 +275,7 @@ class ClinicAppointmentSimulation:
             )
 
             if track_patients:
+                metrics.total_offered_booking_delay += tau
                 metrics.booked += 1
                 metrics.total_booking_delay += tau
                 metrics.accepted_delay_counts[tau] = (
@@ -222,6 +286,110 @@ class ClinicAppointmentSimulation:
 
         for class_id in ordered_arrivals:
             process_one(class_id)
+
+    # -------------------------
+    # Standby / requeue logic
+    # -------------------------
+
+    def process_standby_recalls(self) -> None:
+        """
+        Offer freshly opened capacity to the standby queue before new
+        arrivals are processed for the day, nearest residual day first.
+
+        Within a class, only the head of that class's queue is
+        considered for a given day: FIFO by join order, not by which
+        entry happens to have the smallest original offered delay. A
+        recall is only made when the day is strictly better than what
+        the entry originally declined (r < original_offered_delay), so a
+        recalled patient is always moving to a shorter wait.
+
+        Recall respects the same capacity/reservation split as a fresh
+        offer via _slot_offer_at, so this coexists correctly with a
+        windowed reservation. If a class sets
+        standby_eligible_after_days, an entry that has not yet waited
+        that many days is treated as ineligible today, same as if no
+        day were open for it.
+        """
+        if all(params.standby_prob == 0.0 for params in self.config.classes.values()):
+            return
+
+        for r in range(self.config.horizon_days):
+            for class_id, queue in self.standby_queue.items():
+                eligible_after = self.config.classes[class_id].standby_eligible_after_days or 0
+                while queue:
+                    entry = queue[0]
+                    if entry.days_waited < eligible_after:
+                        # Not yet eligible for a recall at all; consistent
+                        # with the FIFO simplification elsewhere, this
+                        # blocks the rest of the class's queue for today
+                        # rather than skipping ahead to a later entry.
+                        break
+                    if r >= entry.original_offered_delay:
+                        break
+
+                    offer = self._slot_offer_at(r, class_id)
+                    if offer is None:
+                        break
+
+                    queue.pop(0)
+                    self.calendar[r].append(
+                        Booking(
+                            patient_class=class_id,
+                            booking_delay=r,
+                            tracked=entry.tracked,
+                            reserved_slot=offer,
+                            standby_recalled=True,
+                        )
+                    )
+
+                    if entry.tracked:
+                        metrics = self.class_metrics[class_id]
+                        metrics.standby_recalled += 1
+                        # The recalled day is this patient's real offer:
+                        # they were never counted as offered or balked
+                        # when they joined the queue, so both the
+                        # offered-delay and accepted-delay sums use the
+                        # recalled (shorter) day here, not the original
+                        # rejected one.
+                        metrics.total_offered_booking_delay += r
+                        metrics.booked += 1
+                        metrics.total_booking_delay += r
+                        metrics.accepted_delay_counts[r] = (
+                            metrics.accepted_delay_counts.get(r, 0) + 1
+                        )
+                        metrics.total_standby_wait_days += entry.days_waited
+                        metrics.total_original_offered_delay_recalled += (
+                            entry.original_offered_delay
+                        )
+
+    def age_standby_queue(self) -> None:
+        """
+        Advance every remaining standby entry by one day. Entries that
+        reach their class's max_standby_days without being recalled
+        expire and leave the queue permanently. An expired entry was
+        never counted as offered or balked, so it is counted as
+        no_offer here: from the class metrics' point of view, this
+        patient never received a usable slot, exactly like a patient
+        who arrived when the booking horizon was already full.
+        """
+        for class_id, queue in self.standby_queue.items():
+            if not queue:
+                continue
+
+            max_days = self.config.classes[class_id].max_standby_days
+            remaining: List[StandbyEntry] = []
+
+            for entry in queue:
+                entry.days_waited += 1
+                if max_days is not None and entry.days_waited >= max_days:
+                    if entry.tracked:
+                        metrics = self.class_metrics[class_id]
+                        metrics.standby_expired += 1
+                        metrics.no_offer += 1
+                else:
+                    remaining.append(entry)
+
+            self.standby_queue[class_id] = remaining
 
     # -------------------------
     # Daily service logic
@@ -236,6 +404,9 @@ class ClinicAppointmentSimulation:
 
         if count_slot_metrics:
             self.slot_metrics.booked_slots += booked_today
+            self.slot_metrics.reserved_slots_booked += sum(
+                1 for b in todays_bookings if b.reserved_slot
+            )
 
         for booking in todays_bookings:
             class_id = booking.patient_class
@@ -315,13 +486,25 @@ class ClinicAppointmentSimulation:
 
         Day order:
         1. start-of-day cancellations on future appointments
-        2. record start-of-day summary state
-        3. generate all daily arrivals
-        4. randomly permute arrivals
-        5. process offers/balking in FCFS order
-        6. capture final calendar snapshot on the last simulated day
-        7. resolve no-shows/service for today's scheduled patients
-        8. roll the calendar forward
+        2. offer newly freed capacity to the standby queue, nearest day first
+        3. age the standby queue and expire patients past their patience cap
+        4. record start-of-day summary state
+        5. generate all daily arrivals
+        6. randomly permute arrivals
+        7. process offers/balking in FCFS order
+        8. capture final calendar snapshot on the last simulated day
+        9. resolve no-shows/service for today's scheduled patients
+        10. roll the calendar forward
+
+        Note on measurement semantics: cooldown must be long enough not
+        only for late measurement-window bookings to resolve (as with
+        plain FCFS), but also for standby queue entries to resolve, i.e.
+        cooldown_days should be at least as large as the largest
+        configured max_standby_days when standby is enabled. Otherwise
+        some measured patients can be left on standby when the run ends,
+        uncounted in booked, balked, or no_offer alike -- the same
+        "unresolved" caveat that already applies to late plain bookings,
+        just extended to the standby queue.
         """
         total_days = (
             self.config.burn_in_days
@@ -340,7 +523,11 @@ class ClinicAppointmentSimulation:
             # 1. Start-of-day cancellations for future appointments only
             self.apply_start_of_day_cancellations()
 
-            # 2. Record start-of-day summary state after cancellations
+            # 2-3. Standby recall into newly freed capacity, then age the queue
+            self.process_standby_recalls()
+            self.age_standby_queue()
+
+            # 4. Record start-of-day summary state after cancellations/recalls
             if in_measurement_window:
                 start_of_day_summary = self.summary_state()
                 self.daily_summary_states.append({
@@ -348,22 +535,28 @@ class ClinicAppointmentSimulation:
                     for class_id, counts in start_of_day_summary.items()
                 })
 
-            # 3-5. Generate, permute, and process the day's arrivals
+            # 5-7. Generate, permute, and process the day's arrivals
             ordered_arrivals = self.generate_daily_arrival_order()
             self.process_daily_arrivals(
                 ordered_arrivals=ordered_arrivals,
                 track_patients=in_measurement_window,
             )
 
-            # 6. Capture the final calendar view before service and before rolling forward
+            # 8. Capture the final calendar view before service and before rolling forward
             if day == total_days - 1:
                 final_full_state_snapshot = self.full_state_view()
 
-            # 7. Resolve today's scheduled appointments
+            # 9. Resolve today's scheduled appointments
             self.serve_today(count_slot_metrics=in_measurement_window)
 
-            # 8. Move to next day
+            # 10. Move to next day
             self.roll_calendar_forward_one_day()
+
+        reserved_slot_capacity = (
+            self.config.reserved_slots_per_day * self.config.measure_days
+            if self.config.reserved_slots_per_day > 0 and self._reservation_window() > 0
+            else 0
+        )
 
         return SimulationResults(
             class_metrics=self.class_metrics,
@@ -372,4 +565,5 @@ class ClinicAppointmentSimulation:
             total_value=self.total_value,
             daily_summary_states=self.daily_summary_states,
             final_full_state=final_full_state_snapshot,
+            reserved_slot_capacity=reserved_slot_capacity,
         )
