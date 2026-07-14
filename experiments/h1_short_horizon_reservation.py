@@ -13,25 +13,37 @@ meaningful, without pre-filtering to backgrounds that satisfy H1's stated
 condition. This is deliberate: the condition (threshold_1 < threshold_2) is
 one of the things being tested, not assumed.
 
-Two stages:
+Three stages:
 
-    screen  Broad on/off test at a fixed modest policy (Q=5, window=3,
-            always valid given the bank's constraints) across every
-            background in the bank. Answers whether the effect exists at
-            all, and whether it concentrates in backgrounds that satisfy
-            H1's stated condition or shows up elsewhere too.
-    grid    Full (Q, window) grid -- Q up to half of that background's own
-            capacity in steps of 5, window in {3,4,5,6,7} filtered to
-            <= that background's noshow_threshold_1 -- at a small curated
-            set of backgrounds spanning condition-satisfying and
-            condition-violating cases. Answers the optimal-vs-naive-vs-
-            none question.
+    screen          Broad on/off test at a fixed modest policy (Q=5,
+                    window=3, always valid given the bank's constraints)
+                    across every background in the bank. Answers whether
+                    the effect exists at all, and whether it concentrates
+                    in backgrounds that satisfy H1's stated condition or
+                    shows up elsewhere too.
+    grid            Full (Q, window) grid -- Q up to half of that
+                    background's own capacity in steps of 5, window in
+                    {3,4,5,6,7} filtered to <= that background's
+                    noshow_threshold_1 -- at a small curated set of 12
+                    backgrounds spanning condition-satisfying and
+                    condition-violating cases. Answers the optimal-vs-
+                    naive-vs-none question.
+    condition_grid  The same full (Q, window) grid, but at a much larger,
+                    condition-balanced background set (~50 backgrounds,
+                    all with rho > 1.2) instead of 12. Purpose-built to
+                    answer "does the threshold-gap condition still help
+                    under each background's own OPTIMAL policy" with
+                    real sample size, rather than the screen stage's
+                    answer to the same question at one fixed (Q=5,
+                    window=3) policy. Not part of the default "all"
+                    stage set -- request it explicitly.
 
 Run from the repository root:
 
     python experiments/hypothesis_scenario_bank.py          # build the bank once
     python experiments/h1_short_horizon_reservation.py all --stage all
     python experiments/h1_short_horizon_reservation.py classify --stage all
+    python experiments/h1_short_horizon_reservation.py all --stage condition_grid
 
 Use --smoke for a fast end-to-end check before a full run.
 """
@@ -39,6 +51,7 @@ Use --smoke for a fast end-to-end check before a full run.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -74,6 +87,16 @@ STANDARD_Q = 5
 STANDARD_WINDOW = 3
 WINDOW_CANDIDATES = (3, 4, 5, 6, 7)
 N_DEEP_BACKGROUNDS_PER_BUCKET = 3
+
+# condition_grid stage: a larger, condition-balanced background set for
+# testing the threshold-gap condition under each background's own optimal
+# policy, rather than one fixed (Q, window). Only requires rho above the
+# demand floor identified in the screen stage; no additional filtering on
+# Class 1's own volume, since including Q=0 in the search already reveals
+# when a background can't support any positive reservation.
+CONDITION_GRID_MIN_RHO = 1.2
+CONDITION_GRID_N_PER_BUCKET = 25
+CONDITION_GRID_SEED = 20260713
 
 
 def load_bank(path: Path) -> pd.DataFrame:
@@ -198,7 +221,26 @@ def select_deep_backgrounds(bank: pd.DataFrame) -> pd.DataFrame:
     return pd.concat(selected, ignore_index=True).drop_duplicates(subset="background_id")
 
 
-def grid_tasks(deep_backgrounds: pd.DataFrame, smoke: bool) -> list[dict[str, Any]]:
+def select_condition_comparison_backgrounds(bank: pd.DataFrame) -> pd.DataFrame:
+    """A larger, condition-balanced background set for testing whether the
+    threshold-gap condition still matters once the policy is tuned to each
+    background's own optimum, instead of held at one fixed (Q, window).
+    """
+    eligible = bank[bank["rho"] > CONDITION_GRID_MIN_RHO].copy()
+    gap = eligible["noshow_threshold_2"] - eligible["noshow_threshold_1"]
+    satisfied = eligible[gap > 0]
+    violated = eligible[gap <= 0]
+
+    n_sat = min(CONDITION_GRID_N_PER_BUCKET, len(satisfied))
+    n_viol = min(CONDITION_GRID_N_PER_BUCKET, len(violated))
+    satisfied = satisfied.sample(n=n_sat, random_state=CONDITION_GRID_SEED).copy()
+    violated = violated.sample(n=n_viol, random_state=CONDITION_GRID_SEED).copy()
+    satisfied["deep_bucket"] = "condition_satisfied"
+    violated["deep_bucket"] = "condition_violated"
+    return pd.concat([satisfied, violated], ignore_index=True)
+
+
+def grid_tasks(deep_backgrounds: pd.DataFrame, smoke: bool, stage_label: str = "grid") -> list[dict[str, Any]]:
     tasks = []
     rows = deep_backgrounds.head(2) if smoke else deep_backgrounds
     for _, row in rows.iterrows():
@@ -216,9 +258,9 @@ def grid_tasks(deep_backgrounds: pd.DataFrame, smoke: bool) -> list[dict[str, An
                     "config_kwargs": {**base_kwargs, **_reservation_kwargs(False, 0, 0), **_smoke_overrides(smoke)},
                     "seed": seed,
                     "extra_cols": {
-                        "stage": "grid",
+                        "stage": stage_label,
                         "background_id": f"{background_id}_Q=0",
-                        "arm": "grid",
+                        "arm": stage_label,
                         "seed": seed,
                         "source_background_id": background_id,
                         "Q": 0,
@@ -238,9 +280,9 @@ def grid_tasks(deep_backgrounds: pd.DataFrame, smoke: bool) -> list[dict[str, An
                             },
                             "seed": seed,
                             "extra_cols": {
-                                "stage": "grid",
+                                "stage": stage_label,
                                 "background_id": f"{background_id}_Q={q}_w={window}",
-                                "arm": "grid",
+                                "arm": stage_label,
                                 "seed": seed,
                                 "source_background_id": background_id,
                                 "Q": q,
@@ -258,6 +300,9 @@ def build_tasks(stages: list[str], bank: pd.DataFrame, smoke: bool) -> list[dict
     if "grid" in stages:
         deep_backgrounds = select_deep_backgrounds(bank)
         tasks.extend(grid_tasks(deep_backgrounds, smoke))
+    if "condition_grid" in stages:
+        condition_backgrounds = select_condition_comparison_backgrounds(bank)
+        tasks.extend(grid_tasks(condition_backgrounds, smoke, stage_label="condition_grid"))
     return tasks
 
 
@@ -337,8 +382,8 @@ def classify_screen(raw: pd.DataFrame, bank: pd.DataFrame) -> pd.DataFrame:
     return table
 
 
-def classify_grid(raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    grid = raw[raw["stage"] == "grid"]
+def classify_grid(raw: pd.DataFrame, stage_label: str = "grid") -> tuple[pd.DataFrame, pd.DataFrame]:
+    grid = raw[raw["stage"] == stage_label]
     cell_means = grid.groupby(["source_background_id", "Q", "window"], as_index=False)[
         "average_utilization"
     ].mean()
@@ -368,6 +413,56 @@ def classify_grid(raw: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     return combined, cell_means
 
 
+def _optimal_vs_none_status(
+    raw_stage: pd.DataFrame, combined: pd.DataFrame, bank: pd.DataFrame
+) -> pd.DataFrame:
+    """Seed-level paired bootstrap of each background's best (Q, window)
+    cell against Q=0, so the condition_grid comparison has a real supported
+    / contradicted / inconclusive verdict per background, not just a bare
+    mean of already seed-averaged cells.
+    """
+    gap = bank["noshow_threshold_2"] - bank["noshow_threshold_1"]
+    bank_cond = bank.assign(condition_satisfied=gap > 0)[
+        ["background_id", "condition_satisfied", "rho", "class1_share", "slots_per_day"]
+    ]
+
+    rows: list[dict[str, Any]] = []
+    for _, r in combined.iterrows():
+        bg = r["source_background_id"]
+        match = re.match(r"Q=(-?\d+),window=(-?\d+)", str(r["best_params"]))
+        if not match:
+            continue
+        best_q, best_w = int(match.group(1)), int(match.group(2))
+        bg_raw = raw_stage[raw_stage["source_background_id"] == bg]
+        best_rows = bg_raw[(bg_raw["Q"] == best_q) & (bg_raw["window"] == best_w)].sort_values("seed")
+        none_rows = bg_raw[bg_raw["Q"] == 0].sort_values("seed")
+        paired_seeds = sorted(set(best_rows["seed"]) & set(none_rows["seed"]))
+        if not paired_seeds:
+            continue
+        best_idx = best_rows.set_index("seed")
+        none_idx = none_rows.set_index("seed")
+        mean, low, high, _ = paired_delta_ci(
+            best_idx.loc[paired_seeds, "average_utilization"].tolist(),
+            none_idx.loc[paired_seeds, "average_utilization"].tolist(),
+            seed=abs(hash((bg, "optimal_vs_none"))) % (2**31),
+        )
+        rows.append(
+            {
+                "background_id": bg,
+                "best_q": best_q,
+                "best_window": best_w,
+                "delta_optimal_vs_none": mean,
+                "delta_optimal_vs_none_ci_low": low,
+                "delta_optimal_vs_none_ci_high": high,
+                "optimal_status": classify_effect(mean, low, high, expected_sign="positive"),
+            }
+        )
+    table = pd.DataFrame(rows)
+    if table.empty:
+        return table
+    return table.merge(bank_cond, on="background_id", how="left")
+
+
 def classify(*, raw_path: Path, bank_path: Path, output_dir: Path) -> None:
     raw = pd.read_csv(raw_path)
     bank = load_bank(bank_path)
@@ -393,10 +488,34 @@ def classify(*, raw_path: Path, bank_path: Path, output_dir: Path) -> None:
             print("Screen: no paired on/off rows found; check --stage and raw output.")
 
     if (raw["stage"] == "grid").any():
-        combined, cell_means = classify_grid(raw)
+        combined, cell_means = classify_grid(raw, stage_label="grid")
         combined.to_csv(summary_dir / "grid_policy_summary.csv", index=False)
         cell_means.to_csv(summary_dir / "grid_cell_means.csv", index=False)
         print(f"Grid: {summary_dir / 'grid_policy_summary.csv'}")
+
+    if (raw["stage"] == "condition_grid").any():
+        raw_cg = raw[raw["stage"] == "condition_grid"]
+        combined_cg, cell_means_cg = classify_grid(raw, stage_label="condition_grid")
+        combined_cg.to_csv(summary_dir / "condition_grid_policy_summary.csv", index=False)
+        cell_means_cg.to_csv(summary_dir / "condition_grid_cell_means.csv", index=False)
+
+        status_table = _optimal_vs_none_status(raw_cg, combined_cg, bank)
+        if not status_table.empty:
+            status_table.to_csv(summary_dir / "condition_grid_optimal_status.csv", index=False)
+            by_condition_cg = (
+                status_table.groupby(["condition_satisfied", "optimal_status"])
+                .size()
+                .rename("n_backgrounds")
+                .reset_index()
+            )
+            by_condition_cg.to_csv(summary_dir / "condition_grid_by_condition.csv", index=False)
+            print(f"Condition grid: {summary_dir / 'condition_grid_optimal_status.csv'}")
+            print(by_condition_cg.to_string(index=False))
+            print(
+                status_table.groupby("condition_satisfied")["delta_optimal_vs_none"]
+                .agg(["mean", "median", "count"])
+                .to_string()
+            )
 
     _write_summary(raw, summary_dir)
 
@@ -410,8 +529,11 @@ def _write_summary(raw: pd.DataFrame, summary_dir: Path) -> None:
         "",
         "This is an auto-generated data summary, not the narrative report.",
         "See screen_by_condition.csv for whether the threshold-gap condition",
-        "is empirically necessary, and grid_policy_summary.csv for the",
-        "optimal-vs-naive-vs-none comparison at the curated backgrounds.",
+        "is empirically necessary at a fixed (Q=5, window=3) policy,",
+        "grid_policy_summary.csv for the optimal-vs-naive-vs-none comparison",
+        "at 12 curated backgrounds, and condition_grid_by_condition.csv for",
+        "whether the condition still matters under each background's own",
+        "optimal policy at a larger, condition-balanced background set.",
     ]
     write_markdown(lines, summary_dir / "h1_summary.md")
 
@@ -419,7 +541,7 @@ def _write_summary(raw: pd.DataFrame, summary_dir: Path) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("command", choices=["run", "classify", "all"])
-    parser.add_argument("--stage", default="all", help="screen, grid, or 'all'")
+    parser.add_argument("--stage", default="all", help="screen, grid, condition_grid, or 'all' (screen+grid)")
     parser.add_argument("--bank", type=Path, default=DEFAULT_BANK_PATH)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--workers", type=int, default=default_workers())

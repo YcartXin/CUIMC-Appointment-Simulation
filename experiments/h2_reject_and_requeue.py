@@ -13,15 +13,23 @@ part of what's being tested, not assumed.
 
 Two stages:
 
-    screen  Broad on/off test at a fixed standby policy (standby_prob=0.4
-            both classes, eligible after 5 days, no max_standby_days cap)
+    screen  Broad on/off test at a fixed standby policy (standby_prob=0.8
+            both classes, no eligibility delay, no max_standby_days cap)
             across every background in the bank. Answers whether the
             effect exists at all, and whether it concentrates in
             backgrounds that satisfy H2's stated condition.
-    dose    standby_prob dose-response sweep {0, 0.1, 0.2, 0.3, 0.4} at a
-            small curated set of backgrounds spanning condition-satisfying
-            and condition-violating cases (violating via horizon alone,
-            via rho alone, and via both).
+    dose    standby_prob dose-response sweep {0.0, 0.1, ..., 0.8} at a
+            curated set of backgrounds (48, 12 per condition bucket)
+            spanning condition-satisfying and condition-violating cases
+            (violating via horizon alone, via rho alone, and via both).
+
+standby_eligible_after_days is deliberately left unset (None) in this
+version: it is not required by the engine (which treats an unset value
+as 0, i.e. immediate eligibility) and was found to add a second
+confound on top of the FIFO/cancellation-rate bottleneck already
+limiting recalls, making it hard to tell whether a weak result came
+from that bottleneck or from the extra delay. Removing it isolates the
+standby_prob dose-response question.
 
 Run from the repository root:
 
@@ -65,10 +73,10 @@ DEFAULT_OUTPUT_DIR = REPO_DIR / "outputs" / "hypotheses" / "h2_reject_and_requeu
 
 KEY_COLUMNS = ["stage", "background_id", "arm", "seed"]
 
-STANDARD_STANDBY_PROB = 0.4
-STANDBY_ELIGIBLE_AFTER_DAYS = 5
-DOSE_VALUES = (0.0, 0.1, 0.2, 0.3, 0.4)
-N_DEEP_BACKGROUNDS_PER_BUCKET = 3
+STANDARD_STANDBY_PROB = 0.8
+STANDBY_ELIGIBLE_AFTER_DAYS = None
+DOSE_VALUES = (0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8)
+N_DEEP_BACKGROUNDS_PER_BUCKET = 12
 
 STANDBY_DIAGNOSTIC_COLS = [
     "class_1_standby_joined",
@@ -127,6 +135,12 @@ def _standby_kwargs(prob: float) -> dict[str, Any]:
     # queue and biasing mean_standby_wait_days upward without ever
     # resolving), but the engine's own expiry-at-cooldown-boundary logic
     # already bounds a queue's lifetime to at most the horizon.
+    #
+    # standby_eligible_after_days_* is also left unset (None -> the engine
+    # treats this as 0, immediate eligibility): it is not required by the
+    # engine and, in the first version of this sweep, added a second gate
+    # on top of the FIFO/cancellation-rate bottleneck that was already
+    # suppressing recalls, making the two hard to tell apart.
     return {
         "standby_prob_1": prob,
         "standby_prob_2": prob,
