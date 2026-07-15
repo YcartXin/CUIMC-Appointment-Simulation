@@ -150,6 +150,21 @@ class ClinicAppointmentSimulation:
         This is shared by new-offer search (find_earliest_open_day) and
         standby recall (process_standby_recalls) so both respect the same
         capacity/reservation rules.
+
+        Total occupancy is capped at slots_per_day unconditionally, before
+        the reserved/general split is even considered. This matters
+        because a specific calendar day's residual index r decreases as
+        the horizon rolls forward: a day can be booked under the plain
+        (non-reservation) rule while r >= reservation window, then later
+        roll into r < window once the window is reached. Checking only
+        reserved_used < reserved_slots at that point (without also
+        re-checking total occupancy) would let the reserved class keep
+        booking into a day that already filled up to slots_per_day under
+        the earlier rule, since reserved_used starts at 0 for bookings
+        made before the day entered the window. That allowed total
+        bookings for a single day to exceed slots_per_day, which in turn
+        let average_utilization exceed 100%. See
+        test_reservation_window_transition_never_exceeds_slots_per_day.
         """
         reserved_slots = self.config.reserved_slots_per_day
         reserved_class_id = self.config.reserved_class_id
@@ -157,6 +172,9 @@ class ClinicAppointmentSimulation:
         if reserved_slots == 0 or reserved_class_id is None or r >= self._reservation_window():
             if len(self.calendar[r]) < self.config.slots_per_day:
                 return False
+            return None
+
+        if len(self.calendar[r]) >= self.config.slots_per_day:
             return None
 
         general_slots = self.config.slots_per_day - reserved_slots

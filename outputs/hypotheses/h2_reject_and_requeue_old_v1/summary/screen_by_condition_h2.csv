@@ -1,0 +1,5 @@
+condition_satisfied,utilization_status,n_backgrounds
+False,contradicted,3
+False,inconclusive,385
+False,supported,4
+True,inconclusive,88

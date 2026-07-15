@@ -4,7 +4,7 @@ import unittest
 
 from analysis.metrics import outcome_rates_from_result, outcome_totals
 from simulation.engine import ClinicAppointmentSimulation
-from simulation.model import PatientClassParams, SimulationConfig, ThresholdRule
+from simulation.model import Booking, PatientClassParams, SimulationConfig, ThresholdRule
 
 
 ZERO_RULE = ThresholdRule(threshold=0, low=0.0, high=0.0)
@@ -141,6 +141,60 @@ class WindowedReservationTest(unittest.TestCase):
         # r=1 is still inside the window, so the split applies.
         self.assertEqual(sim._slot_offer_at(1, class_id=1), True)
         self.assertEqual(sim._slot_offer_at(1, class_id=2), False)
+
+    def test_reservation_window_transition_never_exceeds_slots_per_day(self) -> None:
+        """
+        Regression test for a capacity-overflow bug: a calendar day that
+        filled to slots_per_day under the plain pooled rule (while its
+        residual offset r was still >= window) must NOT accept an
+        additional reserved-class booking once the day rolls forward and
+        its r drops inside the window.
+
+        Before the fix, the r < window branch only checked
+        reserved_used < reserved_slots without first re-checking total
+        occupancy, so a day already at capacity could still take one more
+        reserved-class booking, pushing len(calendar[r]) above
+        slots_per_day (and average_utilization above 100%).
+        """
+        sim = ClinicAppointmentSimulation(
+            self.make_config(
+                slots_per_day=1,
+                horizon_days=3,
+                reserved_slots_per_day=1,
+                reserved_window_days=2,
+            )
+        )
+
+        # Simulate a day that filled up via the plain pooled rule while it
+        # was still outside the window (r=2 >= window=2), booked by the
+        # non-reserved class.
+        sim.calendar[2].append(
+            Booking(patient_class=2, booking_delay=2, tracked=True, reserved_slot=False)
+        )
+
+        # Roll the calendar forward one day: the booking above now sits at
+        # r=1, which is inside the window (r=1 < window=2).
+        sim.roll_calendar_forward_one_day()
+        self.assertEqual(len(sim.calendar[1]), 1)
+
+        # The reserved class must NOT be offered this day: it is already
+        # at slots_per_day capacity, even though reserved_used == 0.
+        self.assertIsNone(sim._slot_offer_at(1, class_id=1))
+        self.assert_calendar_capacity(sim)
+
+        # End-to-end: also fill r=0 (today) so an arriving reserved-class
+        # patient is forced to search past the already-full r=1 day. With
+        # the fix, that patient must skip r=1 entirely and land on r=2
+        # (outside the window, plain pooled, still empty) rather than
+        # overflowing r=1.
+        sim.calendar[0].append(
+            Booking(patient_class=1, booking_delay=0, tracked=True, reserved_slot=True)
+        )
+        sim.process_daily_arrivals([1], track_patients=True)
+        self.assertEqual(sim.class_metrics[1].booked, 1)
+        self.assertEqual(len(sim.calendar[1]), 1)
+        self.assertEqual(len(sim.calendar[2]), 1)
+        self.assert_calendar_capacity(sim)
 
     def test_window_none_reproduces_full_horizon_reservation(self) -> None:
         """
