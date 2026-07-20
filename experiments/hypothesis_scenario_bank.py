@@ -24,9 +24,20 @@ labels which of its own rows satisfy its stated hypothesis condition at
 classification time, rather than the bank enforcing a direction.
 
 Validity constraints enforced during sampling (per class i in {1, 2}):
-    balk_low_i    <= balk_high_i
-    noshow_low_i  <= noshow_high_i
+    balk_low_i    <  balk_high_i
+    noshow_low_i  <  noshow_high_i
     balk_threshold_i > noshow_threshold_i
+
+The low/high probability pairs are strictly ordered (not <=): a pre-
+threshold probability equal to its own post-threshold probability would
+describe a rule with no actual threshold effect (p(tau) is constant
+regardless of tau), which defeats the purpose of a ThresholdRule and
+would silently produce a "flat" background masquerading as a delay-
+dependent one. BALK_LOW_VALUES/NOSHOW_LOW_VALUES top out at 0.3, one
+step below their _HIGH_VALUES counterparts' maximum of 0.4, specifically
+so every low-value candidate always has at least one larger high value
+to pair with -- 0.4 itself is reserved as a post-threshold-only value
+and is never sampled as a pre-threshold one.
 
 Both balk_threshold_i and noshow_threshold_i are kept from ever exceeding
 the booking horizon, but NOT by filtering rows out of the bank at
@@ -62,16 +73,16 @@ DEFAULT_OUTPUT = REPO_DIR / "outputs" / "hypotheses" / "background_scenarios.csv
 # Value grids, exactly as specified
 # ---------------------------------------------------------------------
 
-RHO_VALUES = (0.8, 1.0, 1.2, 1.4, 1.6, 2.0, 2.5, 3.0)
+RHO_VALUES = (0.8, 1.0, 1.2, 1.4, 1.6, 2.0, 3.0)
 HORIZON_VALUES = (2, 6, 10, 14, 18, 22, 26)
 CLASS1_SHARE_VALUES = (0.1, 0.3, 0.5, 0.7, 0.9)
 CAPACITY_VALUES = (20, 30, 40, 50)
 CANCEL_VALUES = (0.1, 0.2, 0.3)
 BALK_THRESHOLD_VALUES = (5, 9, 16, 22, 24)
-BALK_LOW_VALUES = (0.05, 0.1, 0.2, 0.3, 0.4)
+BALK_LOW_VALUES = (0.05, 0.1, 0.2, 0.3)
 BALK_HIGH_VALUES = (0.1, 0.2, 0.3, 0.4)
 NOSHOW_THRESHOLD_VALUES = (4, 7, 14, 20, 22)
-NOSHOW_LOW_VALUES = (0.05, 0.1, 0.2, 0.3, 0.4)
+NOSHOW_LOW_VALUES = (0.05, 0.1, 0.2, 0.3)
 NOSHOW_HIGH_VALUES = (0.1, 0.2, 0.3, 0.4)
 
 # Order of the 17 Sobol dimensions sampled per horizon stratum (horizon
@@ -135,10 +146,10 @@ def _anchor_rows(horizon: int) -> list[dict]:
 
 def _is_valid(df: pd.DataFrame) -> pd.Series:
     return (
-        (df["balk_low_1"] <= df["balk_high_1"])
-        & (df["balk_low_2"] <= df["balk_high_2"])
-        & (df["noshow_low_1"] <= df["noshow_high_1"])
-        & (df["noshow_low_2"] <= df["noshow_high_2"])
+        (df["balk_low_1"] < df["balk_high_1"])
+        & (df["balk_low_2"] < df["balk_high_2"])
+        & (df["noshow_low_1"] < df["noshow_high_1"])
+        & (df["noshow_low_2"] < df["noshow_high_2"])
         & (df["balk_threshold_1"] > df["noshow_threshold_1"])
         & (df["balk_threshold_2"] > df["noshow_threshold_2"])
     )

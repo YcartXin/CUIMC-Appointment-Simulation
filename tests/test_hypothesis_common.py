@@ -97,6 +97,31 @@ class RunOneAndFlattenTest(unittest.TestCase):
         self.assertIn("class_1_standby_joined", row)
         self.assertGreaterEqual(row["average_utilization"], 0.0)
 
+    def test_flatten_result_includes_weighted_utilization(self) -> None:
+        config = build_config(
+            seed=11,
+            lambda_1=8.0,
+            lambda_2=8.0,
+            measure_days=30,
+            burn_in_days=5,
+            cooldown_days=5,
+        )
+        result = ClinicAppointmentSimulation(config).run()
+        row = flatten_result(result, seed=11)
+
+        self.assertIn("weighted_utilization", row)
+        c1 = result.class_metrics[1]
+        c2 = result.class_metrics[2]
+        w1, w2 = 2.0, 1.0
+        expected = (
+            w1 * (c1.served / c1.arrivals) + w2 * (c2.served / c2.arrivals)
+        ) / (w1 + w2)
+        self.assertAlmostEqual(row["weighted_utilization"], expected, places=9)
+        # Bounded in [0, 1] since it's a weighted average of two rates
+        # each already bounded in [0, 1].
+        self.assertGreaterEqual(row["weighted_utilization"], 0.0)
+        self.assertLessEqual(row["weighted_utilization"], 1.0)
+
     def test_flatten_result_includes_standby_diagnostics(self) -> None:
         config = build_config(
             seed=7,

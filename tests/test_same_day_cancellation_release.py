@@ -316,23 +316,24 @@ class SameDayCancellationReleaseTest(unittest.TestCase):
                 standby_prob=1.0,
             )
         )
+        # original_offered_delay = 1 means r = 0 is the ONLY day that could
+        # ever qualify as a recall target (process_standby_recalls requires
+        # r < original_offered_delay) -- r = 1 and r = 2 are structurally
+        # excluded regardless of whether they happen to be open, so this
+        # isolates the test to r = 0's same-day-cancellation gating alone,
+        # without needing to also pin down whether r = 1 stays occupied
+        # under the shared cancel_prob (it may or may not cancel; either
+        # way it is irrelevant here).
         sim.standby_queue[1].append(
             StandbyEntry(
                 patient_class=1,
-                original_offered_delay=2,
+                original_offered_delay=1,
                 days_waited=0,
                 tracked=True,
             )
         )
         sim.calendar[0].append(
             Booking(patient_class=2, booking_delay=0, tracked=False)
-        )
-        # Also fill r = 1 so the only day that could possibly open up is
-        # r = 0 -- isolating whether a same-day opening (which requires
-        # same_day_cancellation_enabled) is what the recall depends on,
-        # rather than r = 1 simply having been open the whole time.
-        sim.calendar[1].append(
-            Booking(patient_class=2, booking_delay=1, tracked=False)
         )
 
         sim.apply_start_of_day_cancellations()

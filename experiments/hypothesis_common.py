@@ -40,6 +40,7 @@ if str(REPO_DIR) not in sys.path:
     sys.path.insert(0, str(REPO_DIR))
 
 from analysis.metrics import result_metrics_from_result  # noqa: E402
+from analysis.reservation_policy_metrics import reservation_policy_metrics_from_result  # noqa: E402
 from analysis.reservation_policy_selection import bootstrap_mean_ci  # noqa: E402
 from simulation.engine import ClinicAppointmentSimulation  # noqa: E402
 from simulation.model import PatientClassParams, SimulationConfig, ThresholdRule  # noqa: E402
@@ -47,6 +48,17 @@ from simulation.model import PatientClassParams, SimulationConfig, ThresholdRule
 # Practical-equivalence tolerance on rate/utilization deltas, matching
 # docs/reports/reservation/assumption_diagnostics/assumption_report.md.
 PRACTICAL_TOLERANCE = 0.005
+
+# Weighted-utilization objective weights: U_service_norm(w1, w2) =
+# (w1 * class_1_served/class_1_arrivals + w2 * class_2_served/class_2_arrivals)
+# / (w1 + w2), i.e. a weighted average of each class's OWN service rate
+# rather than a demand-pooled rate. w1 > w2 means Class 1's access counts
+# more in the combined score than its raw volume alone would give it.
+# See analysis/reservation_policy_metrics.py (Obj_service_norm) for the
+# underlying computation, originally built for the older strict-
+# reservation study and reused here unchanged.
+WEIGHTED_UTILIZATION_W1 = 2.0
+WEIGHTED_UTILIZATION_W2 = 1.0
 
 # Seed conventions reused from the existing robustness study so results
 # stay comparable and reproducible across reports.
@@ -205,11 +217,17 @@ def flatten_result(result: Any, *, seed: int) -> dict[str, Any]:
     Reuses analysis.metrics.result_metrics_from_result for the metrics
     that already exist repo-wide (utilization, served rate, offered/
     accepted delay, class gaps), and adds the Hypothesis 1 / Hypothesis 2
-    diagnostics that are new to this engine extension.
+    diagnostics that are new to this engine extension, plus the weighted-
+    utilization objective (weighted_utilization, a.k.a. Obj_service_norm
+    at WEIGHTED_UTILIZATION_W1/W2) alongside the existing unweighted
+    average_utilization already in `metrics`.
     """
     metrics = result_metrics_from_result(result)
     c1 = result.class_metrics[1]
     c2 = result.class_metrics[2]
+    weighted = reservation_policy_metrics_from_result(
+        result, w1=WEIGHTED_UTILIZATION_W1, w2=WEIGHTED_UTILIZATION_W2
+    )
 
     def _rate(numerator: float, denominator: float) -> float:
         return numerator / denominator if denominator else 0.0
@@ -217,6 +235,7 @@ def flatten_result(result: Any, *, seed: int) -> dict[str, Any]:
     return {
         **metrics,
         "seed": int(seed),
+        "weighted_utilization": weighted["Obj_service_norm"],
         "reserved_slot_fill_rate": result.reserved_slot_fill_rate,
         "class_1_no_show_rate": _rate(c1.no_show, c1.arrivals),
         "class_2_no_show_rate": _rate(c2.no_show, c2.arrivals),

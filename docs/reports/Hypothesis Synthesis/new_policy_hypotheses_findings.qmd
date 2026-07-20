@@ -17,37 +17,43 @@ Both are tested against the same background bank (`experiments/hypothesis_scenar
 
 Effects are classified supported, contradicted, or inconclusive from a paired-seed bootstrap CI over the same 20 seeds run with a policy on and off, using the robustness study's own 0.005 practical-equivalence tolerance.
 
-> **Note on the numbers below:** the value grids in this section reflect the current design (wider booking-horizon range, revised threshold grids, horizon treated as a swept policy lever for H1, reservation window swept across the full booking horizon). The narrative findings later in this document still describe the prior run (four booking horizons, the earlier threshold grids, and a fixed {3,4,5,6,7} reservation-window candidate set) and will be refreshed once the experiments are re-run under the design below.
+> **Note on the numbers below:** the value grids in this section reflect the current design (wider booking-horizon range, revised threshold grids, horizon treated as a swept policy lever for H1, reservation window swept across the full booking horizon, H1's reservation now searched via a coarse-to-fine grid rather than brute force, and a strict-vs-release reservation comparison plus a weighted-utilization objective — see the policy-parameters table below). The narrative findings later in this document still describe an older run (four booking horizons, earlier threshold grids, a fixed {3,4,5,6,7} reservation-window candidate set, a single strict-only reservation policy, and no weighted-utilization objective) and will be refreshed once the experiments are re-run under the design below on the Columbia research grid.
 
 ### Parameters tested
 
-**Problem parameters** — facts about the clinic's environment, not chosen by anyone, shared by both hypotheses. Every per-class row is sampled independently for Class 1 and Class 2 — no ordering is forced between them — so it's possible to test whether each hypothesis's ordering condition actually matters. Balking threshold is always sampled strictly above no-show threshold within the same class, since a patient who would already have no-showed by their own no-show cutoff has no later point left at which to balk instead.
+**Problem parameters** — facts about the clinic's environment, not chosen by anyone, shared by both hypotheses. Every per-class row is sampled independently for Class 1 and Class 2 — no ordering is forced between them — so it's possible to test whether each hypothesis's ordering condition actually matters. Balking threshold is always sampled strictly above no-show threshold within the same class, since a patient who would already have no-showed by their own no-show cutoff has no later point left at which to balk instead. Within each pre/post pair below, the pre-threshold probability is always sampled strictly below the post-threshold probability — never equal — since an equal pair would describe a rule with no real threshold effect (the same probability regardless of delay), which defeats the purpose of sampling a delay-dependent rule at all. The pre-threshold grids top out one step below the post-threshold grids' own maximum (0.4), so 0.4 is reserved as a post-threshold-only value.
 
 | Parameter | Tested values |
 |---|---|
-| Demand-to-capacity ratio (&rho;) | 0.8, 1.0, 1.2, 1.4, 1.6, 2.0, 2.5, 3.0 |
-| Booking horizon (days) | 2, 6, 10, 14, 18, 22, 26 |
+| Demand-to-capacity ratio (&rho;) | 0.8, 1.0, 1.2, 1.4, 1.6, 2.0, 3.0 |
 | Class 1 demand share | 0.1, 0.3, 0.5, 0.7, 0.9 |
 | Daily capacity (slots/day) | 20, 30, 40, 50 |
 | Cancellation probability (per class) | 0.1, 0.2, 0.3 |
 | Balking threshold (per class, days) | 5, 9, 16, 22, 24 |
-| Pre-threshold balking probability (per class) | 0.05, 0.1, 0.2, 0.3, 0.4 |
+| Pre-threshold balking probability (per class) | 0.05, 0.1, 0.2, 0.3 |
 | Post-threshold balking probability (per class) | 0.1, 0.2, 0.3, 0.4 |
 | No-show threshold (per class, days) | 4, 7, 14, 20, 22 |
-| Pre-threshold no-show probability (per class) | 0.05, 0.1, 0.2, 0.3, 0.4 |
+| Pre-threshold no-show probability (per class) | 0.05, 0.1, 0.2, 0.3 |
 | Post-threshold no-show probability (per class) | 0.1, 0.2, 0.3, 0.4 |
 
-Booking horizon plays a dual role. For H2, and as H1's screen-stage default, it is read as a background fact, exactly like the other rows above. For H1's grid and condition_grid stages, it is additionally swept as its own tested policy lever (see the policy-parameters table below) — clinics can choose how far out to let patients book, so H1 treats that choice itself as part of what's being tested, not just a fact about the clinic. Whenever a sampled balking or no-show threshold would exceed the booking horizon in play for a given task, it is capped dynamically at (horizon &minus; 1) days rather than the row being discarded, so every threshold/horizon combination in the tables above is usable, including the shortest 2-day horizon.
+Booking horizon is not listed above because it is treated as a policy lever rather than a fixed environmental fact (see the policy-parameters table below), but it still underlies every row above operationally: for H2, and for H1's `baseline` and `reservation_only` conditions, each background carries its own bank-assigned horizon; for H1's `horizon_only` and `both_flexible` conditions, horizon is additionally swept, holding a background's other parameters (the rows above) fixed at their bank-assigned values. Whenever a sampled balking or no-show threshold would exceed the booking horizon in play for a given task, it is capped dynamically at (horizon &minus; 1) days rather than the row being discarded, so every threshold/horizon combination is usable, including the shortest 2-day horizon.
 
 **Policy parameters** — the actual levers each hypothesis switches on or tunes.
 
 | Parameter | Applies to |
 |---|---|
-| Reserved slots per day (Q) — 0 (off), then 5 up to half of daily capacity, in steps of 5 | H1 only |
-| Reservation window (days) — 1 day up to the entire booking horizon, in steps of 1 | H1 only |
-| Booking horizon (days) — 2, 6, 10, 14, 18, 22, 26, swept holding a background's other parameters fixed | H1 only (grid and condition_grid stages) |
+| Reserved slots per day (Q) — 0 (off), then 1 up to the entire daily capacity, searched via coarse-to-fine grid (see below), not brute force | H1 only |
+| Reservation window (days) — 1 day up to the entire booking horizon, same coarse-to-fine search | H1 only |
+| Booking horizon (days) — 2, 6, 10, 14, 18, 22, 26, swept holding a background's other parameters fixed | H1 only (`horizon_only` and `both_flexible` conditions) |
+| Reservation-release rule — strict (reserved capacity is never available to Class 2) vs release (an idle reserved slot is pooled with general capacity, same-day only) | H1 only, run as two separate passes |
 | Standby-join probability — 0.0 (off) up to 0.8, in steps of 0.1 | H2 only |
 | Standby queue expiry cap — uncapped (no maximum) | H2 only |
+
+**H1's four flexibility conditions.** Rather than one fixed policy, H1 now searches for the *optimal* (Q, window[, horizon]) at each background, under four regimes: `baseline` (no reservation, horizon fixed at the background's own value — plain FCFS), `horizon_only` (no reservation, but horizon is swept to find the best value alone), `reservation_only` (horizon fixed, but Q and window are optimized), and `both_flexible` (horizon, Q, and window all jointly optimized). `both_flexible`'s search space contains the other three, so its optimum should never be meaningfully worse than any of them — this is checked directly in the summary output as a sanity check on the search itself, not assumed. Every condition is run once under the strict rule and once under the release rule (`experiments/h1_short_horizon_reservation.py --variant strict|release`), with same-day cancellations enabled uniformly across every condition and both variants so that the only thing differing between a strict run and a release run is whether idle reserved capacity actually gets released to Class 2.
+
+Because Q now spans up to 50 candidate values and horizon is swept too, brute-force search became impractically expensive (roughly 7,850 simulations per background per seed). Instead each (Q, window) search runs coarse-to-fine: a coarse joint grid (Q in steps of 5, window in steps of 2) finds an approximate winner, then a "+"-shaped refinement (each dimension swept at step 1 within a radius matching its own coarse step, holding the other dimension at its coarse-winning value) recovers full step-1 resolution in the immediate neighborhood. The reported optimum is the true best of every cell actually evaluated, coarse and fine combined.
+
+**Weighted utilization.** Alongside the existing (unweighted) `average_utilization`, every run now also reports `weighted_utilization`: a weighted average of each class's own service rate, w<sub>1</sub>&middot;(Y<sub>1</sub>/A<sub>1</sub>) + w<sub>2</sub>&middot;(Y<sub>2</sub>/A<sub>2</sub>), normalized by (w<sub>1</sub>+w<sub>2</sub>), where Y<sub>i</sub>/A<sub>i</sub> are class i's served count and arrival count. Default weights are w<sub>1</sub>=2, w<sub>2</sub>=1 — Class 1's own access counts twice as much as Class 2's in the combined score, rather than each class mattering only in proportion to its arrival volume. This is the objective the coarse-to-fine search actually optimizes against (not `average_utilization`); both metrics are recorded at every evaluated cell regardless, so which one is treated as "the optimum" can be revisited without rerunning anything.
 
 ## Hypothesis 1: short-horizon reservation for the shorter-no-show-threshold class
 

@@ -12,8 +12,50 @@ from experiments import hypothesis_scenario_bank as bank_module
 
 def _small_bank() -> pd.DataFrame:
     return bank_module.generate_background_bank(
-        n_per_horizon=6, seed=7, horizons=(6, 22)
+        n_per_horizon=3, seed=7, horizons=(6, 18)
     )
+
+
+class CoarseToFineGridTest(unittest.TestCase):
+    def test_q_coarse_grid_steps_and_includes_capacity(self) -> None:
+        grid = h1.q_coarse_grid(50)
+        self.assertEqual(grid, [5, 10, 15, 20, 25, 30, 35, 40, 45, 50])
+        self.assertNotIn(0, grid)
+
+    def test_q_coarse_grid_always_includes_capacity_even_off_step(self) -> None:
+        grid = h1.q_coarse_grid(22)
+        self.assertEqual(grid[-1], 22)
+
+    def test_window_coarse_grid_steps_and_includes_horizon(self) -> None:
+        grid = h1.window_coarse_grid(14)
+        self.assertEqual(grid, [1, 3, 5, 7, 9, 11, 13, 14])
+        self.assertEqual(grid[-1], 14)
+
+    def test_q_fine_grid_covers_neighborhood_excluding_center(self) -> None:
+        grid = h1.q_fine_grid(15, 50)
+        self.assertEqual(grid, [10, 11, 12, 13, 14, 16, 17, 18, 19, 20])
+        self.assertNotIn(15, grid)
+
+    def test_q_fine_grid_clips_to_valid_range(self) -> None:
+        grid = h1.q_fine_grid(2, 50)
+        self.assertEqual(min(grid), 1)
+        grid_hi = h1.q_fine_grid(48, 50)
+        self.assertEqual(max(grid_hi), 50)
+
+    def test_q_fine_grid_empty_when_coarse_winner_is_zero(self) -> None:
+        self.assertEqual(h1.q_fine_grid(0, 50), [])
+
+    def test_window_fine_grid_covers_neighborhood_excluding_center(self) -> None:
+        grid = h1.window_fine_grid(7, 14)
+        self.assertEqual(grid, [5, 6, 8, 9])
+        self.assertNotIn(7, grid)
+
+    def test_fine_radius_matches_coarse_step_for_full_coverage(self) -> None:
+        # The fine radius on each dimension exactly matches that
+        # dimension's coarse step, so coarse+fine together give full
+        # step-1 coverage out to the adjacent coarse points on both sides.
+        self.assertEqual(h1.Q_REFINE_RADIUS, h1.Q_COARSE_STEP)
+        self.assertEqual(h1.WINDOW_REFINE_RADIUS, h1.WINDOW_COARSE_STEP)
 
 
 class TaskGenerationTest(unittest.TestCase):
@@ -21,228 +63,233 @@ class TaskGenerationTest(unittest.TestCase):
         keys = [tuple(t["extra_cols"][c] for c in h1.KEY_COLUMNS) for t in tasks]
         self.assertEqual(len(keys), len(set(keys)), "task keys must be unique for resume to work")
 
-    def test_screen_covers_whole_bank_with_on_off_pairs(self) -> None:
+    def test_baseline_is_one_cell_per_seed_at_native_horizon(self) -> None:
         bank = _small_bank()
-        tasks = h1.screen_tasks(bank, smoke=False)
+        row = bank.iloc[0]
+        tasks = h1.baseline_tasks(row, h1.VARIANT_STRICT, smoke=False)
+        self.assertEqual(len(tasks), len(h1._seeds(False)))
+        for t in tasks:
+            self.assertEqual(t["extra_cols"]["Q"], 0)
+            self.assertEqual(t["extra_cols"]["horizon_days"], int(row["horizon_days"]))
+            self.assertEqual(t["config_kwargs"]["reserved_slots_per_day"], 0)
+
+    def test_horizon_only_sweeps_all_horizons_with_q_zero(self) -> None:
+        bank = _small_bank()
+        row = bank.iloc[0]
+        tasks = h1.horizon_only_tasks(row, h1.VARIANT_STRICT, smoke=False)
         self._assert_unique_keys(tasks)
-        arms = {t["extra_cols"]["arm"] for t in tasks}
-        self.assertEqual(arms, {"off", "on"})
-        # Off-arm background_ids are unsuffixed and match the bank exactly;
-        # on-arm background_ids are suffixed per swept window
-        # (see screen_tasks), so we check source_background_id instead,
-        # which is preserved unsuffixed on every task regardless of arm.
-        source_ids = {t["extra_cols"]["source_background_id"] for t in tasks}
-        self.assertEqual(source_ids, set(bank["background_id"]))
-        off_background_ids = {
-            t["extra_cols"]["background_id"] for t in tasks if t["extra_cols"]["arm"] == "off"
-        }
-        self.assertEqual(off_background_ids, set(bank["background_id"]))
+        horizons = {t["extra_cols"]["horizon_days"] for t in tasks}
+        self.assertEqual(horizons, set(h1.H1_HORIZON_VALUES))
+        self.assertTrue(all(t["extra_cols"]["Q"] == 0 for t in tasks))
 
-    def test_screen_tasks_have_matching_schema_regardless_of_arm(self) -> None:
-        # Regression: screen and grid extra_cols must share the same key
-        # set so the resumable CSV writer never appends mismatched headers.
+    def test_reservation_only_coarse_never_includes_q_zero(self) -> None:
         bank = _small_bank()
-        tasks = h1.screen_tasks(bank, smoke=True)
-        keys = {frozenset(t["extra_cols"].keys()) for t in tasks}
-        self.assertEqual(len(keys), 1)
-
-    def test_grid_and_screen_extra_cols_share_the_same_schema(self) -> None:
-        bank = _small_bank()
-        deep = h1.select_deep_backgrounds(bank)
-        screen = h1.screen_tasks(bank, smoke=True)
-        grid = h1.grid_tasks(deep, smoke=True)
-        screen_keys = set(screen[0]["extra_cols"].keys())
-        grid_keys = set(grid[0]["extra_cols"].keys())
-        self.assertEqual(screen_keys, grid_keys)
-
-    def test_grid_includes_q_zero_and_positive_q(self) -> None:
-        bank = _small_bank()
-        deep = h1.select_deep_backgrounds(bank)
-        tasks = h1.grid_tasks(deep, smoke=True)
+        row = bank.iloc[0]
+        tasks = h1.reservation_only_coarse_tasks(row, h1.VARIANT_STRICT, smoke=False)
         self._assert_unique_keys(tasks)
         q_values = {t["extra_cols"]["Q"] for t in tasks}
-        self.assertIn(0, q_values)
-        self.assertTrue(any(q > 0 for q in q_values))
+        self.assertNotIn(0, q_values)
+        horizons = {t["extra_cols"]["horizon_days"] for t in tasks}
+        self.assertEqual(horizons, {int(row["horizon_days"])})
 
-    def test_window_grid_spans_one_to_the_full_horizon(self) -> None:
-        for horizon in (2, 6, 14, 26):
-            windows = h1.window_grid_for_horizon(horizon)
-            self.assertEqual(windows, list(range(1, horizon + 1)))
-            self.assertTrue(all(w <= horizon for w in windows))
-
-    def test_screen_window_sweep_never_exceeds_each_backgrounds_own_horizon(self) -> None:
+    def test_reservation_only_fine_refines_around_winner(self) -> None:
         bank = _small_bank()
-        tasks = h1.screen_tasks(bank, smoke=False)
-        by_bg_horizon = {row["background_id"]: int(row["horizon_days"]) for _, row in bank.iterrows()}
-        for t in tasks:
-            if t["extra_cols"]["arm"] != "on":
-                continue
-            horizon = by_bg_horizon[t["extra_cols"]["source_background_id"]]
-            self.assertLessEqual(t["extra_cols"]["window"], horizon)
-
-    def test_grid_sweeps_horizon_as_a_policy_lever(self) -> None:
-        bank = _small_bank()
-        deep = h1.select_deep_backgrounds(bank)
-        tasks = h1.grid_tasks(deep, smoke=False)
-        swept_horizons = {t["extra_cols"]["horizon_days"] for t in tasks}
-        self.assertEqual(swept_horizons, set(h1.H1_HORIZON_VALUES))
-
-    def test_grid_smoke_mode_uses_fewer_horizons(self) -> None:
-        bank = _small_bank()
-        deep = h1.select_deep_backgrounds(bank)
-        tasks = h1.grid_tasks(deep, smoke=True)
-        swept_horizons = {t["extra_cols"]["horizon_days"] for t in tasks}
-        self.assertEqual(swept_horizons, set(h1.H1_HORIZON_VALUES[:2]))
-
-    def test_thresholds_are_capped_at_horizon_minus_one_in_built_config(self) -> None:
-        # Exercise the dynamic-capping path directly through build_config
-        # (hypothesis_common), since h1's own task generation deliberately
-        # passes raw, uncapped threshold values through.
-        from experiments.hypothesis_common import build_config
-
-        config = build_config(
-            slots_per_day=30,
-            lambda_1=10.0,
-            lambda_2=10.0,
-            cancel_1=0.1,
-            cancel_2=0.1,
-            balk_threshold_1=24,
-            balk_low_1=0.1,
-            balk_high_1=0.2,
-            balk_threshold_2=24,
-            balk_low_2=0.1,
-            balk_high_2=0.2,
-            noshow_threshold_1=22,
-            noshow_low_1=0.1,
-            noshow_high_1=0.2,
-            noshow_threshold_2=22,
-            noshow_low_2=0.1,
-            noshow_high_2=0.2,
-            horizon_days=2,
-            seed=1,
+        row = bank.iloc[0]
+        tasks = h1.reservation_only_fine_tasks(
+            row, h1.VARIANT_STRICT, smoke=False, best_q=10, best_window=5
         )
-        self.assertEqual(config.classes[1].balk_prob.threshold, 1)
-        self.assertEqual(config.classes[1].no_show_prob.threshold, 1)
-        self.assertEqual(config.classes[2].balk_prob.threshold, 1)
-        self.assertEqual(config.classes[2].no_show_prob.threshold, 1)
+        self._assert_unique_keys(tasks)
+        q_values = {t["extra_cols"]["Q"] for t in tasks if t["extra_cols"]["window"] == 5}
+        self.assertNotIn(10, q_values)  # center excluded, already evaluated in coarse
 
-    def test_q_grid_caps_at_half_capacity(self) -> None:
-        for capacity in (20, 30, 40, 50):
-            q_values = h1.q_grid_for_capacity(capacity)
-            self.assertTrue(all(q <= capacity // 2 for q in q_values))
-            self.assertTrue(all(q % 5 == 0 for q in q_values))
+    def test_both_flexible_coarse_sweeps_every_horizon(self) -> None:
+        bank = _small_bank()
+        row = bank.iloc[0]
+        tasks = h1.both_flexible_coarse_tasks(row, h1.VARIANT_STRICT, smoke=False)
+        self._assert_unique_keys(tasks)
+        horizons = {t["extra_cols"]["horizon_days"] for t in tasks}
+        self.assertEqual(horizons, set(h1.H1_HORIZON_VALUES))
+        q_values = {t["extra_cols"]["Q"] for t in tasks}
+        self.assertNotIn(0, q_values)
 
-    def test_smoke_reduces_seed_count(self) -> None:
-        full = len(h1._seeds(smoke=False))
-        smoke = len(h1._seeds(smoke=True))
-        self.assertLess(smoke, full)
+    def test_both_flexible_fine_only_covers_winning_horizons(self) -> None:
+        bank = _small_bank()
+        row = bank.iloc[0]
+        winners = {6: (10, 3), 18: (20, 7)}
+        tasks = h1.both_flexible_fine_tasks(row, h1.VARIANT_STRICT, smoke=False, winners=winners)
+        horizons = {t["extra_cols"]["horizon_days"] for t in tasks}
+        self.assertEqual(horizons, {6, 18})
+
+    def test_release_variant_sets_release_flag_only_for_positive_q(self) -> None:
+        bank = _small_bank()
+        row = bank.iloc[0]
+        tasks = h1.reservation_only_coarse_tasks(row, h1.VARIANT_RELEASE, smoke=False)
+        for t in tasks:
+            self.assertTrue(t["config_kwargs"]["release_unused_reservation_same_day"])
+        baseline = h1.baseline_tasks(row, h1.VARIANT_RELEASE, smoke=False)
+        for t in baseline:
+            self.assertFalse(t["config_kwargs"]["release_unused_reservation_same_day"])
+
+    def test_strict_variant_never_sets_release_flag(self) -> None:
+        bank = _small_bank()
+        row = bank.iloc[0]
+        tasks = h1.reservation_only_coarse_tasks(row, h1.VARIANT_STRICT, smoke=False)
+        for t in tasks:
+            self.assertFalse(t["config_kwargs"]["release_unused_reservation_same_day"])
+
+    def test_same_day_cancellation_always_enabled_regardless_of_variant(self) -> None:
+        bank = _small_bank()
+        row = bank.iloc[0]
+        for variant in h1.VARIANTS:
+            for tasks in (
+                h1.baseline_tasks(row, variant, smoke=False),
+                h1.horizon_only_tasks(row, variant, smoke=False),
+                h1.reservation_only_coarse_tasks(row, variant, smoke=False),
+            ):
+                for t in tasks:
+                    self.assertTrue(t["config_kwargs"]["same_day_cancellation_enabled"])
+
+    def test_invalid_variant_rejected_by_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            bank_path = Path(tmp) / "bank.csv"
+            _small_bank().to_csv(bank_path, index=False)
+            with self.assertRaises(ValueError):
+                h1.run(
+                    variant="bogus",
+                    bank_path=bank_path,
+                    output_dir=Path(tmp) / "out",
+                    workers=1,
+                    smoke=True,
+                    resume=False,
+                )
 
 
-class SelectDeepBackgroundsTest(unittest.TestCase):
-    def test_selection_includes_condition_satisfied_and_violated(self) -> None:
-        bank = bank_module.generate_background_bank(n_per_horizon=30, seed=11)
-        deep = h1.select_deep_backgrounds(bank)
-        self.assertGreater(len(deep), 0)
-        self.assertIn("deep_bucket", deep.columns)
-        gap = deep["noshow_threshold_2"] - deep["noshow_threshold_1"]
-        self.assertTrue((gap > 0).any())
-        self.assertTrue((gap <= 0).any() or len(deep) == (gap > 0).sum())
+class ShardedExecutionTest(unittest.TestCase):
+    def test_run_sharded_tasks_routes_rows_by_source_background_id(self) -> None:
+        bank = _small_bank()
+        row = bank.iloc[0]
+        tasks = h1.baseline_tasks(row, h1.VARIANT_STRICT, smoke=True)
+        with tempfile.TemporaryDirectory() as tmp:
+            raw_dir = Path(tmp) / "raw"
+            h1.run_sharded_tasks(tasks, raw_dir=raw_dir, workers=1)
+            shard = h1.shard_path(raw_dir, row["background_id"])
+            self.assertTrue(shard.exists())
+            written = pd.read_csv(shard)
+            self.assertEqual(len(written), len(tasks))
+
+    def test_filter_pending_skips_already_completed(self) -> None:
+        bank = _small_bank()
+        row = bank.iloc[0]
+        tasks = h1.baseline_tasks(row, h1.VARIANT_STRICT, smoke=True)
+        with tempfile.TemporaryDirectory() as tmp:
+            raw_dir = Path(tmp) / "raw"
+            h1.run_sharded_tasks(tasks, raw_dir=raw_dir, workers=1)
+            pending = h1._filter_pending(tasks, raw_dir)
+            self.assertEqual(pending, [])
 
 
 class EndToEndSmokeTest(unittest.TestCase):
-    def test_run_and_classify_screen_produces_expected_columns(self) -> None:
+    def test_run_and_classify_produce_expected_structure(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             bank_path = Path(tmp) / "bank.csv"
             _small_bank().to_csv(bank_path, index=False)
             output_dir = Path(tmp) / "out"
-            raw_path = h1.run(
-                stages=["screen"],
+
+            h1.run(
+                variant=h1.VARIANT_STRICT,
                 bank_path=bank_path,
                 output_dir=output_dir,
                 workers=1,
                 smoke=True,
                 resume=False,
             )
-            self.assertTrue(raw_path.exists())
-            raw = pd.read_csv(raw_path)
-            self.assertGreater(len(raw), 0)
-            for column in ("average_utilization", "reserved_slot_fill_rate", "arm", "stage"):
-                self.assertIn(column, raw.columns)
+            h1.classify(output_dir=output_dir, bank_path=bank_path, variant=h1.VARIANT_STRICT)
 
-            h1.classify(raw_path=raw_path, bank_path=bank_path, output_dir=output_dir)
-            screen_path = output_dir / "summary" / "screen_by_background.csv"
-            self.assertTrue(screen_path.exists())
-            screen = pd.read_csv(screen_path)
-            self.assertIn("utilization_status", screen.columns)
-            self.assertIn("condition_satisfied", screen.columns)
-            self.assertIn("best_window", screen.columns)
-            self.assertTrue(
-                screen["utilization_status"].isin(["supported", "inconclusive", "contradicted"]).all()
-            )
-            # mean_offered_delay has no directional claim: diagnostic delta
-            # only, no status column.
-            self.assertNotIn("mean_offered_delay_status", screen.columns)
+            optima_path = output_dir / h1.VARIANT_STRICT / "summary" / "condition_optima.csv"
+            deltas_path = output_dir / h1.VARIANT_STRICT / "summary" / "condition_deltas.csv"
+            self.assertTrue(optima_path.exists())
+            self.assertTrue(deltas_path.exists())
 
-    def test_run_and_classify_grid_produces_optimal_vs_none_per_horizon(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            bank_path = Path(tmp) / "bank.csv"
-            _small_bank().to_csv(bank_path, index=False)
-            output_dir = Path(tmp) / "out"
-            raw_path = h1.run(
-                stages=["grid"],
-                bank_path=bank_path,
-                output_dir=output_dir,
-                workers=1,
-                smoke=True,
-                resume=False,
-            )
-            h1.classify(raw_path=raw_path, bank_path=bank_path, output_dir=output_dir)
-            grid_path = output_dir / "summary" / "grid_policy_summary.csv"
-            self.assertTrue(grid_path.exists())
-            grid = pd.read_csv(grid_path)
-            for column in (
-                "source_background_id",
-                "horizon_days",
-                "optimal_utilization",
-                "none_utilization",
-                "optimal_minus_none",
-            ):
-                self.assertIn(column, grid.columns)
-            # naive-vs-optimal no longer applies: there is no single
-            # universal (Q, window) baseline once window sweeps 1..horizon
-            # and horizon itself is swept.
-            self.assertNotIn("naive_utilization", grid.columns)
-            # One row per (background, horizon) tested, not one per background.
+            optima = pd.read_csv(optima_path)
+            self.assertGreater(len(optima), 0)
+            for stage in h1.STAGES:
+                for suffix in ("horizon_days", "Q", "window", "average_utilization", "weighted_utilization"):
+                    self.assertIn(f"{stage}_{suffix}", optima.columns)
+            self.assertTrue((optima["baseline_Q"] == 0).all())
+
+            deltas = pd.read_csv(deltas_path)
+            self.assertGreater(len(deltas), 0)
             self.assertEqual(
-                set(grid["horizon_days"].unique()), set(h1.H1_HORIZON_VALUES[:2])
+                set(deltas["comparison"].unique()),
+                {
+                    "both_flexible_vs_baseline",
+                    "both_flexible_vs_reservation_only",
+                    "both_flexible_vs_horizon_only",
+                },
             )
+            for metric in ("average_utilization", "weighted_utilization"):
+                self.assertIn(f"delta_{metric}", deltas.columns)
+                self.assertIn(f"{metric}_status", deltas.columns)
 
-    def test_resume_skips_already_completed_rows(self) -> None:
+            summary_md = output_dir / h1.VARIANT_STRICT / "summary" / "h1_summary.md"
+            self.assertTrue(summary_md.exists())
+
+    def test_resume_skips_already_completed_backgrounds(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             bank_path = Path(tmp) / "bank.csv"
             _small_bank().to_csv(bank_path, index=False)
             output_dir = Path(tmp) / "out"
+
             h1.run(
-                stages=["screen"],
+                variant=h1.VARIANT_RELEASE,
                 bank_path=bank_path,
                 output_dir=output_dir,
                 workers=1,
                 smoke=True,
                 resume=False,
             )
-            raw_path = output_dir / "raw" / "h1_raw.csv"
-            first_len = len(pd.read_csv(raw_path))
+            raw_dir = output_dir / h1.VARIANT_RELEASE / "raw"
+            row_counts_before = {
+                shard.name: len(pd.read_csv(shard)) for shard in raw_dir.glob("*.csv")
+            }
 
             h1.run(
-                stages=["screen"],
+                variant=h1.VARIANT_RELEASE,
                 bank_path=bank_path,
                 output_dir=output_dir,
                 workers=1,
                 smoke=True,
                 resume=True,
             )
-            second_len = len(pd.read_csv(raw_path))
-            self.assertEqual(first_len, second_len)
+            row_counts_after = {
+                shard.name: len(pd.read_csv(shard)) for shard in raw_dir.glob("*.csv")
+            }
+            self.assertEqual(row_counts_before, row_counts_after)
+
+    def test_strict_and_release_variants_write_separate_output_trees(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            bank_path = Path(tmp) / "bank.csv"
+            _small_bank().to_csv(bank_path, index=False)
+            output_dir = Path(tmp) / "out"
+
+            h1.run(
+                variant=h1.VARIANT_STRICT,
+                bank_path=bank_path,
+                output_dir=output_dir,
+                workers=1,
+                smoke=True,
+                resume=False,
+            )
+            h1.run(
+                variant=h1.VARIANT_RELEASE,
+                bank_path=bank_path,
+                output_dir=output_dir,
+                workers=1,
+                smoke=True,
+                resume=False,
+            )
+            self.assertTrue((output_dir / h1.VARIANT_STRICT / "raw").exists())
+            self.assertTrue((output_dir / h1.VARIANT_RELEASE / "raw").exists())
 
 
 if __name__ == "__main__":
