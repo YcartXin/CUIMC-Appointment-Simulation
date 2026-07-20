@@ -106,6 +106,30 @@ class SimulationConfig:
     means the reservation applies across the full horizon (the original,
     backward-compatible behavior). A window covering the full horizon and
     a window of None are equivalent.
+
+    same_day_cancellation_enabled: when False (default), reproduces the
+    original, documented "no same-day cancellations" assumption exactly
+    -- apply_start_of_day_cancellations only ever touches residual days
+    r >= 1. When True, day r = 0 is also subject to the same per-class
+    cancel_prob, once, before that day's fresh arrivals are processed.
+    This is a genuine change to a core, shared modeling assumption (see
+    docs/reference/simulation_documentation.qmd), so it defaults off:
+    every existing config, and every hypothesis built on this engine,
+    keeps its original behavior unless it opts in explicitly.
+
+    release_unused_reservation_same_day: when False (default), reserved
+    capacity is never available to any class other than reserved_class_id
+    at any residual day, including r = 0 -- the original "strict"
+    reservation behavior. When True, at r = 0 only, reserved capacity is
+    pooled with general capacity: any class can take an r = 0 slot on a
+    first-come basis regardless of whether it happens to be one of the
+    reserved_slots_per_day. This covers both ways a reserved slot can end
+    up idle on the day of -- Class 1 demand simply not filling it, or (if
+    same_day_cancellation_enabled is also True) a same-day cancellation
+    freeing a slot Class 1 had already booked -- since both look
+    identical to _slot_offer_at as "this slot is not currently occupied
+    right now." Only meaningful when reserved_slots_per_day > 0; a no-op
+    otherwise.
     """
     slots_per_day: int
     horizon_days: int
@@ -117,6 +141,8 @@ class SimulationConfig:
     reserved_class_id: Optional[int] = None
     reserved_slots_per_day: int = 0
     reserved_window_days: Optional[int] = None
+    same_day_cancellation_enabled: bool = False
+    release_unused_reservation_same_day: bool = False
 
     def __post_init__(self) -> None:
         if self.slots_per_day <= 0:

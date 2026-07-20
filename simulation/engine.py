@@ -27,12 +27,18 @@ class ClinicAppointmentSimulation:
     - delay-dependent balking
     - delay-dependent no-show
     - constant cancellation applied once per day to future appointments only
-    - no same-day cancellations
+      by default (no same-day cancellations); optionally extended to
+      same-day (r = 0) via same_day_cancellation_enabled
     - no rebooking of no-show slots
     - day-level calendar state with booking audit records
     - derived summary state at the start of each measured day
     - optional windowed reservation: a class-specific slot reservation that
       only applies within a near-term residual-day window
+    - optional same-day reservation release: when
+      release_unused_reservation_same_day is set, an idle reserved slot at
+      r = 0 (whether never filled today, or freed by a same-day
+      cancellation) is pooled with general capacity instead of held
+      strictly for the reserved class
     - optional standby/requeue: patients who would otherwise balk a
       far-out offer can instead wait off-calendar for an earlier opening
       freed by a cancellation
@@ -169,7 +175,16 @@ class ClinicAppointmentSimulation:
         reserved_slots = self.config.reserved_slots_per_day
         reserved_class_id = self.config.reserved_class_id
 
-        if reserved_slots == 0 or reserved_class_id is None or r >= self._reservation_window():
+        # Same-day release: at r = 0 only, and only when explicitly
+        # configured, reserved capacity is pooled with general capacity
+        # rather than gated by reserved_class_id. This covers a reserved
+        # slot sitting idle at r = 0 for either reason -- Class 1 simply
+        # hasn't filled it yet today, or (with same_day_cancellation_enabled
+        # also set) a same-day cancellation just freed it -- since both
+        # look identical here: the slot is not currently occupied.
+        released_today = r == 0 and self.config.release_unused_reservation_same_day
+
+        if reserved_slots == 0 or reserved_class_id is None or r >= self._reservation_window() or released_today:
             if len(self.calendar[r]) < self.config.slots_per_day:
                 return False
             return None
@@ -460,13 +475,23 @@ class ClinicAppointmentSimulation:
 
     def apply_start_of_day_cancellations(self) -> None:
         """
-        Apply cancellations only to future appointments with r >= 1.
-        Same-day cancellations are not allowed.
+        Apply cancellations to future appointments with r >= 1, and, when
+        config.same_day_cancellation_enabled is True, to r = 0 as well
+        using the same per-class cancel_prob. Defaults to r >= 1 only,
+        reproducing the original "no same-day cancellations" behavior
+        exactly.
 
-        All future bookings may cancel, but only tracked bookings count toward
-        class-level cancellation metrics.
+        This runs before that day's fresh arrivals are processed (see
+        run()'s day order), so a same-day-canceled booking is removed
+        from calendar[0] before find_earliest_open_day or serve_today
+        ever sees it -- it is neither double-counted as a no-show nor
+        left occupying a slot a new arrival could otherwise take.
+
+        All eligible bookings may cancel, but only tracked bookings count
+        toward class-level cancellation metrics.
         """
-        for r in range(1, self.config.horizon_days):
+        start_r = 0 if self.config.same_day_cancellation_enabled else 1
+        for r in range(start_r, self.config.horizon_days):
             surviving_bookings: List[Booking] = []
 
             for booking in self.calendar[r]:

@@ -3074,11 +3074,14 @@ vertical-align: -.125em;
 <section id="purpose-and-method-shared-by-both-hypotheses" class="level2">
 <h2 class="anchored" data-anchor-id="purpose-and-method-shared-by-both-hypotheses">Purpose and method, shared by both hypotheses</h2>
 <p>This document covers two new booking-policy hypotheses, separate from the nine-hypothesis robustness study behind <code>clinic_facing_conclusions.qmd</code>. Those nine describe how the <em>existing</em> first-come-first-served engine behaves. The two here test whether adding a <em>new</em> booking policy changes outcomes, and whether each hypothesis’s stated condition is actually the condition under which it helps.</p>
-<p>Both were tested against the same 480-scenario background bank (<code>experiments/hypothesis_scenario_bank.py</code>), Sobol-sampled across every dimension in the original design brief and stratified evenly across four booking horizons. No background was filtered out for failing to match a hypothesis’s stated condition — the point was to let the data show whether the stated conditions are the right ones, not assume it.</p>
+<p>Both are tested against the same background bank (<code>experiments/hypothesis_scenario_bank.py</code>), Sobol-sampled across every dimension in the design brief and stratified evenly across seven booking horizons. No background is filtered out for failing to match a hypothesis’s stated condition — the point is to let the data show whether the stated conditions are the right ones, not assume it.</p>
 <p>Effects are classified supported, contradicted, or inconclusive from a paired-seed bootstrap CI over the same 20 seeds run with a policy on and off, using the robustness study’s own 0.005 practical-equivalence tolerance.</p>
+<blockquote class="blockquote">
+<p><strong>Note on the numbers below:</strong> the value grids in this section reflect the current design (wider booking-horizon range, revised threshold grids, horizon treated as a swept policy lever for H1, reservation window swept across the full booking horizon). The narrative findings later in this document still describe the prior run (four booking horizons, the earlier threshold grids, and a fixed {3,4,5,6,7} reservation-window candidate set) and will be refreshed once the experiments are re-run under the design below.</p>
+</blockquote>
 <section id="parameters-tested" class="level3">
 <h3 class="anchored" data-anchor-id="parameters-tested">Parameters tested</h3>
-<p><strong>Problem parameters</strong> — facts about the clinic’s environment, not chosen by anyone, shared by both hypotheses. Booking horizon is the clearest example: it describes how far out the clinic already lets patients book, the same way it is an existing per-class operating fact in the robustness study, not something either hypothesis tests as an intervention. Every per-class row was sampled independently for Class 1 and Class 2 — no ordering was forced between them — so it’s possible to test whether each hypothesis’s ordering condition actually matters.</p>
+<p><strong>Problem parameters</strong> — facts about the clinic’s environment, not chosen by anyone, shared by both hypotheses. Every per-class row is sampled independently for Class 1 and Class 2 — no ordering is forced between them — so it’s possible to test whether each hypothesis’s ordering condition actually matters. Balking threshold is always sampled strictly above no-show threshold within the same class, since a patient who would already have no-showed by their own no-show cutoff has no later point left at which to balk instead.</p>
 <table class="table">
 <colgroup>
 <col style="width: 50%">
@@ -3097,7 +3100,7 @@ vertical-align: -.125em;
 </tr>
 <tr class="even">
 <td>Booking horizon (days)</td>
-<td>7, 14, 21, 28</td>
+<td>2, 6, 10, 14, 18, 22, 26</td>
 </tr>
 <tr class="odd">
 <td>Class 1 demand share</td>
@@ -3113,7 +3116,7 @@ vertical-align: -.125em;
 </tr>
 <tr class="even">
 <td>Balking threshold (per class, days)</td>
-<td>4, 8, 12, 16, 20, 24</td>
+<td>5, 9, 16, 22, 24</td>
 </tr>
 <tr class="odd">
 <td>Pre-threshold balking probability (per class)</td>
@@ -3125,7 +3128,7 @@ vertical-align: -.125em;
 </tr>
 <tr class="odd">
 <td>No-show threshold (per class, days)</td>
-<td>4, 6, 8, 10, 12, 14, 18, 20, 22, 24</td>
+<td>4, 7, 14, 20, 22</td>
 </tr>
 <tr class="even">
 <td>Pre-threshold no-show probability (per class)</td>
@@ -3137,6 +3140,7 @@ vertical-align: -.125em;
 </tr>
 </tbody>
 </table>
+<p>Booking horizon plays a dual role. For H2, and as H1’s screen-stage default, it is read as a background fact, exactly like the other rows above. For H1’s grid and condition_grid stages, it is additionally swept as its own tested policy lever (see the policy-parameters table below) — clinics can choose how far out to let patients book, so H1 treats that choice itself as part of what’s being tested, not just a fact about the clinic. Whenever a sampled balking or no-show threshold would exceed the booking horizon in play for a given task, it is capped dynamically at (horizon − 1) days rather than the row being discarded, so every threshold/horizon combination in the tables above is usable, including the shortest 2-day horizon.</p>
 <p><strong>Policy parameters</strong> — the actual levers each hypothesis switches on or tunes.</p>
 <table class="table">
 <colgroup>
@@ -3155,14 +3159,18 @@ vertical-align: -.125em;
 <td>H1 only</td>
 </tr>
 <tr class="even">
-<td>Reservation window (days) — 3, 4, 5, 6, 7, capped at Class 1’s own no-show threshold</td>
+<td>Reservation window (days) — 1 day up to the entire booking horizon, in steps of 1</td>
 <td>H1 only</td>
 </tr>
 <tr class="odd">
+<td>Booking horizon (days) — 2, 6, 10, 14, 18, 22, 26, swept holding a background’s other parameters fixed</td>
+<td>H1 only (grid and condition_grid stages)</td>
+</tr>
+<tr class="even">
 <td>Standby-join probability — 0.0 (off) up to 0.8, in steps of 0.1</td>
 <td>H2 only</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Standby queue expiry cap — uncapped (no maximum)</td>
 <td>H2 only</td>
 </tr>

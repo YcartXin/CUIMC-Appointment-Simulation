@@ -13,34 +13,39 @@ format:
 
 This document covers two new booking-policy hypotheses, separate from the nine-hypothesis robustness study behind `clinic_facing_conclusions.qmd`. Those nine describe how the *existing* first-come-first-served engine behaves. The two here test whether adding a *new* booking policy changes outcomes, and whether each hypothesis's stated condition is actually the condition under which it helps.
 
-Both were tested against the same 480-scenario background bank (`experiments/hypothesis_scenario_bank.py`), Sobol-sampled across every dimension in the original design brief and stratified evenly across four booking horizons. No background was filtered out for failing to match a hypothesis's stated condition — the point was to let the data show whether the stated conditions are the right ones, not assume it.
+Both are tested against the same background bank (`experiments/hypothesis_scenario_bank.py`), Sobol-sampled across every dimension in the design brief and stratified evenly across seven booking horizons. No background is filtered out for failing to match a hypothesis's stated condition — the point is to let the data show whether the stated conditions are the right ones, not assume it.
 
 Effects are classified supported, contradicted, or inconclusive from a paired-seed bootstrap CI over the same 20 seeds run with a policy on and off, using the robustness study's own 0.005 practical-equivalence tolerance.
 
+> **Note on the numbers below:** the value grids in this section reflect the current design (wider booking-horizon range, revised threshold grids, horizon treated as a swept policy lever for H1, reservation window swept across the full booking horizon). The narrative findings later in this document still describe the prior run (four booking horizons, the earlier threshold grids, and a fixed {3,4,5,6,7} reservation-window candidate set) and will be refreshed once the experiments are re-run under the design below.
+
 ### Parameters tested
 
-**Problem parameters** — facts about the clinic's environment, not chosen by anyone, shared by both hypotheses. Booking horizon is the clearest example: it describes how far out the clinic already lets patients book, the same way it is an existing per-class operating fact in the robustness study, not something either hypothesis tests as an intervention. Every per-class row was sampled independently for Class 1 and Class 2 — no ordering was forced between them — so it's possible to test whether each hypothesis's ordering condition actually matters.
+**Problem parameters** — facts about the clinic's environment, not chosen by anyone, shared by both hypotheses. Every per-class row is sampled independently for Class 1 and Class 2 — no ordering is forced between them — so it's possible to test whether each hypothesis's ordering condition actually matters. Balking threshold is always sampled strictly above no-show threshold within the same class, since a patient who would already have no-showed by their own no-show cutoff has no later point left at which to balk instead.
 
 | Parameter | Tested values |
 |---|---|
 | Demand-to-capacity ratio (&rho;) | 0.8, 1.0, 1.2, 1.4, 1.6, 2.0, 2.5, 3.0 |
-| Booking horizon (days) | 7, 14, 21, 28 |
+| Booking horizon (days) | 2, 6, 10, 14, 18, 22, 26 |
 | Class 1 demand share | 0.1, 0.3, 0.5, 0.7, 0.9 |
 | Daily capacity (slots/day) | 20, 30, 40, 50 |
 | Cancellation probability (per class) | 0.1, 0.2, 0.3 |
-| Balking threshold (per class, days) | 4, 8, 12, 16, 20, 24 |
+| Balking threshold (per class, days) | 5, 9, 16, 22, 24 |
 | Pre-threshold balking probability (per class) | 0.05, 0.1, 0.2, 0.3, 0.4 |
 | Post-threshold balking probability (per class) | 0.1, 0.2, 0.3, 0.4 |
-| No-show threshold (per class, days) | 4, 6, 8, 10, 12, 14, 18, 20, 22, 24 |
+| No-show threshold (per class, days) | 4, 7, 14, 20, 22 |
 | Pre-threshold no-show probability (per class) | 0.05, 0.1, 0.2, 0.3, 0.4 |
 | Post-threshold no-show probability (per class) | 0.1, 0.2, 0.3, 0.4 |
+
+Booking horizon plays a dual role. For H2, and as H1's screen-stage default, it is read as a background fact, exactly like the other rows above. For H1's grid and condition_grid stages, it is additionally swept as its own tested policy lever (see the policy-parameters table below) — clinics can choose how far out to let patients book, so H1 treats that choice itself as part of what's being tested, not just a fact about the clinic. Whenever a sampled balking or no-show threshold would exceed the booking horizon in play for a given task, it is capped dynamically at (horizon &minus; 1) days rather than the row being discarded, so every threshold/horizon combination in the tables above is usable, including the shortest 2-day horizon.
 
 **Policy parameters** — the actual levers each hypothesis switches on or tunes.
 
 | Parameter | Applies to |
 |---|---|
 | Reserved slots per day (Q) — 0 (off), then 5 up to half of daily capacity, in steps of 5 | H1 only |
-| Reservation window (days) — 3, 4, 5, 6, 7, capped at Class 1's own no-show threshold | H1 only |
+| Reservation window (days) — 1 day up to the entire booking horizon, in steps of 1 | H1 only |
+| Booking horizon (days) — 2, 6, 10, 14, 18, 22, 26, swept holding a background's other parameters fixed | H1 only (grid and condition_grid stages) |
 | Standby-join probability — 0.0 (off) up to 0.8, in steps of 0.1 | H2 only |
 | Standby queue expiry cap — uncapped (no maximum) | H2 only |
 

@@ -26,6 +26,21 @@ class BuildConfigTest(unittest.TestCase):
         self.assertEqual(config.classes[1].no_show_prob.threshold, 6)
         self.assertEqual(config.classes[1].standby_prob, 0.0)
         self.assertIsNone(config.reserved_class_id)
+        self.assertFalse(config.same_day_cancellation_enabled)
+        self.assertFalse(config.release_unused_reservation_same_day)
+
+    def test_same_day_flags_flow_through(self) -> None:
+        config = build_config(
+            seed=1,
+            lambda_1=10.0,
+            lambda_2=10.0,
+            reserved_class_id=1,
+            reserved_slots_per_day=4,
+            same_day_cancellation_enabled=True,
+            release_unused_reservation_same_day=True,
+        )
+        self.assertTrue(config.same_day_cancellation_enabled)
+        self.assertTrue(config.release_unused_reservation_same_day)
 
     def test_reservation_kwargs_flow_through(self) -> None:
         config = build_config(

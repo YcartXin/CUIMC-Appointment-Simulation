@@ -13,30 +13,43 @@ meaningful, without pre-filtering to backgrounds that satisfy H1's stated
 condition. This is deliberate: the condition (threshold_1 < threshold_2) is
 one of the things being tested, not assumed.
 
+Booking horizon is treated as a genuine policy lever for H1 (clinics can
+choose how far out to let patients book), not just a fixed background
+fact -- see H1_HORIZON_VALUES. The reservation window is swept from 1 day
+up to the entire booking horizon in steps of 1, replacing the old fixed
+{3,4,5,6,7} candidate set, and both balk and no-show thresholds are
+dynamically capped at horizon_days - 1 wherever a config is built (see
+experiments/hypothesis_common.py's build_config), so every threshold is
+guaranteed to sit within whatever horizon is in play for a given task.
+
 Three stages:
 
-    screen          Broad on/off test at a fixed modest policy (Q=5,
-                    window=3, always valid given the bank's constraints)
-                    across every background in the bank. Answers whether
-                    the effect exists at all, and whether it concentrates
-                    in backgrounds that satisfy H1's stated condition or
-                    shows up elsewhere too.
-    grid            Full (Q, window) grid -- Q up to half of that
-                    background's own capacity in steps of 5, window in
-                    {3,4,5,6,7} filtered to <= that background's
-                    noshow_threshold_1 -- at a small curated set of 12
+    screen          Broad on/off test across every background in the
+                    bank, at each background's own bank-assigned horizon
+                    (horizon itself is NOT swept here, only the window --
+                    see the module-level compute-scale note above
+                    H1_HORIZON_VALUES). Q is fixed at STANDARD_Q; window
+                    sweeps 1..horizon, and classify_screen picks each
+                    background's own best window before comparing on vs
+                    off. Answers whether the effect exists at all, and
+                    whether it concentrates in backgrounds that satisfy
+                    H1's stated condition or shows up elsewhere too.
+    grid            Full (horizon, Q, window) grid -- horizon swept
+                    across H1_HORIZON_VALUES, Q up to half of that
+                    background's own capacity in steps of 5, window
+                    swept 1..that horizon -- at a small curated set of 12
                     backgrounds spanning condition-satisfying and
-                    condition-violating cases. Answers the optimal-vs-
-                    naive-vs-none question.
-    condition_grid  The same full (Q, window) grid, but at a much larger,
-                    condition-balanced background set (~50 backgrounds,
-                    all with rho > 1.2) instead of 12. Purpose-built to
-                    answer "does the threshold-gap condition still help
-                    under each background's own OPTIMAL policy" with
-                    real sample size, rather than the screen stage's
-                    answer to the same question at one fixed (Q=5,
-                    window=3) policy. Not part of the default "all"
-                    stage set -- request it explicitly.
+                    condition-violating cases. Answers the optimal-vs-none
+                    question per (background, horizon).
+    condition_grid  The same full (horizon, Q, window) grid, but at a much
+                    larger, condition-balanced background set (~50
+                    backgrounds, all with rho > 1.2) instead of 12.
+                    Purpose-built to answer "does the threshold-gap
+                    condition help under each background's own OPTIMAL
+                    policy" with real sample size, rather than the screen
+                    stage's answer to the same question at a fixed Q.
+                    Not part of the default "all" stage set -- request it
+                    explicitly.
 
 Run from the repository root:
 
@@ -75,6 +88,7 @@ from experiments.hypothesis_common import (  # noqa: E402
 )
 from experiments.hypothesis_scenario_bank import (  # noqa: E402
     DEFAULT_OUTPUT as DEFAULT_BANK_PATH,
+    HORIZON_VALUES,
     generate_background_bank,
 )
 
@@ -84,8 +98,16 @@ DEFAULT_OUTPUT_DIR = REPO_DIR / "outputs" / "hypotheses" / "h1_short_horizon_res
 KEY_COLUMNS = ["stage", "background_id", "arm", "seed"]
 
 STANDARD_Q = 5
-STANDARD_WINDOW = 3
-WINDOW_CANDIDATES = (3, 4, 5, 6, 7)
+
+# Booking horizon is treated as its own tested policy lever in the grid and
+# condition_grid stages (compared directly, holding a background's other
+# parameters fixed), separate from whatever horizon_days each background
+# happens to carry in the bank. The screen stage does NOT sweep horizon
+# itself -- only the reservation window, at each background's own native
+# horizon -- purely for compute-scale reasons: sweeping horizon too across
+# all 480 screen backgrounds would multiply screen's task count roughly
+# 30x (see the module docstring's stage descriptions).
+H1_HORIZON_VALUES = HORIZON_VALUES
 N_DEEP_BACKGROUNDS_PER_BUCKET = 3
 
 # condition_grid stage: a larger, condition-balanced background set for
@@ -109,8 +131,15 @@ def load_bank(path: Path) -> pd.DataFrame:
 
 
 def _row_config_kwargs(row: pd.Series) -> dict[str, Any]:
+    """Every background parameter except horizon_days.
+
+    horizon_days is deliberately left out here: H1 treats it as a tested
+    policy lever supplied separately per task (see H1_HORIZON_VALUES),
+    rather than reading whatever value the bank happened to assign to
+    this row. Callers must add "horizon_days" to the returned dict
+    themselves before passing it to build_config.
+    """
     return {
-        "horizon_days": int(row["horizon_days"]),
         "slots_per_day": int(row["slots_per_day"]),
         "lambda_1": float(row["lambda_1"]),
         "lambda_2": float(row["lambda_2"]),
@@ -151,8 +180,13 @@ def q_grid_for_capacity(capacity: int) -> list[int]:
     return list(range(5, capacity // 2 + 1, 5))
 
 
-def window_grid_for_threshold(threshold_1: int) -> list[int]:
-    return [w for w in WINDOW_CANDIDATES if w <= threshold_1]
+def window_grid_for_horizon(horizon_days: int) -> list[int]:
+    """Reservation window candidates: 1 day up to the entire booking
+    horizon, in steps of 1. Replaces the old fixed {3,4,5,6,7} (capped at
+    Class 1's no-show threshold) now that the window is swept against
+    whatever horizon is actually in play for a given task.
+    """
+    return list(range(1, int(horizon_days) + 1))
 
 
 # ---------------------------------------------------------------------
@@ -160,29 +194,65 @@ def window_grid_for_threshold(threshold_1: int) -> list[int]:
 # ---------------------------------------------------------------------
 
 def screen_tasks(bank: pd.DataFrame, smoke: bool) -> list[dict[str, Any]]:
+    """Broad on/off test across the whole bank.
+
+    Horizon is NOT swept here (see H1_HORIZON_VALUES's comment above) --
+    each background keeps its own bank-assigned horizon_days. What's new
+    is the on-arm window sweep: instead of one fixed window=3, every
+    background now gets an on-arm cell for every window from 1 to its own
+    horizon_days, so classify_screen can pick each background's own best
+    window before comparing on vs off (see classify_screen).
+    """
     rows = bank.sample(n=min(40, len(bank)), random_state=0) if smoke else bank
     tasks = []
     for _, row in rows.iterrows():
         background_id = row["background_id"]
-        base_kwargs = _row_config_kwargs(row)
-        for arm in ("off", "on"):
+        horizon_days = int(row["horizon_days"])
+        base_kwargs = {**_row_config_kwargs(row), "horizon_days": horizon_days}
+        window_values = window_grid_for_horizon(horizon_days)
+        if smoke:
+            window_values = window_values[:2]
+
+        for seed in _seeds(smoke):
+            tasks.append(
+                {
+                    "config_kwargs": {
+                        **base_kwargs,
+                        **_reservation_kwargs(False, 0, 0),
+                        **_smoke_overrides(smoke),
+                    },
+                    "seed": seed,
+                    "extra_cols": {
+                        "stage": "screen",
+                        "background_id": background_id,
+                        "arm": "off",
+                        "seed": seed,
+                        "source_background_id": background_id,
+                        "horizon_days": horizon_days,
+                        "Q": 0,
+                        "window": -1,
+                    },
+                }
+            )
+        for window in window_values:
             for seed in _seeds(smoke):
                 tasks.append(
                     {
                         "config_kwargs": {
                             **base_kwargs,
-                            **_reservation_kwargs(arm == "on", STANDARD_Q, STANDARD_WINDOW),
+                            **_reservation_kwargs(True, STANDARD_Q, window),
                             **_smoke_overrides(smoke),
                         },
                         "seed": seed,
                         "extra_cols": {
                             "stage": "screen",
-                            "background_id": background_id,
-                            "arm": arm,
+                            "background_id": f"{background_id}_w={window}",
+                            "arm": "on",
                             "seed": seed,
                             "source_background_id": background_id,
+                            "horizon_days": horizon_days,
                             "Q": STANDARD_Q,
-                            "window": STANDARD_WINDOW,
+                            "window": window,
                         },
                     }
                 )
@@ -209,8 +279,12 @@ def select_deep_backgrounds(bank: pd.DataFrame) -> pd.DataFrame:
         "condition_violated_low_demand": bank[(gap > 0) & (bank["rho"] < 1.2)].head(
             N_DEEP_BACKGROUNDS_PER_BUCKET
         ),
-        "diverse_capacity_horizon": bank[(gap > 0) & high_demand]
-        .drop_duplicates(subset=["horizon_days", "slots_per_day"])
+        # Diversify by capacity only: every selected background is tested at
+        # every H1_HORIZON_VALUES horizon in grid_tasks regardless of the
+        # bank row's own horizon_days, so diversifying this bucket by
+        # horizon_days would no longer add coverage the way it used to.
+        "diverse_capacity": bank[(gap > 0) & high_demand]
+        .drop_duplicates(subset=["slots_per_day"])
         .head(N_DEEP_BACKGROUNDS_PER_BUCKET),
     }
     selected = []
@@ -241,55 +315,76 @@ def select_condition_comparison_backgrounds(bank: pd.DataFrame) -> pd.DataFrame:
 
 
 def grid_tasks(deep_backgrounds: pd.DataFrame, smoke: bool, stage_label: str = "grid") -> list[dict[str, Any]]:
+    """Full (horizon, Q, window) sweep at a curated set of backgrounds.
+
+    Horizon is swept explicitly here (H1_HORIZON_VALUES), holding a
+    background's other parameters fixed -- this is where booking horizon
+    is actually tested as a policy lever, rather than left at whatever
+    value the bank assigned. Each tested horizon gets its own baseline
+    (Q=0) cell and its own window range (1..that horizon), since both
+    the "no reservation" comparison point and the window candidates are
+    horizon-dependent.
+    """
     tasks = []
     rows = deep_backgrounds.head(2) if smoke else deep_backgrounds
+    horizons = H1_HORIZON_VALUES[:2] if smoke else H1_HORIZON_VALUES
     for _, row in rows.iterrows():
         background_id = row["background_id"]
         base_kwargs = _row_config_kwargs(row)
         q_values = q_grid_for_capacity(int(row["slots_per_day"]))
-        window_values = window_grid_for_threshold(int(row["noshow_threshold_1"]))
         if smoke:
             q_values = q_values[:2]
-            window_values = window_values[:2]
 
-        for seed in _seeds(smoke):
-            tasks.append(
-                {
-                    "config_kwargs": {**base_kwargs, **_reservation_kwargs(False, 0, 0), **_smoke_overrides(smoke)},
-                    "seed": seed,
-                    "extra_cols": {
-                        "stage": stage_label,
-                        "background_id": f"{background_id}_Q=0",
-                        "arm": stage_label,
+        for horizon in horizons:
+            horizon_kwargs = {**base_kwargs, "horizon_days": horizon}
+            window_values = window_grid_for_horizon(horizon)
+            if smoke:
+                window_values = window_values[:2]
+
+            for seed in _seeds(smoke):
+                tasks.append(
+                    {
+                        "config_kwargs": {
+                            **horizon_kwargs,
+                            **_reservation_kwargs(False, 0, 0),
+                            **_smoke_overrides(smoke),
+                        },
                         "seed": seed,
-                        "source_background_id": background_id,
-                        "Q": 0,
-                        "window": -1,
-                    },
-                }
-            )
-        for q in q_values:
-            for window in window_values:
-                for seed in _seeds(smoke):
-                    tasks.append(
-                        {
-                            "config_kwargs": {
-                                **base_kwargs,
-                                **_reservation_kwargs(True, q, window),
-                                **_smoke_overrides(smoke),
-                            },
+                        "extra_cols": {
+                            "stage": stage_label,
+                            "background_id": f"{background_id}_H={horizon}_Q=0",
+                            "arm": stage_label,
                             "seed": seed,
-                            "extra_cols": {
-                                "stage": stage_label,
-                                "background_id": f"{background_id}_Q={q}_w={window}",
-                                "arm": stage_label,
+                            "source_background_id": background_id,
+                            "horizon_days": horizon,
+                            "Q": 0,
+                            "window": -1,
+                        },
+                    }
+                )
+            for q in q_values:
+                for window in window_values:
+                    for seed in _seeds(smoke):
+                        tasks.append(
+                            {
+                                "config_kwargs": {
+                                    **horizon_kwargs,
+                                    **_reservation_kwargs(True, q, window),
+                                    **_smoke_overrides(smoke),
+                                },
                                 "seed": seed,
-                                "source_background_id": background_id,
-                                "Q": q,
-                                "window": window,
-                            },
-                        }
-                    )
+                                "extra_cols": {
+                                    "stage": stage_label,
+                                    "background_id": f"{background_id}_H={horizon}_Q={q}_w={window}",
+                                    "arm": stage_label,
+                                    "seed": seed,
+                                    "source_background_id": background_id,
+                                    "horizon_days": horizon,
+                                    "Q": q,
+                                    "window": window,
+                                },
+                            }
+                        )
     return tasks
 
 
@@ -341,15 +436,35 @@ VALUE_COLS: dict[str, tuple[str, str | None]] = {
 
 
 def classify_screen(raw: pd.DataFrame, bank: pd.DataFrame) -> pd.DataFrame:
+    """Per background: pick the on-arm window with the best mean
+    utilization (Q held at STANDARD_Q), then paired-bootstrap that best
+    window against the off arm. Grouping is on source_background_id, not
+    background_id, since each on-arm window cell now has its own
+    background_id (e.g. "BG00001_w=5") to keep resumable-run keys unique
+    per window -- see screen_tasks.
+    """
     screen = raw[raw["stage"] == "screen"]
     rows: list[dict[str, Any]] = []
-    for background_id, group in screen.groupby("background_id", sort=False):
-        on = group[group["arm"] == "on"].sort_values("seed").set_index("seed")
+    for background_id, group in screen.groupby("source_background_id", sort=False):
         off = group[group["arm"] == "off"].sort_values("seed").set_index("seed")
+        on_all = group[group["arm"] == "on"]
+        if off.empty or on_all.empty:
+            continue
+
+        window_means = on_all.groupby("window")["average_utilization"].mean()
+        if window_means.empty:
+            continue
+        best_window = int(window_means.idxmax())
+        on = on_all[on_all["window"] == best_window].sort_values("seed").set_index("seed")
+
         paired_seeds = sorted(set(on.index) & set(off.index))
         if not paired_seeds:
             continue
-        row: dict[str, Any] = {"background_id": background_id, "n_paired_seeds": len(paired_seeds)}
+        row: dict[str, Any] = {
+            "background_id": background_id,
+            "n_paired_seeds": len(paired_seeds),
+            "best_window": best_window,
+        }
         row["reserved_slot_fill_rate_on_arm"] = float(on.loc[paired_seeds, "reserved_slot_fill_rate"].mean())
         for prefix, (column, expected_sign) in VALUE_COLS.items():
             mean, low, high, _ = paired_delta_ci(
@@ -383,32 +498,34 @@ def classify_screen(raw: pd.DataFrame, bank: pd.DataFrame) -> pd.DataFrame:
 
 
 def classify_grid(raw: pd.DataFrame, stage_label: str = "grid") -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Per (background, horizon): best (Q, window) vs. no reservation.
+
+    Horizon is now one of the swept dimensions (see grid_tasks), so the
+    grid summary has one row per background PER TESTED HORIZON, not one
+    row per background. There is no more single "naive" (Q, window) cell
+    to compare against -- the old fixed Q=5/window=3 comparison point
+    doesn't generalize once window sweeps 1..horizon and horizon itself
+    varies -- so this only reports optimal-vs-none, not naive-vs-optimal.
+    """
     grid = raw[raw["stage"] == stage_label]
-    cell_means = grid.groupby(["source_background_id", "Q", "window"], as_index=False)[
+    cell_means = grid.groupby(["source_background_id", "horizon_days", "Q", "window"], as_index=False)[
         "average_utilization"
     ].mean()
 
     positive_q = cell_means[cell_means["Q"] > 0]
     best_table = best_and_near_tie(
         positive_q,
-        group_cols=["source_background_id"],
+        group_cols=["source_background_id", "horizon_days"],
         param_cols=["Q", "window"],
         value_col="average_utilization",
         tolerance=0.01,
     )
-    none_table = cell_means[cell_means["Q"] == 0][["source_background_id", "average_utilization"]].rename(
-        columns={"average_utilization": "none_utilization"}
-    )
-    naive = cell_means[
-        (cell_means["Q"] == STANDARD_Q) & (cell_means["window"] == STANDARD_WINDOW)
-    ][["source_background_id", "average_utilization"]].rename(columns={"average_utilization": "naive_utilization"})
+    none_table = cell_means[cell_means["Q"] == 0][
+        ["source_background_id", "horizon_days", "average_utilization"]
+    ].rename(columns={"average_utilization": "none_utilization"})
 
-    combined = best_table.rename(columns={"background_id": "source_background_id", "best_value": "optimal_utilization"})
-    combined = combined.merge(none_table, on="source_background_id", how="left").merge(
-        naive, on="source_background_id", how="left"
-    )
-    combined["naive_minus_none"] = combined["naive_utilization"] - combined["none_utilization"]
-    combined["optimal_minus_naive"] = combined["optimal_utilization"] - combined["naive_utilization"]
+    combined = best_table.rename(columns={"best_value": "optimal_utilization"})
+    combined = combined.merge(none_table, on=["source_background_id", "horizon_days"], how="left")
     combined["optimal_minus_none"] = combined["optimal_utilization"] - combined["none_utilization"]
     return combined, cell_means
 
@@ -417,9 +534,10 @@ def _optimal_vs_none_status(
     raw_stage: pd.DataFrame, combined: pd.DataFrame, bank: pd.DataFrame
 ) -> pd.DataFrame:
     """Seed-level paired bootstrap of each background's best (Q, window)
-    cell against Q=0, so the condition_grid comparison has a real supported
-    / contradicted / inconclusive verdict per background, not just a bare
-    mean of already seed-averaged cells.
+    cell against Q=0, per tested horizon, so the condition_grid comparison
+    has a real supported / contradicted / inconclusive verdict for each
+    (background, horizon) combination, not just a bare mean of already
+    seed-averaged cells.
     """
     gap = bank["noshow_threshold_2"] - bank["noshow_threshold_1"]
     bank_cond = bank.assign(condition_satisfied=gap > 0)[
@@ -429,11 +547,14 @@ def _optimal_vs_none_status(
     rows: list[dict[str, Any]] = []
     for _, r in combined.iterrows():
         bg = r["source_background_id"]
+        horizon = int(r["horizon_days"])
         match = re.match(r"Q=(-?\d+),window=(-?\d+)", str(r["best_params"]))
         if not match:
             continue
         best_q, best_w = int(match.group(1)), int(match.group(2))
-        bg_raw = raw_stage[raw_stage["source_background_id"] == bg]
+        bg_raw = raw_stage[
+            (raw_stage["source_background_id"] == bg) & (raw_stage["horizon_days"] == horizon)
+        ]
         best_rows = bg_raw[(bg_raw["Q"] == best_q) & (bg_raw["window"] == best_w)].sort_values("seed")
         none_rows = bg_raw[bg_raw["Q"] == 0].sort_values("seed")
         paired_seeds = sorted(set(best_rows["seed"]) & set(none_rows["seed"]))
@@ -444,11 +565,12 @@ def _optimal_vs_none_status(
         mean, low, high, _ = paired_delta_ci(
             best_idx.loc[paired_seeds, "average_utilization"].tolist(),
             none_idx.loc[paired_seeds, "average_utilization"].tolist(),
-            seed=abs(hash((bg, "optimal_vs_none"))) % (2**31),
+            seed=abs(hash((bg, horizon, "optimal_vs_none"))) % (2**31),
         )
         rows.append(
             {
                 "background_id": bg,
+                "horizon_days": horizon,
                 "best_q": best_q,
                 "best_window": best_w,
                 "delta_optimal_vs_none": mean,
@@ -529,11 +651,12 @@ def _write_summary(raw: pd.DataFrame, summary_dir: Path) -> None:
         "",
         "This is an auto-generated data summary, not the narrative report.",
         "See screen_by_condition.csv for whether the threshold-gap condition",
-        "is empirically necessary at a fixed (Q=5, window=3) policy,",
-        "grid_policy_summary.csv for the optimal-vs-naive-vs-none comparison",
-        "at 12 curated backgrounds, and condition_grid_by_condition.csv for",
-        "whether the condition still matters under each background's own",
-        "optimal policy at a larger, condition-balanced background set.",
+        "is empirically necessary at each background's own best reservation",
+        "window (Q=5, window swept 1..horizon), grid_policy_summary.csv for",
+        "the optimal-vs-none comparison per (background, horizon) at 12",
+        "curated backgrounds, and condition_grid_by_condition.csv for",
+        "whether the condition matters under each background's own optimal",
+        "policy at a larger, condition-balanced background set.",
     ]
     write_markdown(lines, summary_dir / "h1_summary.md")
 

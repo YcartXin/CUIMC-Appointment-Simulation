@@ -12,7 +12,7 @@ from experiments import hypothesis_scenario_bank as bank_module
 
 def _small_bank() -> pd.DataFrame:
     return bank_module.generate_background_bank(
-        n_per_horizon=6, seed=7, horizons=(7, 21)
+        n_per_horizon=6, seed=7, horizons=(6, 22)
     )
 
 
@@ -27,8 +27,16 @@ class TaskGenerationTest(unittest.TestCase):
         self._assert_unique_keys(tasks)
         arms = {t["extra_cols"]["arm"] for t in tasks}
         self.assertEqual(arms, {"off", "on"})
-        background_ids = {t["extra_cols"]["background_id"] for t in tasks}
-        self.assertEqual(background_ids, set(bank["background_id"]))
+        # Off-arm background_ids are unsuffixed and match the bank exactly;
+        # on-arm background_ids are suffixed per swept window
+        # (see screen_tasks), so we check source_background_id instead,
+        # which is preserved unsuffixed on every task regardless of arm.
+        source_ids = {t["extra_cols"]["source_background_id"] for t in tasks}
+        self.assertEqual(source_ids, set(bank["background_id"]))
+        off_background_ids = {
+            t["extra_cols"]["background_id"] for t in tasks if t["extra_cols"]["arm"] == "off"
+        }
+        self.assertEqual(off_background_ids, set(bank["background_id"]))
 
     def test_screen_tasks_have_matching_schema_regardless_of_arm(self) -> None:
         # Regression: screen and grid extra_cols must share the same key
@@ -56,10 +64,67 @@ class TaskGenerationTest(unittest.TestCase):
         self.assertIn(0, q_values)
         self.assertTrue(any(q > 0 for q in q_values))
 
-    def test_window_grid_never_exceeds_noshow_threshold_1(self) -> None:
-        for threshold in (4, 6, 10, 24):
-            windows = h1.window_grid_for_threshold(threshold)
-            self.assertTrue(all(w <= threshold for w in windows))
+    def test_window_grid_spans_one_to_the_full_horizon(self) -> None:
+        for horizon in (2, 6, 14, 26):
+            windows = h1.window_grid_for_horizon(horizon)
+            self.assertEqual(windows, list(range(1, horizon + 1)))
+            self.assertTrue(all(w <= horizon for w in windows))
+
+    def test_screen_window_sweep_never_exceeds_each_backgrounds_own_horizon(self) -> None:
+        bank = _small_bank()
+        tasks = h1.screen_tasks(bank, smoke=False)
+        by_bg_horizon = {row["background_id"]: int(row["horizon_days"]) for _, row in bank.iterrows()}
+        for t in tasks:
+            if t["extra_cols"]["arm"] != "on":
+                continue
+            horizon = by_bg_horizon[t["extra_cols"]["source_background_id"]]
+            self.assertLessEqual(t["extra_cols"]["window"], horizon)
+
+    def test_grid_sweeps_horizon_as_a_policy_lever(self) -> None:
+        bank = _small_bank()
+        deep = h1.select_deep_backgrounds(bank)
+        tasks = h1.grid_tasks(deep, smoke=False)
+        swept_horizons = {t["extra_cols"]["horizon_days"] for t in tasks}
+        self.assertEqual(swept_horizons, set(h1.H1_HORIZON_VALUES))
+
+    def test_grid_smoke_mode_uses_fewer_horizons(self) -> None:
+        bank = _small_bank()
+        deep = h1.select_deep_backgrounds(bank)
+        tasks = h1.grid_tasks(deep, smoke=True)
+        swept_horizons = {t["extra_cols"]["horizon_days"] for t in tasks}
+        self.assertEqual(swept_horizons, set(h1.H1_HORIZON_VALUES[:2]))
+
+    def test_thresholds_are_capped_at_horizon_minus_one_in_built_config(self) -> None:
+        # Exercise the dynamic-capping path directly through build_config
+        # (hypothesis_common), since h1's own task generation deliberately
+        # passes raw, uncapped threshold values through.
+        from experiments.hypothesis_common import build_config
+
+        config = build_config(
+            slots_per_day=30,
+            lambda_1=10.0,
+            lambda_2=10.0,
+            cancel_1=0.1,
+            cancel_2=0.1,
+            balk_threshold_1=24,
+            balk_low_1=0.1,
+            balk_high_1=0.2,
+            balk_threshold_2=24,
+            balk_low_2=0.1,
+            balk_high_2=0.2,
+            noshow_threshold_1=22,
+            noshow_low_1=0.1,
+            noshow_high_1=0.2,
+            noshow_threshold_2=22,
+            noshow_low_2=0.1,
+            noshow_high_2=0.2,
+            horizon_days=2,
+            seed=1,
+        )
+        self.assertEqual(config.classes[1].balk_prob.threshold, 1)
+        self.assertEqual(config.classes[1].no_show_prob.threshold, 1)
+        self.assertEqual(config.classes[2].balk_prob.threshold, 1)
+        self.assertEqual(config.classes[2].no_show_prob.threshold, 1)
 
     def test_q_grid_caps_at_half_capacity(self) -> None:
         for capacity in (20, 30, 40, 50):
@@ -110,6 +175,7 @@ class EndToEndSmokeTest(unittest.TestCase):
             screen = pd.read_csv(screen_path)
             self.assertIn("utilization_status", screen.columns)
             self.assertIn("condition_satisfied", screen.columns)
+            self.assertIn("best_window", screen.columns)
             self.assertTrue(
                 screen["utilization_status"].isin(["supported", "inconclusive", "contradicted"]).all()
             )
@@ -117,7 +183,7 @@ class EndToEndSmokeTest(unittest.TestCase):
             # only, no status column.
             self.assertNotIn("mean_offered_delay_status", screen.columns)
 
-    def test_run_and_classify_grid_produces_optimal_vs_naive_vs_none(self) -> None:
+    def test_run_and_classify_grid_produces_optimal_vs_none_per_horizon(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             bank_path = Path(tmp) / "bank.csv"
             _small_bank().to_csv(bank_path, index=False)
@@ -135,12 +201,21 @@ class EndToEndSmokeTest(unittest.TestCase):
             self.assertTrue(grid_path.exists())
             grid = pd.read_csv(grid_path)
             for column in (
+                "source_background_id",
+                "horizon_days",
                 "optimal_utilization",
                 "none_utilization",
-                "naive_utilization",
                 "optimal_minus_none",
             ):
                 self.assertIn(column, grid.columns)
+            # naive-vs-optimal no longer applies: there is no single
+            # universal (Q, window) baseline once window sweeps 1..horizon
+            # and horizon itself is swept.
+            self.assertNotIn("naive_utilization", grid.columns)
+            # One row per (background, horizon) tested, not one per background.
+            self.assertEqual(
+                set(grid["horizon_days"].unique()), set(h1.H1_HORIZON_VALUES[:2])
+            )
 
     def test_resume_skips_already_completed_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

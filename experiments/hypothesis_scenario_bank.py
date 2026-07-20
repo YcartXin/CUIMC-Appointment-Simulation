@@ -10,9 +10,9 @@ is on the order of 10^8 combinations before either hypothesis's own focal
 parameters or seeds enter. Instead this module follows the same approach as
 experiments/robustness/scenario_design.py: scrambled-Sobol sampling mapped
 onto the discrete value grids, with rejection filtering for the validity
-constraints below, stratified evenly across horizon_days so that short
-horizons are not diluted away by how restrictive the no-show-threshold
-constraint becomes at short horizons.
+constraints below, stratified evenly across horizon_days so every horizon
+is represented at the same count regardless of how the other dimensions
+happen to sample.
 
 Both H1 and H2 consume the SAME bank. No-show threshold is sampled fully
 independently per class (not forced class_1 < class_2), which is what makes
@@ -27,15 +27,23 @@ Validity constraints enforced during sampling (per class i in {1, 2}):
     balk_low_i    <= balk_high_i
     noshow_low_i  <= noshow_high_i
     balk_threshold_i > noshow_threshold_i
-    noshow_threshold_i < horizon_days - 1
 
-The last constraint is the one explicitly requested to keep the no-show
-threshold sweep "in restraint" of the horizon: a threshold at or beyond
-horizon_days - 1 can never see its post-threshold probability used, since
-offered delay tau never reaches it. balk_threshold is deliberately NOT
-bounded by horizon the same way: a balk_threshold that ends up at or beyond
-the horizon is a legitimate scenario (balking never escalates within this
-horizon), not a degenerate one, so it is left alone.
+Both balk_threshold_i and noshow_threshold_i are kept from ever exceeding
+the booking horizon, but NOT by filtering rows out of the bank at
+generation time. Instead, experiments/hypothesis_common.py's build_config
+caps each threshold at horizon_days - 1 when it actually builds a
+simulation config: a threshold sampled at or beyond that point behaves as
+if it were exactly horizon_days - 1, since offered delay tau never reaches
+horizon_days anyway. This keeps every (threshold, horizon) combination in
+the bank usable, including short horizons, rather than needing horizon-
+dependent rejection sampling here. See build_config's docstring for the
+capping logic itself.
+
+horizon_days is still a per-background column here (used by H2's
+horizon-based condition, and as H1's background-level default), but H1's
+own experiment script additionally treats horizon_days as a tested policy
+lever, sweeping it directly rather than only reading each row's assigned
+value -- see experiments/h1_short_horizon_reservation.py.
 """
 
 from __future__ import annotations
@@ -55,14 +63,14 @@ DEFAULT_OUTPUT = REPO_DIR / "outputs" / "hypotheses" / "background_scenarios.csv
 # ---------------------------------------------------------------------
 
 RHO_VALUES = (0.8, 1.0, 1.2, 1.4, 1.6, 2.0, 2.5, 3.0)
-HORIZON_VALUES = (7, 14, 21, 28)
+HORIZON_VALUES = (2, 6, 10, 14, 18, 22, 26)
 CLASS1_SHARE_VALUES = (0.1, 0.3, 0.5, 0.7, 0.9)
 CAPACITY_VALUES = (20, 30, 40, 50)
 CANCEL_VALUES = (0.1, 0.2, 0.3)
-BALK_THRESHOLD_VALUES = (4, 8, 12, 16, 20, 24)
+BALK_THRESHOLD_VALUES = (5, 9, 16, 22, 24)
 BALK_LOW_VALUES = (0.05, 0.1, 0.2, 0.3, 0.4)
 BALK_HIGH_VALUES = (0.1, 0.2, 0.3, 0.4)
-NOSHOW_THRESHOLD_VALUES = (4, 6, 8, 10, 12, 14, 18, 20, 22, 24)
+NOSHOW_THRESHOLD_VALUES = (4, 7, 14, 20, 22)
 NOSHOW_LOW_VALUES = (0.05, 0.1, 0.2, 0.3, 0.4)
 NOSHOW_HIGH_VALUES = (0.1, 0.2, 0.3, 0.4)
 
@@ -107,10 +115,10 @@ def _anchor_rows(horizon: int) -> list[dict]:
                     "slots_per_day": 30,
                     "cancel_1": 0.1,
                     "cancel_2": 0.1,
-                    "balk_threshold_1": 8,
+                    "balk_threshold_1": 9,
                     "balk_low_1": 0.05,
                     "balk_high_1": 0.1,
-                    "balk_threshold_2": 8,
+                    "balk_threshold_2": 9,
                     "balk_low_2": 0.05,
                     "balk_high_2": 0.1,
                     "noshow_threshold_1": 4,
@@ -133,8 +141,6 @@ def _is_valid(df: pd.DataFrame) -> pd.Series:
         & (df["noshow_low_2"] <= df["noshow_high_2"])
         & (df["balk_threshold_1"] > df["noshow_threshold_1"])
         & (df["balk_threshold_2"] > df["noshow_threshold_2"])
-        & (df["noshow_threshold_1"] < df["horizon_days"] - 1)
-        & (df["noshow_threshold_2"] < df["horizon_days"] - 1)
     )
 
 

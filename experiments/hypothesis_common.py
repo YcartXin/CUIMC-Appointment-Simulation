@@ -106,6 +106,8 @@ def build_config(
     max_standby_days_2: int | None = None,
     standby_eligible_after_days_1: int | None = None,
     standby_eligible_after_days_2: int | None = None,
+    same_day_cancellation_enabled: bool = False,
+    release_unused_reservation_same_day: bool = False,
 ) -> SimulationConfig:
     """Build a two-class SimulationConfig directly from explicit parameters.
 
@@ -114,17 +116,43 @@ def build_config(
     CSV row. These two hypotheses use small, explicit, hand-designed
     grids rather than a sampled scenario bank, so building the config
     directly keeps every experiment script's grid readable in one place.
+
+    Both classes' balk_threshold and noshow_threshold are capped at
+    horizon_days - 1 here, dynamically, rather than being validated at
+    bank-generation time. A threshold sampled at or beyond the booking
+    horizon can never actually see its "post-threshold" probability used
+    -- offered delay tau ranges only 0..horizon_days-1 -- so capping it
+    to horizon_days - 1 makes every (threshold, horizon) combination a
+    well-defined, non-degenerate scenario instead of an invalid one to be
+    filtered out. This matters most at short horizons (as low as 2 days),
+    where every sampled threshold value would otherwise exceed the
+    horizon: at horizon_days=2, both thresholds collapse to 1 for every
+    class, which is the expected, intentional behavior at that extreme
+    (a 2-day horizon has no real room for a pre/post-threshold
+    distinction), not a bug.
+
+    same_day_cancellation_enabled and release_unused_reservation_same_day
+    both default to False here too, exactly mirroring SimulationConfig's
+    own defaults, so no existing H1/H2 task changes behavior by omission.
+    They only matter once an experiment script deliberately sets them,
+    e.g. to compare a "release unused reservation same-day" H1 policy
+    variant against the original strict-reservation variant.
     """
+    effective_balk_threshold_1 = min(int(balk_threshold_1), int(horizon_days) - 1)
+    effective_balk_threshold_2 = min(int(balk_threshold_2), int(horizon_days) - 1)
+    effective_noshow_threshold_1 = min(int(noshow_threshold_1), int(horizon_days) - 1)
+    effective_noshow_threshold_2 = min(int(noshow_threshold_2), int(horizon_days) - 1)
+
     classes = {
         1: PatientClassParams(
             class_id=1,
             lambda_per_day=float(lambda_1),
             cancel_prob=float(cancel_1),
             balk_prob=ThresholdRule(
-                threshold=int(balk_threshold_1), low=float(balk_low_1), high=float(balk_high_1)
+                threshold=effective_balk_threshold_1, low=float(balk_low_1), high=float(balk_high_1)
             ),
             no_show_prob=ThresholdRule(
-                threshold=int(noshow_threshold_1), low=float(noshow_low_1), high=float(noshow_high_1)
+                threshold=effective_noshow_threshold_1, low=float(noshow_low_1), high=float(noshow_high_1)
             ),
             standby_prob=float(standby_prob_1),
             max_standby_days=(
@@ -139,10 +167,10 @@ def build_config(
             lambda_per_day=float(lambda_2),
             cancel_prob=float(cancel_2),
             balk_prob=ThresholdRule(
-                threshold=int(balk_threshold_2), low=float(balk_low_2), high=float(balk_high_2)
+                threshold=effective_balk_threshold_2, low=float(balk_low_2), high=float(balk_high_2)
             ),
             no_show_prob=ThresholdRule(
-                threshold=int(noshow_threshold_2), low=float(noshow_low_2), high=float(noshow_high_2)
+                threshold=effective_noshow_threshold_2, low=float(noshow_low_2), high=float(noshow_high_2)
             ),
             standby_prob=float(standby_prob_2),
             max_standby_days=(
@@ -166,6 +194,8 @@ def build_config(
         reserved_window_days=(
             None if reserved_window_days is None else int(reserved_window_days)
         ),
+        same_day_cancellation_enabled=bool(same_day_cancellation_enabled),
+        release_unused_reservation_same_day=bool(release_unused_reservation_same_day),
     )
 
 
