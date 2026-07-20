@@ -676,33 +676,45 @@ def run(
         for shard in raw_dir.glob("*.csv"):
             shard.unlink()
 
-    # --- Batch 1: baseline + horizon_only (exact) + reservation_only and
-    # both_flexible's coarse phases. Every background's coarse phase must
-    # be fully complete before batch 2 can determine fine-phase winners.
-    batch1: list[dict[str, Any]] = []
-    for _, row in rows.iterrows():
+    # Process one background at a time. The original implementation built
+    # every task for every background in one in-memory list; the full bank
+    # creates millions of nested task dictionaries and can exhaust RAM before
+    # the first simulation starts. Per-background processing preserves the
+    # existing shard/resume behavior while bounding memory use.
+    for row_number, (_, row) in enumerate(rows.iterrows(), start=1):
+        bg = row["background_id"]
+        print(f"\nH1 [{variant}] background {row_number:,}/{len(rows):,}: {bg}")
+
+        # Batch 1: baseline + horizon_only (exact) + reservation_only and
+        # both_flexible coarse phases for this background only.
+        batch1: list[dict[str, Any]] = []
         batch1.extend(baseline_tasks(row, variant, smoke))
         batch1.extend(horizon_only_tasks(row, variant, smoke))
         batch1.extend(reservation_only_coarse_tasks(row, variant, smoke))
         batch1.extend(both_flexible_coarse_tasks(row, variant, smoke))
 
-    pending1 = _filter_pending(batch1, raw_dir) if resume else batch1
-    print(f"H1 [{variant}] batch 1 (baseline/horizon_only/coarse): backgrounds={len(rows)}")
-    print(f"  total tasks: {len(batch1):,}; already completed: {len(batch1) - len(pending1):,}; to run: {len(pending1):,}")
-    run_sharded_tasks(pending1, raw_dir=raw_dir, workers=workers)
+        pending1 = _filter_pending(batch1, raw_dir) if resume else batch1
+        print(
+            "  batch 1 (baseline/horizon_only/coarse): "
+            f"total={len(batch1):,}; "
+            f"completed={len(batch1) - len(pending1):,}; "
+            f"to run={len(pending1):,}"
+        )
+        run_sharded_tasks(pending1, raw_dir=raw_dir, workers=workers)
 
-    # --- Batch 2: fine phases, derived from each background's now-complete
-    # coarse-phase shard.
-    batch2: list[dict[str, Any]] = []
-    for _, row in rows.iterrows():
-        bg = row["background_id"]
+        # Batch 2: derive fine-phase winners from this background's now-complete
+        # coarse shard, then run only this background's fine tasks.
         shard = shard_path(raw_dir, bg)
         if not shard.exists():
+            print(f"  No shard found for {bg}; skipping fine phase.")
             continue
+
         shard_df = pd.read_csv(shard)
+        batch2: list[dict[str, Any]] = []
 
         resv_coarse = shard_df[
-            (shard_df["stage"] == STAGE_RESERVATION_ONLY) & (shard_df["arm"] == PHASE_COARSE)
+            (shard_df["stage"] == STAGE_RESERVATION_ONLY)
+            & (shard_df["arm"] == PHASE_COARSE)
         ]
         best_q, best_window = _best_qw(resv_coarse)
         if best_q is not None and best_q > 0:
@@ -713,7 +725,8 @@ def run(
             )
 
         both_coarse = shard_df[
-            (shard_df["stage"] == STAGE_BOTH_FLEXIBLE) & (shard_df["arm"] == PHASE_COARSE)
+            (shard_df["stage"] == STAGE_BOTH_FLEXIBLE)
+            & (shard_df["arm"] == PHASE_COARSE)
         ]
         winners: dict[int, tuple[int, int]] = {}
         for horizon, group in both_coarse.groupby("horizon_days"):
@@ -723,9 +736,14 @@ def run(
         if winners:
             batch2.extend(both_flexible_fine_tasks(row, variant, smoke, winners=winners))
 
-    pending2 = _filter_pending(batch2, raw_dir) if resume else batch2
-    print(f"H1 [{variant}] batch 2 (fine): total tasks: {len(batch2):,}; already completed: {len(batch2) - len(pending2):,}; to run: {len(pending2):,}")
-    run_sharded_tasks(pending2, raw_dir=raw_dir, workers=workers)
+        pending2 = _filter_pending(batch2, raw_dir) if resume else batch2
+        print(
+            "  batch 2 (fine): "
+            f"total={len(batch2):,}; "
+            f"completed={len(batch2) - len(pending2):,}; "
+            f"to run={len(pending2):,}"
+        )
+        run_sharded_tasks(pending2, raw_dir=raw_dir, workers=workers)
 
     print(f"Raw results (sharded): {raw_dir}")
     return raw_dir
