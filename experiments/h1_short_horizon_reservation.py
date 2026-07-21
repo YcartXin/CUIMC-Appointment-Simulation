@@ -788,7 +788,11 @@ def run(
             (shard_df["stage"] == STAGE_RESERVATION_ONLY)
             & (shard_df["arm"] == PHASE_COARSE)
         ]
-        best_q, best_window = _best_qw(resv_coarse)
+        baseline_zero = shard_df[shard_df["stage"] == STAGE_BASELINE]
+
+        best_q, best_window = _best_qw(
+            pd.concat([resv_coarse, baseline_zero], ignore_index=True)
+        )
         if best_q is not None and best_q > 0:
             batch2.extend(
                 reservation_only_fine_tasks(
@@ -802,7 +806,14 @@ def run(
         ]
         winners: dict[int, tuple[int, int]] = {}
         for horizon, group in both_coarse.groupby("horizon_days"):
-            bq, bw = _best_qw(group)
+            horizon_zero = shard_df[
+                (shard_df["stage"] == STAGE_HORIZON_ONLY)
+                & (shard_df["horizon_days"] == horizon)
+            ]
+
+            bq, bw = _best_qw(
+                pd.concat([group, horizon_zero], ignore_index=True)
+            )
             if bq is not None and bq > 0:
                 winners[int(horizon)] = (bq, bw)
         if winners:
