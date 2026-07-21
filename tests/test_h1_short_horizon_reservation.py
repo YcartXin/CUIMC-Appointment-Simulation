@@ -164,6 +164,101 @@ class TaskGenerationTest(unittest.TestCase):
                 )
 
 
+class SeedAndJobShardingTest(unittest.TestCase):
+    def tearDown(self) -> None:
+        # Restore the module-level seed count so other tests are unaffected.
+        h1.set_n_seeds(len(h1.STAGE1_SEEDS))
+
+    def test_set_n_seeds_takes_prefix_of_stage1_seeds(self) -> None:
+        h1.set_n_seeds(10)
+        seeds = h1._seeds(smoke=False)
+        self.assertEqual(seeds, h1.STAGE1_SEEDS[:10])
+        # Prefix property: a reduced-seed run's keys are a strict subset
+        # of a full-seed run's keys, so previously completed 20-seed rows
+        # remain valid resumable work.
+        self.assertTrue(set(seeds).issubset(set(h1.STAGE1_SEEDS)))
+
+    def test_set_n_seeds_rejects_out_of_range(self) -> None:
+        with self.assertRaises(ValueError):
+            h1.set_n_seeds(0)
+        with self.assertRaises(ValueError):
+            h1.set_n_seeds(len(h1.STAGE1_SEEDS) + 1)
+
+    def test_n_seeds_does_not_affect_smoke_mode(self) -> None:
+        h1.set_n_seeds(10)
+        self.assertEqual(h1._seeds(smoke=True), h1.STAGE1_SEEDS[:2])
+
+    def test_shards_partition_the_bank_disjointly_and_completely(self) -> None:
+        bank = bank_module.generate_background_bank(
+            n_per_horizon=6, seed=3, horizons=(6, 14, 22)
+        )
+        shard_count = 4
+        shuffled = bank.sample(frac=1.0, random_state=h1.RUN_ORDER_SEED).reset_index(drop=True)
+        assigned: list[set[str]] = []
+        for shard_index in range(shard_count):
+            subset = shuffled.iloc[shard_index::shard_count]
+            assigned.append(set(subset["background_id"]))
+        union = set().union(*assigned)
+        self.assertEqual(union, set(bank["background_id"]))
+        total = sum(len(s) for s in assigned)
+        self.assertEqual(total, len(bank))  # disjoint: sizes add up exactly
+
+    def test_shuffle_is_deterministic_across_invocations(self) -> None:
+        bank = bank_module.generate_background_bank(
+            n_per_horizon=6, seed=3, horizons=(6, 14)
+        )
+        order1 = bank.sample(frac=1.0, random_state=h1.RUN_ORDER_SEED)["background_id"].tolist()
+        order2 = bank.sample(frac=1.0, random_state=h1.RUN_ORDER_SEED)["background_id"].tolist()
+        self.assertEqual(order1, order2)
+
+    def test_run_rejects_invalid_shard_args(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            bank_path = Path(tmp) / "bank.csv"
+            _small_bank().to_csv(bank_path, index=False)
+            for bad_kwargs in (
+                {"shard_index": 2, "shard_count": 2},
+                {"shard_index": -1, "shard_count": 2},
+                {"shard_index": 0, "shard_count": 0},
+            ):
+                with self.assertRaises(ValueError):
+                    h1.run(
+                        variant=h1.VARIANT_STRICT,
+                        bank_path=bank_path,
+                        output_dir=Path(tmp) / "out",
+                        workers=1,
+                        smoke=True,
+                        resume=False,
+                        **bad_kwargs,
+                    )
+
+    def test_sharded_jobs_cover_backgrounds_without_collision(self) -> None:
+        # Two shard jobs over the same output tree: their shard files
+        # must be disjoint and together cover every background processed.
+        with tempfile.TemporaryDirectory() as tmp:
+            bank_path = Path(tmp) / "bank.csv"
+            bank = _small_bank()
+            bank.to_csv(bank_path, index=False)
+            output_dir = Path(tmp) / "out"
+
+            for shard_index in range(2):
+                h1.run(
+                    variant=h1.VARIANT_STRICT,
+                    bank_path=bank_path,
+                    output_dir=output_dir,
+                    workers=1,
+                    smoke=True,
+                    resume=True,
+                    shard_index=shard_index,
+                    shard_count=2,
+                )
+            raw_dir = output_dir / h1.VARIANT_STRICT / "raw"
+            shard_files = {p.stem for p in raw_dir.glob("*.csv")}
+            # smoke mode subsamples the bank, so compare against the same
+            # subsample both jobs saw.
+            expected = set(h1._smoke_bank(bank)["background_id"])
+            self.assertEqual(shard_files, expected)
+
+
 class ShardedExecutionTest(unittest.TestCase):
     def test_run_sharded_tasks_routes_rows_by_source_background_id(self) -> None:
         bank = _small_bank()

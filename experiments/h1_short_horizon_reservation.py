@@ -138,6 +138,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -265,8 +266,34 @@ def _reservation_kwargs(q: int, window: int, variant: str) -> dict[str, Any]:
     }
 
 
+# Number of seeds per cell for non-smoke runs. Settable via --n-seeds
+# (see set_n_seeds); always a PREFIX of STAGE1_SEEDS, so rows already
+# simulated under a larger seed count remain valid, resumable work --
+# a 10-seed run's keys are a strict subset of a 20-seed run's keys.
+_ACTIVE_N_SEEDS = len(STAGE1_SEEDS)
+
+# Fixed shuffle seed for background processing order (see run()). The
+# bank is stored sorted by horizon stratum, so processing it in file
+# order would leave any partially-completed run biased toward short
+# horizons; a deterministic shuffle makes any prefix (or any
+# --shard-index subset) a representative sample of the whole bank,
+# while staying identical across jobs and reruns so resume/sharding
+# stay consistent.
+RUN_ORDER_SEED = 20260720
+
+
+def set_n_seeds(n: int) -> None:
+    global _ACTIVE_N_SEEDS
+    n = int(n)
+    if not (1 <= n <= len(STAGE1_SEEDS)):
+        raise ValueError(
+            f"--n-seeds must be between 1 and {len(STAGE1_SEEDS)}, got {n}"
+        )
+    _ACTIVE_N_SEEDS = n
+
+
 def _seeds(smoke: bool) -> tuple[int, ...]:
-    return STAGE1_SEEDS[:2] if smoke else STAGE1_SEEDS
+    return STAGE1_SEEDS[:2] if smoke else STAGE1_SEEDS[:_ACTIVE_N_SEEDS]
 
 
 def _smoke_overrides(smoke: bool) -> dict[str, Any]:
@@ -663,27 +690,72 @@ def _filter_pending(tasks: list[dict[str, Any]], raw_dir: Path) -> list[dict[str
 # ---------------------------------------------------------------------
 
 def run(
-    *, variant: str, bank_path: Path, output_dir: Path, workers: int, smoke: bool, resume: bool
+    *,
+    variant: str,
+    bank_path: Path,
+    output_dir: Path,
+    workers: int,
+    smoke: bool,
+    resume: bool,
+    n_seeds: int | None = None,
+    shard_index: int = 0,
+    shard_count: int = 1,
 ) -> Path:
     if variant not in VARIANTS:
         raise ValueError(f"variant must be one of {VARIANTS}, got {variant!r}")
+    if shard_count < 1:
+        raise ValueError(f"--shard-count must be >= 1, got {shard_count}")
+    if not (0 <= shard_index < shard_count):
+        raise ValueError(
+            f"--shard-index must be in [0, {shard_count - 1}], got {shard_index}"
+        )
+    if n_seeds is not None:
+        set_n_seeds(n_seeds)
 
     bank = load_bank(bank_path)
     rows = _smoke_bank(bank) if smoke else bank
+
+    # Deterministic shuffle, then stride-slice for this job's shard. The
+    # shuffle (fixed RUN_ORDER_SEED, identical across jobs/reruns) makes
+    # any prefix of any shard a representative sample of the whole bank
+    # rather than a run of same-horizon rows; the stride slice gives each
+    # of N concurrent jobs a disjoint background subset, so multiple
+    # invocations can safely share one output tree (shard files are
+    # per-background, so disjoint backgrounds means no write collisions).
+    rows = rows.sample(frac=1.0, random_state=RUN_ORDER_SEED).reset_index(drop=True)
+    rows = rows.iloc[shard_index::shard_count]
+
     raw_dir = output_dir / variant / "raw"
 
     if not resume and raw_dir.exists():
-        for shard in raw_dir.glob("*.csv"):
-            shard.unlink()
+        # Scope deletion to THIS job's backgrounds only: with concurrent
+        # sharded jobs sharing one output tree, deleting every shard file
+        # here would destroy other jobs' completed work.
+        for bg in rows["background_id"]:
+            shard = shard_path(raw_dir, bg)
+            if shard.exists():
+                shard.unlink()
 
     # Process one background at a time. The original implementation built
     # every task for every background in one in-memory list; the full bank
     # creates millions of nested task dictionaries and can exhaust RAM before
     # the first simulation starts. Per-background processing preserves the
-    # existing shard/resume behavior while bounding memory use.
+    # existing shard/resume behavior while bounding memory use -- and,
+    # combined with the shuffled order above, means an interrupted or
+    # deadline-truncated run leaves behind fully-completed, representative
+    # backgrounds that classify() can use as-is.
+    shard_label = f" shard {shard_index + 1}/{shard_count}" if shard_count > 1 else ""
+    run_started = time.monotonic()
     for row_number, (_, row) in enumerate(rows.iterrows(), start=1):
         bg = row["background_id"]
-        print(f"\nH1 [{variant}] background {row_number:,}/{len(rows):,}: {bg}")
+        elapsed = time.monotonic() - run_started
+        if row_number > 1 and elapsed > 0:
+            per_bg = elapsed / (row_number - 1)
+            remaining_h = per_bg * (len(rows) - row_number + 1) / 3600
+            eta = f"; ~{per_bg / 60:.1f} min/bg, est {remaining_h:.1f}h remaining"
+        else:
+            eta = ""
+        print(f"\nH1 [{variant}]{shard_label} background {row_number:,}/{len(rows):,}: {bg}{eta}")
 
         # Batch 1: baseline + horizon_only (exact) + reservation_only and
         # both_flexible coarse phases for this background only.
@@ -959,6 +1031,33 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--bank", type=Path, default=DEFAULT_BANK_PATH)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--workers", type=int, default=default_workers())
+    parser.add_argument(
+        "--n-seeds",
+        type=int,
+        default=len(STAGE1_SEEDS),
+        help=(
+            "Seeds per cell (prefix of STAGE1_SEEDS). Lower = faster with "
+            "wider CIs; rows already run at a higher seed count remain "
+            "valid and are skipped on resume."
+        ),
+    )
+    parser.add_argument(
+        "--shard-index",
+        type=int,
+        default=0,
+        help="This job's shard number, 0-based. See --shard-count.",
+    )
+    parser.add_argument(
+        "--shard-count",
+        type=int,
+        default=1,
+        help=(
+            "Split the (shuffled) bank across N concurrent jobs; each job "
+            "handles backgrounds where position %% N == its --shard-index. "
+            "All jobs may share one --output-dir: shard files are "
+            "per-background, so disjoint subsets never collide."
+        ),
+    )
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--no-resume", action="store_true")
     return parser
@@ -980,6 +1079,9 @@ def main() -> None:
             workers=args.workers,
             smoke=args.smoke,
             resume=not args.no_resume,
+            n_seeds=args.n_seeds,
+            shard_index=args.shard_index,
+            shard_count=args.shard_count,
         )
     if args.command in {"classify", "all"}:
         classify(output_dir=args.output_dir, bank_path=args.bank, variant=args.variant)
