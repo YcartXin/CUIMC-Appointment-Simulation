@@ -1,0 +1,903 @@
+---
+title: "H1 Policy Comparison: Same-Day Release of Unused Reservations"
+subtitle: "Policies optimized for average appointment utilization"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: true
+    code-summary: "Show analysis code"
+    embed-resources: true
+    theme: cosmo
+execute:
+  echo: false
+  warning: false
+  message: false
+  freeze: auto
+---
+
+
+```{r}
+#| label: setup
+#| include: false
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(readr)
+library(scales)
+library(knitr)
+
+find_repo_root <- function(start = getwd()) {
+  current <- normalizePath(start, winslash = "/", mustWork = FALSE)
+
+  repeat {
+    marker <- file.path(
+      current,
+      "full_run_summaries",
+      "h1_policy_outcomes"
+    )
+
+    if (dir.exists(marker)) {
+      return(current)
+    }
+
+    parent <- dirname(current)
+
+    if (identical(parent, current)) {
+      stop(
+        "Could not find the repository root. Render this file from inside ",
+        "CUIMC-Appointment-Simulation."
+      )
+    }
+
+    current <- parent
+  }
+}
+
+repo_root <- find_repo_root()
+data_root <- file.path(
+  repo_root,
+  "full_run_summaries",
+  "h1_policy_outcomes"
+)
+
+variant <- "release"
+companion_variant <- "strict"
+
+policy_outcomes <- read_csv(
+  file.path(data_root, variant, "selected_policy_outcomes.csv"),
+  show_col_types = FALSE
+)
+
+pairwise <- read_csv(
+  file.path(data_root, variant, "pairwise_group_deltas.csv"),
+  show_col_types = FALSE
+)
+
+objective_switch <- read_csv(
+  file.path(data_root, variant, "objective_switch_deltas.csv"),
+  show_col_types = FALSE
+)
+
+companion_outcomes <- read_csv(
+  file.path(data_root, companion_variant, "selected_policy_outcomes.csv"),
+  show_col_types = FALSE
+)
+
+companion_pairwise <- read_csv(
+  file.path(data_root, companion_variant, "pairwise_group_deltas.csv"),
+  show_col_types = FALSE
+)
+
+companion_switch <- read_csv(
+  file.path(data_root, companion_variant, "objective_switch_deltas.csv"),
+  show_col_types = FALSE
+)
+
+avg_outcomes <- policy_outcomes |>
+  filter(selection_objective == "average_utilization")
+
+avg_pairwise <- pairwise |>
+  filter(selection_objective == "average_utilization")
+
+avg_companion_pairwise <- companion_pairwise |>
+  filter(selection_objective == "average_utilization")
+
+policy_labels <- c(
+  baseline = "Baseline",
+  horizon_only = "Horizon only",
+  reservation_only = "Reservation only",
+  both_flexible = "Both flexible"
+)
+
+comparison_labels <- c(
+  horizon_only_vs_baseline = "Horizon only − baseline",
+  reservation_only_vs_baseline = "Reservation only − baseline",
+  both_flexible_vs_baseline = "Both flexible − baseline",
+  both_flexible_vs_horizon_only = "Both flexible − horizon only",
+  both_flexible_vs_reservation_only = "Both flexible − reservation only",
+  reservation_only_vs_horizon_only = "Reservation only − horizon only"
+)
+
+pct <- function(x, digits = 1) {
+  paste0(formatC(100 * x, format = "f", digits = digits), "%")
+}
+
+pp <- function(x, digits = 2) {
+  paste0(formatC(100 * x, format = "f", digits = digits), " pp")
+}
+
+comparison_rows <- function(comparison_name) {
+  avg_pairwise |>
+    filter(comparison == comparison_name)
+}
+
+supported_rate <- function(comparison_name) {
+  comparison_rows(comparison_name) |>
+    summarise(
+      value = mean(
+        average_utilization_change_status == "supported_increase"
+      )
+    ) |>
+    pull(value)
+}
+
+decrease_rate <- function(comparison_name) {
+  comparison_rows(comparison_name) |>
+    summarise(
+      value = mean(
+        average_utilization_change_status == "supported_decrease"
+      )
+    ) |>
+    pull(value)
+}
+
+tie_rate <- function(comparison_name) {
+  comparison_rows(comparison_name) |>
+    summarise(
+      value = mean(
+        average_utilization_change_status == "practical_tie"
+      )
+    ) |>
+    pull(value)
+}
+
+median_gain <- function(comparison_name) {
+  comparison_rows(comparison_name) |>
+    summarise(value = median(delta_average_utilization, na.rm = TRUE)) |>
+    pull(value)
+}
+
+supported_count <- function(comparison_name) {
+  comparison_rows(comparison_name) |>
+    summarise(
+      value = sum(
+        average_utilization_change_status == "supported_increase"
+      )
+    ) |>
+    pull(value)
+}
+
+decrease_count <- function(comparison_name) {
+  comparison_rows(comparison_name) |>
+    summarise(
+      value = sum(
+        average_utilization_change_status == "supported_decrease"
+      )
+    ) |>
+    pull(value)
+}
+
+tie_count <- function(comparison_name) {
+  comparison_rows(comparison_name) |>
+    summarise(
+      value = sum(
+        average_utilization_change_status == "practical_tie"
+      )
+    ) |>
+    pull(value)
+}
+
+tradeoff_rate <- function(comparison_name) {
+  comparison_rows(comparison_name) |>
+    summarise(
+      value = mean(
+        patient_group_supported_tradeoff ==
+          "priority_gains_general_loses"
+      )
+    ) |>
+    pull(value)
+}
+
+switch_policy_rows <- function(policy_name) {
+  objective_switch |>
+    filter(policy == policy_name)
+}
+
+same_cell_rate <- function(policy_name) {
+  switch_policy_rows(policy_name) |>
+    summarise(value = mean(same_policy_cell, na.rm = TRUE)) |>
+    pull(value)
+}
+
+median_switch_average <- function(policy_name) {
+  switch_policy_rows(policy_name) |>
+    summarise(value = median(delta_average_utilization, na.rm = TRUE)) |>
+    pull(value)
+}
+
+median_switch_weighted <- function(policy_name) {
+  switch_policy_rows(policy_name) |>
+    summarise(value = median(delta_weighted_utilization, na.rm = TRUE)) |>
+    pull(value)
+}
+
+theme_report <- function() {
+  theme_minimal(base_size = 12) +
+    theme(
+      panel.grid.minor = element_blank(),
+      plot.title.position = "plot",
+      legend.position = "bottom",
+      strip.text = element_text(face = "bold"),
+      axis.title = element_text(face = "bold")
+    )
+}
+```
+
+## Main findings
+
+- **Most policy comparisons are still ties.** Both-flexible improves on baseline in `r pct(supported_rate("both_flexible_vs_baseline"))` of backgrounds and is practically tied in `r pct(tie_rate("both_flexible_vs_baseline"))`.
+- **Release makes reservations more useful.** Reservation-only improves on baseline in `r pct(supported_rate("reservation_only_vs_baseline"))`, compared with fewer backgrounds in the strict companion analysis.
+- **Both-flexible is usually tied with reservation-only.** Their difference is a practical tie in `r pct(tie_rate("both_flexible_vs_reservation_only"))` of backgrounds.
+- **Reservation-only more often beats horizon-only than the reverse.** It wins in `r supported_count("reservation_only_vs_horizon_only")` backgrounds, loses in `r decrease_count("reservation_only_vs_horizon_only")`, and ties in `r tie_count("reservation_only_vs_horizon_only")`.
+- **Patient-group redistribution remains important.** Priority served rate rises while general-group served rate falls in `r pct(tradeoff_rate("reservation_only_vs_baseline"))` of reservation-only comparisons with baseline.
+
+## How the simulations were run
+
+- **840 backgrounds:** 42 anchor settings and 798 Sobol-sampled settings.
+- **10 paired seeds** were used for every evaluated policy cell.
+- Demand-to-capacity ratio ranged from **0.8 to 3.0**; priority-group share ranged from **0.1 to 0.9**.
+- Daily capacity ranged from **20 to 50 slots** and the native horizon ranged from **2 to 26 days**.
+- Cancellation, balking, and no-show behavior varied across both groups.
+- Paired bootstrap intervals used **2,000 draws**. A difference within **0.005** utilization was treated as a practical tie.
+
+The four policy regimes were:
+
+| Policy | Booking horizon | Priority reservations |
+|---|---|---|
+| Baseline | Fixed at the background value | None |
+| Horizon only | Optimized | None |
+| Reservation only | Fixed at the background value | Quantity and reservation window optimized |
+| Both flexible | Optimized | Quantity and reservation window optimized |
+
+The primary objective was **average utilization**:
+
+\[
+\text{Average utilization}
+=
+\frac{\text{completed visits}}
+{\text{available measured slots}}.
+\]
+
+Class 1 and Class 2 remain different simulated patient populations in every regime. Class 1 is called the **priority group** only when \(Q>0\). When \(Q=0\), both groups book through the general first-come-first-served pool.
+
+## Overall policy comparison
+
+```{r}
+#| label: fig-overall-comparisons
+#| fig-cap: "Distribution of average-utilization differences across all six policy comparisons. Points show medians, thick lines show interquartile ranges, and thin lines show the 10th–90th percentiles."
+#| fig-width: 10
+#| fig-height: 6
+
+comparison_order <- unname(comparison_labels)
+
+comparison_summary <- avg_pairwise |>
+  group_by(comparison) |>
+  summarise(
+    q10 = quantile(delta_average_utilization, 0.10, na.rm = TRUE),
+    q25 = quantile(delta_average_utilization, 0.25, na.rm = TRUE),
+    median = median(delta_average_utilization, na.rm = TRUE),
+    q75 = quantile(delta_average_utilization, 0.75, na.rm = TRUE),
+    q90 = quantile(delta_average_utilization, 0.90, na.rm = TRUE),
+    supported = mean(
+      average_utilization_change_status == "supported_increase"
+    ),
+    practical_tie = mean(
+      average_utilization_change_status == "practical_tie"
+    ),
+    .groups = "drop"
+  ) |>
+  mutate(
+    comparison_label = comparison_labels[comparison],
+    comparison_label = factor(
+      comparison_label,
+      levels = rev(comparison_order)
+    ),
+    comparison_group = if_else(
+      grepl("_vs_baseline$", comparison),
+      "Compared with baseline",
+      "Compared with another active policy"
+    ),
+    across(c(q10, q25, median, q75, q90), ~100 * .x),
+    result_label = paste0(
+      pct(supported),
+      " supported; ",
+      pct(practical_tie),
+      " tied"
+    )
+  )
+
+ggplot(
+  comparison_summary,
+  aes(y = comparison_label)
+) +
+  geom_vline(xintercept = 0, colour = "grey45") +
+  geom_vline(
+    xintercept = 0.5,
+    linetype = "dashed",
+    colour = "grey65"
+  ) +
+  geom_segment(
+    aes(x = q10, xend = q90, yend = comparison_label),
+    linewidth = 0.6,
+    colour = "grey45"
+  ) +
+  geom_segment(
+    aes(x = q25, xend = q75, yend = comparison_label),
+    linewidth = 3
+  ) +
+  geom_point(aes(x = median), size = 2.5) +
+  geom_text(
+    aes(x = q90, label = result_label),
+    hjust = -0.08,
+    size = 3.1
+  ) +
+  facet_wrap(
+    ~comparison_group,
+    ncol = 1,
+    scales = "free_y"
+  ) +
+  scale_x_continuous(
+    name = "Average-utilization difference (percentage points)",
+    expand = expansion(mult = c(0.05, 0.34))
+  ) +
+  labs(y = NULL) +
+  coord_cartesian(clip = "off") +
+  theme_report()
+```
+
+- Both-flexible weakly contains the other policy choices, so it cannot be worse after optimization.
+- That does **not** mean both policies are always needed. Most backgrounds are practical ties.
+- Reservation-only and horizon-only should be read as competing single-policy options, not as a ranking that applies to every clinic.
+
+```{r}
+#| label: tbl-comparison-summary
+
+comparison_table <- comparison_summary |>
+  transmute(
+    Comparison = as.character(comparison_label),
+    `Median difference` = paste0(
+      formatC(median, format = "f", digits = 2),
+      " pp"
+    ),
+    `Supported increase` = pct(supported),
+    `Practical tie` = pct(practical_tie)
+  )
+
+kable(
+  comparison_table,
+  align = c("l", "r", "r", "r")
+)
+```
+
+## Which scenarios benefit?
+
+```{r}
+#| label: fig-scenario-heatmap
+#| fig-cap: "Median average-utilization difference by demand pressure and priority-group share. Values are aggregated over the remaining scenario parameters."
+#| fig-width: 11
+#| fig-height: 8
+
+heatmap_data <- avg_pairwise |>
+  group_by(comparison, rho, class1_share) |>
+  summarise(
+    median_delta_pp =
+      100 * median(delta_average_utilization, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    comparison_label = comparison_labels[comparison],
+    class1_share = factor(class1_share),
+    rho = factor(rho)
+  )
+
+heat_limit <- quantile(
+  abs(heatmap_data$median_delta_pp),
+  0.95,
+  na.rm = TRUE
+)
+
+ggplot(
+  heatmap_data,
+  aes(
+    x = class1_share,
+    y = rho,
+    fill = median_delta_pp
+  )
+) +
+  geom_tile(colour = "white", linewidth = 0.25) +
+  geom_text(
+    aes(
+      label = if_else(
+        abs(median_delta_pp) >= 0.5,
+        formatC(
+          median_delta_pp,
+          format = "f",
+          digits = 1
+        ),
+        ""
+      )
+    ),
+    size = 2.7
+  ) +
+  facet_wrap(
+    ~comparison_label,
+    ncol = 3
+  ) +
+  scale_fill_gradient2(
+    low = "#B2182B",
+    mid = "white",
+    high = "#2166AC",
+    midpoint = 0,
+    limits = c(-heat_limit, heat_limit),
+    oob = squish,
+    name = "Median\nchange (pp)"
+  ) +
+  labs(
+    x = "Priority-group share",
+    y = "Demand-to-capacity ratio"
+  ) +
+  theme_report()
+```
+
+The dominant pattern is demand pressure:
+
+- At low and moderate demand, the policies are usually tied in utilization.
+- The clearest gains appear when demand approaches the upper end of the tested range.
+- Priority-group share changes which single policy performs better, but it does not create one universal winner.
+
+### No-show behavior and reservation value
+
+```{r}
+#| label: fig-noshow-pattern
+#| fig-cap: "Reservation-related gains rise under heavy demand when the general group has a higher low-delay no-show probability. These are grouped associations across backgrounds, not isolated one-parameter causal effects."
+#| fig-width: 10
+#| fig-height: 4.8
+
+noshow_pattern <- avg_pairwise |>
+  filter(
+    comparison %in% c(
+      "reservation_only_vs_baseline",
+      "both_flexible_vs_baseline"
+    )
+  ) |>
+  group_by(
+    comparison,
+    rho,
+    noshow_low_2
+  ) |>
+  summarise(
+    median_delta_pp =
+      100 * median(delta_average_utilization, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    comparison_label = comparison_labels[comparison],
+    noshow_low_2 = factor(noshow_low_2)
+  )
+
+ggplot(
+  noshow_pattern,
+  aes(
+    x = rho,
+    y = median_delta_pp,
+    colour = noshow_low_2,
+    group = noshow_low_2
+  )
+) +
+  geom_hline(yintercept = 0, colour = "grey55") +
+  geom_hline(
+    yintercept = 0.5,
+    linetype = "dashed",
+    colour = "grey70"
+  ) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.8) +
+  facet_wrap(~comparison_label, ncol = 2) +
+  labs(
+    x = "Demand-to-capacity ratio",
+    y = "Median utilization difference (pp)",
+    colour = paste(
+      "General-group low-delay",
+      "no-show probability"
+    )
+  ) +
+  theme_report()
+```
+
+With same-day release:
+
+- Demand remains the strongest separator between ties and meaningful utilization gains.
+- Reservations begin to show modest gains across a wider range of priority-group shares because unused reserved slots can be reused.
+- At a demand-to-capacity ratio of 3.0, the median reservation-only gain rises from about **0.3 pp** to about **3.6 pp** as the general-group low-delay no-show probability rises from 0.05 to 0.30.
+- The incremental value of horizon flexibility after reservations are optimized is usually small: both-flexible and reservation-only tie in most backgrounds.
+
+## Optimized policy parameters
+
+The figure below focuses on **both-flexible**, where the horizon, reserved quantity, and reservation window were jointly selected.
+
+```{r}
+#| label: fig-optimized-parameters
+#| fig-cap: "Median jointly optimized policy parameters by demand and priority-group share."
+#| fig-width: 10.5
+#| fig-height: 7
+
+joint_policy <- avg_outcomes |>
+  filter(policy == "both_flexible") |>
+  mutate(
+    reserved_capacity_pct =
+      100 * selected_Q / slots_per_day
+  )
+
+parameter_summary <- bind_rows(
+  joint_policy |>
+    group_by(rho, class1_share) |>
+    summarise(
+      value = median(
+        selected_horizon_days,
+        na.rm = TRUE
+      ),
+      metric = "Selected horizon (days)",
+      .groups = "drop"
+    ),
+  joint_policy |>
+    group_by(rho, class1_share) |>
+    summarise(
+      value = median(
+        reserved_capacity_pct,
+        na.rm = TRUE
+      ),
+      metric = "Reserved quantity (% of daily capacity)",
+      .groups = "drop"
+    ),
+  joint_policy |>
+    filter(
+      selected_Q > 0,
+      selected_window >= 0
+    ) |>
+    group_by(rho, class1_share) |>
+    summarise(
+      value = median(
+        selected_window,
+        na.rm = TRUE
+      ),
+      metric = "Reservation window (days)",
+      .groups = "drop"
+    )
+) |>
+  mutate(
+    class1_share = factor(class1_share)
+  )
+
+ggplot(
+  parameter_summary,
+  aes(
+    x = rho,
+    y = value,
+    colour = class1_share,
+    group = class1_share
+  )
+) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1.8) +
+  facet_wrap(
+    ~metric,
+    scales = "free_y",
+    ncol = 1
+  ) +
+  labs(
+    x = "Demand-to-capacity ratio",
+    y = NULL,
+    colour = "Priority-group share"
+  ) +
+  theme_report()
+```
+
+Release changes how the nominal reservation parameters should be interpreted:
+
+- The jointly optimized horizon is **2 days** in `r pct(mean(joint_policy$selected_horizon_days == 2))` of backgrounds and **6 days** in `r pct(mean(joint_policy$selected_horizon_days == 6))`.
+- Optimized \(Q\) is often large—commonly 75%–90% of daily capacity across priority-group shares.
+- A large \(Q\) does **not** mean that the same share is withheld from the general group for the full day. Unused reservations are released.
+- Release therefore makes high nominal reservation caps less costly than under the strict policy.
+- Reservation windows are generally longer than under strict reservation when the horizon is fixed, but remain short under many jointly optimized settings.
+
+## Effects on the two patient groups
+
+The utilization objective counts completed appointments, regardless of which group receives them. A utilization gain can therefore coexist with a redistribution of access.
+
+```{r}
+#| label: fig-patient-group-effects
+#| fig-cap: "Supported Class 1 and Class 2 served-rate patterns for each policy compared with baseline."
+#| fig-width: 10
+#| fig-height: 4.8
+
+collapse_tradeoff <- function(x) {
+  case_when(
+    x == "both_groups_gain" ~
+      "Both groups gain",
+    x == "priority_gains_general_loses" ~
+      "Priority gains; general loses",
+    x == "priority_loses_general_gains" ~
+      "General gains; priority loses",
+    x %in% c(
+      "priority_gains_general_tied",
+      "priority_tied_general_gains"
+    ) ~
+      "One group gains; other tied",
+    x %in% c(
+      "priority_loses_general_tied",
+      "priority_tied_general_loses",
+      "both_groups_lose"
+    ) ~
+      "At least one group loses",
+    TRUE ~
+      "No clear group change"
+  )
+}
+
+group_effects <- avg_pairwise |>
+  filter(
+    comparison %in% c(
+      "horizon_only_vs_baseline",
+      "reservation_only_vs_baseline",
+      "both_flexible_vs_baseline"
+    )
+  ) |>
+  mutate(
+    comparison_label = comparison_labels[comparison],
+    group_pattern = collapse_tradeoff(
+      patient_group_supported_tradeoff
+    )
+  ) |>
+  count(
+    comparison_label,
+    group_pattern,
+    name = "n"
+  ) |>
+  group_by(comparison_label) |>
+  mutate(share = n / sum(n)) |>
+  ungroup()
+
+group_pattern_levels <- c(
+  "Both groups gain",
+  "Priority gains; general loses",
+  "General gains; priority loses",
+  "One group gains; other tied",
+  "At least one group loses",
+  "No clear group change"
+)
+
+group_effects <- group_effects |>
+  mutate(
+    group_pattern = factor(
+      group_pattern,
+      levels = group_pattern_levels
+    ),
+    comparison_label = factor(
+      comparison_label,
+      levels = c(
+        "Both flexible − baseline",
+        "Reservation only − baseline",
+        "Horizon only − baseline"
+      )
+    )
+  )
+
+ggplot(
+  group_effects,
+  aes(
+    x = share,
+    y = comparison_label,
+    fill = group_pattern
+  )
+) +
+  geom_col(width = 0.7) +
+  scale_x_continuous(labels = percent_format()) +
+  scale_fill_manual(
+    values = c(
+      "#2A9D8F",
+      "#E76F51",
+      "#457B9D",
+      "#F4A261",
+      "#9D4EDD",
+      "#D9D9D9"
+    ),
+    drop = FALSE
+  ) +
+  labs(
+    x = "Share of backgrounds",
+    y = NULL,
+    fill = "Supported group pattern"
+  ) +
+  theme_report()
+```
+
+- Horizon changes can help or hurt either group because they change the set of delays offered to everyone.
+- Reservations more directly redistribute access toward Class 1.
+- “Priority gains; general loses” means the paired confidence intervals support both directions. It is not inferred from point estimates alone.
+
+The main strict-reservation trade-off appears under congested conditions:
+
+- Reservation-only produces a supported priority-gain/general-loss pattern in `r pct(tradeoff_rate("reservation_only_vs_baseline"))` of backgrounds.
+- Both-flexible produces the same pattern in `r pct(tradeoff_rate("both_flexible_vs_baseline"))`.
+- At demand ratios below 1.2, clear group changes are rare.
+- As demand rises, reservations increasingly determine **who** receives limited capacity rather than creating additional capacity.
+
+## Comparison with the twice-weighted Class 1 objective
+
+The secondary objective was:
+
+\[
+\text{Priority-weighted served rate}
+=
+\frac{
+2(\text{Class 1 served rate})
++
+(\text{Class 2 served rate})
+}{3}.
+\]
+
+Class 1 therefore receives **twice the policy weight** of Class 2.
+
+### What is similar?
+
+- The baseline is identical because it has no parameters to optimize.
+- Demand remains the main condition under which policy changes matter.
+- Short horizons remain common under both objectives.
+- Horizon-only is more stable across objectives than reservation policies.
+
+### What changes?
+
+```{r}
+#| label: tbl-objective-switch
+
+objective_switch_summary <- objective_switch |>
+  filter(policy != "baseline") |>
+  group_by(policy) |>
+  summarise(
+    `Same exact policy cell` =
+      mean(same_policy_cell, na.rm = TRUE),
+    `Median average-utilization change` =
+      median(delta_average_utilization, na.rm = TRUE),
+    `Median weighted-rate change` =
+      median(delta_weighted_utilization, na.rm = TRUE),
+    `Average-utilization loss > 0.5 pp` =
+      mean(delta_average_utilization < -0.005, na.rm = TRUE),
+    `Weighted-rate gain > 0.5 pp` =
+      mean(delta_weighted_utilization > 0.005, na.rm = TRUE),
+    `Priority gains; general loses` =
+      mean(
+        patient_group_supported_tradeoff ==
+          "priority_gains_general_loses",
+        na.rm = TRUE
+      ),
+    .groups = "drop"
+  ) |>
+  mutate(
+    Policy = policy_labels[policy],
+    `Same exact policy cell` =
+      pct(`Same exact policy cell`),
+    `Median average-utilization change` =
+      pp(`Median average-utilization change`),
+    `Median weighted-rate change` =
+      pp(`Median weighted-rate change`),
+    `Average-utilization loss > 0.5 pp` =
+      pct(`Average-utilization loss > 0.5 pp`),
+    `Weighted-rate gain > 0.5 pp` =
+      pct(`Weighted-rate gain > 0.5 pp`),
+    `Priority gains; general loses` =
+      pct(`Priority gains; general loses`)
+  ) |>
+  select(
+    Policy,
+    `Same exact policy cell`,
+    `Median average-utilization change`,
+    `Median weighted-rate change`,
+    `Average-utilization loss > 0.5 pp`,
+    `Weighted-rate gain > 0.5 pp`,
+    `Priority gains; general loses`
+  )
+
+kable(
+  objective_switch_summary,
+  align = c("l", rep("r", 6))
+)
+```
+
+```{r}
+#| label: fig-objective-tradeoff
+#| fig-cap: "Changing from the average-utilization optimum to the twice-weighted Class 1 optimum. Upper-left observations gain priority-weighted access while losing average utilization."
+#| fig-width: 10
+#| fig-height: 4.8
+
+switch_plot <- objective_switch |>
+  filter(policy != "baseline") |>
+  mutate(
+    policy_label = policy_labels[policy],
+    average_change_pp =
+      100 * delta_average_utilization,
+    weighted_change_pp =
+      100 * delta_weighted_utilization
+  )
+
+ggplot(
+  switch_plot,
+  aes(
+    x = average_change_pp,
+    y = weighted_change_pp
+  )
+) +
+  geom_hline(yintercept = 0, colour = "grey45") +
+  geom_vline(xintercept = 0, colour = "grey45") +
+  geom_hline(
+    yintercept = 0.5,
+    linetype = "dotted",
+    colour = "grey65"
+  ) +
+  geom_vline(
+    xintercept = -0.5,
+    linetype = "dotted",
+    colour = "grey65"
+  ) +
+  geom_point(
+    alpha = 0.24,
+    size = 1.2
+  ) +
+  facet_wrap(
+    ~policy_label,
+    scales = "free",
+    ncol = 3
+  ) +
+  labs(
+    x = "Change in average utilization (pp)",
+    y = "Change in priority-weighted served rate (pp)"
+  ) +
+  theme_report()
+```
+
+The weighted objective still changes reservation design, but release softens the capacity cost:
+
+- For reservation-only, switching to the weighted optimum changes average utilization by a median of `r pp(median_switch_average("reservation_only"))` and raises the weighted served rate by `r pp(median_switch_weighted("reservation_only"))`.
+- For both-flexible, the corresponding medians are `r pp(median_switch_average("both_flexible"))` and `r pp(median_switch_weighted("both_flexible"))`.
+- Exact reservation cells remain uncommon across objectives, but the median utilization loss is smaller than under strict reservation.
+- The largest differences are in \(Q\), reservation-window length, and Class 1 versus Class 2 access—not in the overall demand pattern.
+
+## Brief comparison with the companion report
+
+The [strict-reservation report](h1_strict_policy_comparison.html) has the same central result: meaningful utilization gains concentrate under heavy demand.
+
+Compared with strict reservation:
+
+- Release increases the share of backgrounds where reservation-only improves utilization.
+- Release supports much larger nominal \(Q\) values because unused reservations can return to the general pool.
+- The twice-weighted Class 1 objective causes a smaller average-utilization loss under release.
+- Strict reservation requires more conservative reserved quantities and shorter reservation windows to avoid stranded capacity.
+
+## Conclusions
+
+- **Low and moderate demand:** practical ties remain the dominant result.
+- **Heavy demand:** horizon flexibility and reservations can both improve utilization; the largest gains occur when no-show risk is also high.
+- **Release effect:** reservation-only performs better relative to horizon-only than under strict reservation, while both-flexible is usually tied with reservation-only.
+- **Access distribution:** release protects capacity use but does not eliminate priority-group gains at the general group’s expense.
+- **Objective choice matters:** the twice-weighted Class 1 objective changes reservation design, although release reduces its utilization cost.
