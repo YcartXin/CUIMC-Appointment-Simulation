@@ -886,6 +886,16 @@ def _condition_optimum(
     if cells.empty:
         return None
 
+    # The coarse and fine grids can evaluate the same policy cell under
+    # different phase labels (for example, a neighboring coarse Q can also
+    # appear in the fine refinement).  Keep one deterministic result per
+    # policy cell and seed so duplicated phase rows do not overweight a cell
+    # or create duplicate seed labels in paired comparisons.
+    cells = cells.drop_duplicates(
+        subset=["horizon_days", "Q", "window", "seed"],
+        keep="first",
+    )
+
     group_cols = ["horizon_days", "Q", "window"]
     means = cells.groupby(group_cols, as_index=False)[objective].mean()
     best = means.loc[means[objective].idxmax()]
@@ -907,8 +917,13 @@ def _delta_row(
     """Paired-seed bootstrap delta of condition a vs condition b, for
     both average_utilization and weighted_utilization.
     """
-    a_idx = a.set_index("seed")
-    b_idx = b.set_index("seed")
+    # Collapse any repeated phase rows to one value per seed before pairing.
+    # This is necessary because the coarse and fine grids can contain the same
+    # (horizon, Q, window) cell, producing duplicate seed rows for an otherwise
+    # identical policy.
+    metric_columns = [column for column, _ in VALUE_COLS.values()]
+    a_idx = a.groupby("seed", sort=True)[metric_columns].mean()
+    b_idx = b.groupby("seed", sort=True)[metric_columns].mean()
     paired_seeds = sorted(set(a_idx.index) & set(b_idx.index))
     row: dict[str, Any] = {"comparison": label, "n_paired_seeds": len(paired_seeds)}
     if not paired_seeds:

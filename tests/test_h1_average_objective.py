@@ -83,6 +83,80 @@ class ObjectiveSelectionTest(unittest.TestCase):
         self.assertEqual(int(weighted["horizon_days"].iloc[0]), 7)
         self.assertEqual(int(average["horizon_days"].iloc[0]), 14)
 
+
+    def test_duplicate_phase_rows_are_collapsed_by_seed(self) -> None:
+        cells = pd.DataFrame(
+            [
+                {
+                    "stage": h1.STAGE_BOTH_FLEXIBLE,
+                    "horizon_days": 14,
+                    "Q": 10,
+                    "window": 3,
+                    "seed": 1000,
+                    "average_utilization": 0.90,
+                    "weighted_utilization": 0.80,
+                },
+                {
+                    "stage": h1.STAGE_BOTH_FLEXIBLE,
+                    "horizon_days": 14,
+                    "Q": 10,
+                    "window": 3,
+                    "seed": 1000,
+                    "average_utilization": 0.90,
+                    "weighted_utilization": 0.80,
+                },
+                {
+                    "stage": h1.STAGE_BOTH_FLEXIBLE,
+                    "horizon_days": 14,
+                    "Q": 10,
+                    "window": 3,
+                    "seed": 1001,
+                    "average_utilization": 0.91,
+                    "weighted_utilization": 0.81,
+                },
+                {
+                    "stage": h1.STAGE_BOTH_FLEXIBLE,
+                    "horizon_days": 14,
+                    "Q": 10,
+                    "window": 3,
+                    "seed": 1001,
+                    "average_utilization": 0.91,
+                    "weighted_utilization": 0.81,
+                },
+            ]
+        )
+
+        optimum = h1._condition_optimum(
+            cells,
+            h1.STAGE_BOTH_FLEXIBLE,
+            objective="average_utilization",
+        )
+        self.assertIsNotNone(optimum)
+        self.assertEqual(len(optimum), 2)
+        self.assertEqual(optimum["seed"].nunique(), 2)
+
+        baseline = pd.DataFrame(
+            [
+                {
+                    "seed": 1000,
+                    "average_utilization": 0.70,
+                    "weighted_utilization": 0.75,
+                },
+                {
+                    "seed": 1001,
+                    "average_utilization": 0.71,
+                    "weighted_utilization": 0.76,
+                },
+            ]
+        )
+        delta = h1._delta_row(
+            "both_flexible_vs_baseline",
+            optimum,
+            baseline,
+            seed_key=("BG_DUP", "average_utilization"),
+        )
+        self.assertEqual(delta["n_paired_seeds"], 2)
+
     def test_parser_accepts_average_utilization_objective(self) -> None:
         args = h1.build_parser().parse_args(
             [
