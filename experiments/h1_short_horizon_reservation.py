@@ -39,11 +39,13 @@ its optimum should never be meaningfully worse than the other three. The
 summary step reports how often that dominance actually holds as a sanity
 check on the search itself.
 
-classify() reports, per background: each condition's optimum (average
-utilization AND the weighted-utilization objective from
-experiments/hypothesis_common.py, w1=2/w2=1 by default), plus three
-paired-seed-bootstrap comparisons -- both_flexible vs baseline,
-vs reservation_only, and vs horizon_only -- for both metrics.
+The optimization objective is selectable with --objective. By default,
+weighted_utilization is used for backward compatibility; use
+--objective average_utilization to choose policies that maximize completed
+appointments as a share of measured capacity. classify() reports each
+condition's optimum under the selected objective, both utilization metrics
+at that optimum, and all six policy comparisons among baseline,
+horizon_only, reservation_only, and both_flexible.
 
 STRICT VS RELEASE VARIANTS
 ----------------------------
@@ -94,11 +96,11 @@ Instead, each (Q, window) search is done in two phases:
 
 The coarse and fine phases both simply get logged as additional
 evaluated cells; classify() takes the true argmax over every cell
-actually evaluated (coarse union fine), so which objective ("optimal"
-means best weighted_utilization, not average_utilization -- see
-WEIGHTED_UTILIZATION_W1/W2 in hypothesis_common.py) drives the search can
-be revisited later without rerunning anything, since both metrics are
-recorded at every cell regardless of which one picked the winner.
+actually evaluated (coarse union fine) using the selected --objective.
+Both metrics are recorded at every cell. Re-running with a different
+objective against the same raw-output directory reuses all exact and
+coarse cells and adds only any missing fine cells around the new coarse
+winner.
 
 If Q = 0 wins in the coarse phase (i.e. no reservation already beats
 every coarse Q > 0 candidate), the fine phase is skipped for that
@@ -202,6 +204,17 @@ VALUE_COLS: dict[str, tuple[str, str | None]] = {
     "average_utilization": ("average_utilization", "positive"),
     "weighted_utilization": ("weighted_utilization", "positive"),
 }
+OPTIMIZATION_OBJECTIVES = tuple(VALUE_COLS)
+DEFAULT_OPTIMIZATION_OBJECTIVE = "weighted_utilization"
+
+
+def _validate_objective(objective: str) -> str:
+    """Validate and return the metric used to choose policy optima."""
+    if objective not in OPTIMIZATION_OBJECTIVES:
+        raise ValueError(
+            f"objective must be one of {OPTIMIZATION_OBJECTIVES}, got {objective!r}"
+        )
+    return objective
 
 
 def load_bank(path: Path) -> pd.DataFrame:
@@ -700,7 +713,9 @@ def run(
     n_seeds: int | None = None,
     shard_index: int = 0,
     shard_count: int = 1,
+    objective: str = DEFAULT_OPTIMIZATION_OBJECTIVE,
 ) -> Path:
+    objective = _validate_objective(objective)
     if variant not in VARIANTS:
         raise ValueError(f"variant must be one of {VARIANTS}, got {variant!r}")
     if shard_count < 1:
@@ -791,7 +806,8 @@ def run(
         baseline_zero = shard_df[shard_df["stage"] == STAGE_BASELINE]
 
         best_q, best_window = _best_qw(
-            pd.concat([resv_coarse, baseline_zero], ignore_index=True)
+            pd.concat([resv_coarse, baseline_zero], ignore_index=True),
+            objective,
         )
         if best_q is not None and best_q > 0:
             batch2.extend(
@@ -812,7 +828,8 @@ def run(
             ]
 
             bq, bw = _best_qw(
-                pd.concat([group, horizon_zero], ignore_index=True)
+                pd.concat([group, horizon_zero], ignore_index=True),
+                objective,
             )
             if bq is not None and bq > 0:
                 winners[int(horizon)] = (bq, bw)
@@ -832,14 +849,16 @@ def run(
     return raw_dir
 
 
-def _best_qw(cells: pd.DataFrame) -> tuple[int | None, int | None]:
-    """Pick the (Q, window) cell with the best mean weighted_utilization
-    from a set of raw rows spanning multiple (Q, window, seed) cells.
-    """
+def _best_qw(
+    cells: pd.DataFrame,
+    objective: str = DEFAULT_OPTIMIZATION_OBJECTIVE,
+) -> tuple[int | None, int | None]:
+    """Select the coarse (Q, window) winner using the requested objective."""
+    objective = _validate_objective(objective)
     if cells.empty:
         return None, None
-    means = cells.groupby(["Q", "window"], as_index=False)["weighted_utilization"].mean()
-    best = means.loc[means["weighted_utilization"].idxmax()]
+    means = cells.groupby(["Q", "window"], as_index=False)[objective].mean()
+    best = means.loc[means[objective].idxmax()]
     return int(best["Q"]), int(best["window"])
 
 
@@ -848,18 +867,19 @@ def _best_qw(cells: pd.DataFrame) -> tuple[int | None, int | None]:
 # ---------------------------------------------------------------------
 
 def _condition_optimum(
-    shard_df: pd.DataFrame, stage: str, *, extra_zero_rows: pd.DataFrame | None = None
+    shard_df: pd.DataFrame,
+    stage: str,
+    *,
+    objective: str = DEFAULT_OPTIMIZATION_OBJECTIVE,
+    extra_zero_rows: pd.DataFrame | None = None,
 ) -> pd.DataFrame | None:
-    """All seed-level rows (both metrics) for the single best cell of one
-    condition, chosen by mean weighted_utilization across every cell
-    actually evaluated for that condition (all phases, plus any folded-
-    in Q = 0 rows from another condition -- see extra_zero_rows).
+    """Return seed-level rows for the best evaluated policy cell.
 
-    For horizon-swept conditions (horizon_only, both_flexible) this
-    picks the single best (horizon[, Q, window]) cell across every
-    swept horizon, not per-horizon -- the "optimum" is over the whole
-    flexible search space.
+    The winner is chosen by the mean requested objective across seeds.
+    For horizon-swept conditions (horizon_only and both_flexible), the
+    optimum is selected across the entire flexible horizon search space.
     """
+    objective = _validate_objective(objective)
     cells = shard_df[shard_df["stage"] == stage]
     if extra_zero_rows is not None and not extra_zero_rows.empty:
         cells = pd.concat([cells, extra_zero_rows], ignore_index=True)
@@ -867,8 +887,8 @@ def _condition_optimum(
         return None
 
     group_cols = ["horizon_days", "Q", "window"]
-    means = cells.groupby(group_cols, as_index=False)["weighted_utilization"].mean()
-    best = means.loc[means["weighted_utilization"].idxmax()]
+    means = cells.groupby(group_cols, as_index=False)[objective].mean()
+    best = means.loc[means[objective].idxmax()]
     mask = (
         (cells["horizon_days"] == best["horizon_days"])
         & (cells["Q"] == best["Q"])
@@ -906,10 +926,22 @@ def _delta_row(
     return row
 
 
-def classify(*, output_dir: Path, bank_path: Path, variant: str) -> None:
+def classify(
+    *,
+    output_dir: Path,
+    bank_path: Path,
+    variant: str,
+    objective: str = DEFAULT_OPTIMIZATION_OBJECTIVE,
+) -> None:
+    objective = _validate_objective(objective)
     bank = load_bank(bank_path)
     raw_dir = output_dir / variant / "raw"
-    summary_dir = output_dir / variant / "summary"
+    summary_name = (
+        "summary"
+        if objective == DEFAULT_OPTIMIZATION_OBJECTIVE
+        else f"summary_{objective}"
+    )
+    summary_dir = output_dir / variant / summary_name
     summary_dir.mkdir(parents=True, exist_ok=True)
 
     shards = sorted(raw_dir.glob("*.csv"))
@@ -927,12 +959,22 @@ def classify(*, output_dir: Path, bank_path: Path, variant: str) -> None:
         background_id = str(shard_df["source_background_id"].iloc[0])
 
         baseline = shard_df[shard_df["stage"] == STAGE_BASELINE]
-        horizon_only = _condition_optimum(shard_df, STAGE_HORIZON_ONLY)
+        horizon_only = _condition_optimum(
+            shard_df,
+            STAGE_HORIZON_ONLY,
+            objective=objective,
+        )
         reservation_only = _condition_optimum(
-            shard_df, STAGE_RESERVATION_ONLY, extra_zero_rows=baseline
+            shard_df,
+            STAGE_RESERVATION_ONLY,
+            objective=objective,
+            extra_zero_rows=baseline,
         )
         both_flexible = _condition_optimum(
-            shard_df, STAGE_BOTH_FLEXIBLE, extra_zero_rows=horizon_only
+            shard_df,
+            STAGE_BOTH_FLEXIBLE,
+            objective=objective,
+            extra_zero_rows=horizon_only,
         )
 
         conditions = {
@@ -944,7 +986,11 @@ def classify(*, output_dir: Path, bank_path: Path, variant: str) -> None:
         if any(v is None for v in conditions.values()):
             continue
 
-        opt_row: dict[str, Any] = {"background_id": background_id, "variant": variant}
+        opt_row: dict[str, Any] = {
+            "background_id": background_id,
+            "variant": variant,
+            "optimization_objective": objective,
+        }
         for stage, cells in conditions.items():
             opt_row[f"{stage}_horizon_days"] = int(cells["horizon_days"].iloc[0])
             opt_row[f"{stage}_Q"] = int(cells["Q"].iloc[0])
@@ -954,16 +1000,70 @@ def classify(*, output_dir: Path, bank_path: Path, variant: str) -> None:
             opt_row[f"{stage}_n_seeds"] = int(cells["seed"].nunique())
         optimum_rows.append(opt_row)
 
-        for label, other in (
-            ("both_flexible_vs_baseline", conditions[STAGE_BASELINE]),
-            ("both_flexible_vs_reservation_only", conditions[STAGE_RESERVATION_ONLY]),
-            ("both_flexible_vs_horizon_only", conditions[STAGE_HORIZON_ONLY]),
-        ):
+        if objective == DEFAULT_OPTIMIZATION_OBJECTIVE:
+            # Preserve the original weighted-objective output contract so the
+            # existing summary files and regression tests remain unchanged.
+            comparisons = (
+                (
+                    "both_flexible_vs_baseline",
+                    conditions[STAGE_BOTH_FLEXIBLE],
+                    conditions[STAGE_BASELINE],
+                ),
+                (
+                    "both_flexible_vs_reservation_only",
+                    conditions[STAGE_BOTH_FLEXIBLE],
+                    conditions[STAGE_RESERVATION_ONLY],
+                ),
+                (
+                    "both_flexible_vs_horizon_only",
+                    conditions[STAGE_BOTH_FLEXIBLE],
+                    conditions[STAGE_HORIZON_ONLY],
+                ),
+            )
+        else:
+            comparisons = (
+                (
+                    "horizon_only_vs_baseline",
+                    conditions[STAGE_HORIZON_ONLY],
+                    conditions[STAGE_BASELINE],
+                ),
+                (
+                    "reservation_only_vs_baseline",
+                    conditions[STAGE_RESERVATION_ONLY],
+                    conditions[STAGE_BASELINE],
+                ),
+                (
+                    "both_flexible_vs_baseline",
+                    conditions[STAGE_BOTH_FLEXIBLE],
+                    conditions[STAGE_BASELINE],
+                ),
+                (
+                    "both_flexible_vs_horizon_only",
+                    conditions[STAGE_BOTH_FLEXIBLE],
+                    conditions[STAGE_HORIZON_ONLY],
+                ),
+                (
+                    "both_flexible_vs_reservation_only",
+                    conditions[STAGE_BOTH_FLEXIBLE],
+                    conditions[STAGE_RESERVATION_ONLY],
+                ),
+                (
+                    "reservation_only_vs_horizon_only",
+                    conditions[STAGE_RESERVATION_ONLY],
+                    conditions[STAGE_HORIZON_ONLY],
+                ),
+            )
+
+        for label, first, second in comparisons:
             drow = _delta_row(
-                label, conditions[STAGE_BOTH_FLEXIBLE], other, seed_key=(background_id,)
+                label,
+                first,
+                second,
+                seed_key=(background_id, objective),
             )
             drow["background_id"] = background_id
             drow["variant"] = variant
+            drow["optimization_objective"] = objective
             delta_rows.append(drow)
 
     optimum_table = pd.DataFrame(optimum_rows)
@@ -995,17 +1095,30 @@ def classify(*, output_dir: Path, bank_path: Path, variant: str) -> None:
                     delta_table.groupby(["comparison", col]).size().rename("n_backgrounds").to_string()
                 )
 
-    _write_summary(optimum_table, delta_table, summary_dir, variant)
+    _write_summary(optimum_table, delta_table, summary_dir, variant, objective)
 
 
 def _write_summary(
-    optimum_table: pd.DataFrame, delta_table: pd.DataFrame, summary_dir: Path, variant: str
+    optimum_table: pd.DataFrame,
+    delta_table: pd.DataFrame,
+    summary_dir: Path,
+    variant: str,
+    objective: str,
 ) -> None:
     dominance_note = "n/a (no rows classified)"
     if not delta_table.empty:
-        both_ge_all = delta_table[delta_table["delta_average_utilization"].notna()].groupby(
-            "background_id"
-        )["delta_average_utilization"].min()
+        dominance_comparisons = {
+            "both_flexible_vs_baseline",
+            "both_flexible_vs_reservation_only",
+            "both_flexible_vs_horizon_only",
+        }
+        dominance_rows = delta_table[
+            delta_table["comparison"].isin(dominance_comparisons)
+            & delta_table["delta_average_utilization"].notna()
+        ]
+        both_ge_all = dominance_rows.groupby("background_id")[
+            "delta_average_utilization"
+        ].min()
         share_dominant = float((both_ge_all >= -PRACTICAL_TOLERANCE).mean()) if len(both_ge_all) else float("nan")
         dominance_note = (
             f"{share_dominant:.1%} of backgrounds had both_flexible's average_utilization "
@@ -1013,9 +1126,15 @@ def _write_summary(
             "practical-equivalence tolerance) -- the expected weak-dominance property, "
             "since both_flexible's search space contains the other three."
         )
+    delta_description = (
+        "condition_deltas.csv has the original three both-flexible comparisons."
+        if objective == DEFAULT_OPTIMIZATION_OBJECTIVE
+        else "condition_deltas.csv has all six paired-seed-bootstrap policy comparisons."
+    )
     lines = [
         f"# H1 Short-Horizon Reservation ({variant}): Summary",
         "",
+        f"Optimization objective: {objective}",
         f"Practical-equivalence tolerance: {PRACTICAL_TOLERANCE}",
         f"Weighted-utilization weights: w1={WEIGHTED_UTILIZATION_W1}, w2={WEIGHTED_UTILIZATION_W2}",
         f"Backgrounds classified: {len(optimum_table):,}",
@@ -1023,8 +1142,9 @@ def _write_summary(
         "This is an auto-generated data summary, not the narrative report.",
         "condition_optima.csv has one row per background with each of the four",
         "conditions' optimal (horizon, Q, window) and both utilization metrics.",
-        "condition_deltas.csv has the paired-seed-bootstrap comparison of",
-        "both_flexible against each of the other three conditions.",
+        delta_description,
+        "For reservation_only_vs_horizon_only, a positive delta means the",
+        "reservation-only policy is higher; a negative delta means horizon-only is higher.",
         "",
         f"Dominance check: {dominance_note}",
     ]
@@ -1042,6 +1162,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--bank", type=Path, default=DEFAULT_BANK_PATH)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--workers", type=int, default=default_workers())
+    parser.add_argument(
+        "--objective",
+        choices=OPTIMIZATION_OBJECTIVES,
+        default=DEFAULT_OPTIMIZATION_OBJECTIVE,
+        help=(
+            "Metric used to choose coarse-search winners and final policy optima. "
+            "Both metrics are still reported for the selected policy."
+        ),
+    )
     parser.add_argument(
         "--n-seeds",
         type=int,
@@ -1093,9 +1222,15 @@ def main() -> None:
             n_seeds=args.n_seeds,
             shard_index=args.shard_index,
             shard_count=args.shard_count,
+            objective=args.objective,
         )
     if args.command in {"classify", "all"}:
-        classify(output_dir=args.output_dir, bank_path=args.bank, variant=args.variant)
+        classify(
+            output_dir=args.output_dir,
+            bank_path=args.bank,
+            variant=args.variant,
+            objective=args.objective,
+        )
 
 
 if __name__ == "__main__":
