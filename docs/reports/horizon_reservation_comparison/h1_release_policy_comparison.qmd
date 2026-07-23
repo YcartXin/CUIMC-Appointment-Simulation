@@ -256,11 +256,85 @@ theme_report <- function() {
 ## How the simulations were run
 
 - **840 backgrounds:** 42 anchor settings and 798 Sobol-sampled settings.
-- **10 paired seeds** were used for every evaluated policy cell.
+- A **policy cell** is one exact combination of booking horizon, reserved quantity, and reservation-window length.
+- Every evaluated policy cell was run with **10 paired seeds**, so competing policies were compared under the same random seeds.
+- The final postprocessed file contains **67,200 selected-policy seed records per reservation rule**: 840 backgrounds × 4 policies × 2 optimization objectives × 10 seeds. These are the selected outcomes; the optimizer ran additional candidate cells before choosing each optimum.
 - Demand-to-capacity ratio ranged from **0.8 to 3.0**; priority-group share ranged from **0.1 to 0.9**.
 - Daily capacity ranged from **20 to 50 slots** and the native horizon ranged from **2 to 26 days**.
 - Cancellation, balking, and no-show behavior varied across both groups.
-- Paired bootstrap intervals used **2,000 draws**. A difference within **0.005** utilization was treated as a practical tie.
+- Paired bootstrap intervals used **2,000 draws**. Bootstrap draws are resamples of the paired seed differences, not additional simulation runs. A difference within **0.005** utilization was treated as a practical tie.
+
+
+### Problem parameters
+
+The 840 backgrounds were sampled from the following parameter grid. The design was not a full factorial: it combined 42 anchor scenarios with 798 Sobol-sampled scenarios.
+
+```{r}
+#| label: tbl-problem-parameters
+
+problem_parameters <- tibble(
+  Parameter = c(
+    "Demand-to-capacity ratio (ρ)",
+    "Native booking horizon (days)",
+    "Priority-group share (Class 1)",
+    "Daily capacity (slots/day)",
+    "Cancellation probability (per class)",
+    "Balking threshold (per class, days)",
+    "Pre-threshold balking probability (per class)",
+    "Post-threshold balking probability (per class)",
+    "No-show threshold (per class, days)",
+    "Pre-threshold no-show probability (per class)",
+    "Post-threshold no-show probability (per class)"
+  ),
+  `Tested values` = c(
+    "0.8, 1.0, 1.2, 1.4, 1.6, 2.0, 3.0",
+    "2, 6, 10, 14, 18, 22, 26",
+    "0.1, 0.3, 0.5, 0.7, 0.9",
+    "20, 30, 40, 50",
+    "0.1, 0.2, 0.3",
+    "5, 9, 16, 22, 24",
+    "0.05, 0.1, 0.2, 0.3",
+    "0.1, 0.2, 0.3, 0.4",
+    "4, 7, 14, 20, 22",
+    "0.05, 0.1, 0.2, 0.3",
+    "0.1, 0.2, 0.3, 0.4"
+  )
+)
+
+kable(
+  problem_parameters,
+  align = c("l", "l"),
+  col.names = c("Parameter", "Tested values")
+)
+```
+
+The cancellation, balking, and no-show parameters were sampled separately for Class 1 and Class 2. Valid sampled backgrounds required each post-threshold probability to exceed its corresponding pre-threshold probability and each class's balking threshold to exceed its no-show threshold. When a sampled threshold was outside a tested booking horizon, the simulation capped it at the active horizon minus one day.
+
+### Policy-search parameters
+
+The optimized policy search used:
+
+```{r}
+#| label: tbl-policy-search-parameters
+
+policy_search_parameters <- tibble(
+  `Policy parameter` = c(
+    "Booking horizon",
+    "Reserved quantity Q",
+    "Reservation-window length"
+  ),
+  `Candidate values` = c(
+    "2, 6, 10, 14, 18, 22, 26 days",
+    "0 to daily capacity; positive Q searched coarsely in steps of 5 and refined in steps of 1",
+    "1 day through the selected horizon; searched coarsely in steps of 2 and refined in steps of 1"
+  )
+)
+
+kable(
+  policy_search_parameters,
+  align = c("l", "l")
+)
+```
 
 The four policy regimes were:
 
@@ -273,14 +347,9 @@ The four policy regimes were:
 
 The primary objective was **average utilization**:
 
-\[
-\text{Average utilization}
-=
-\frac{\text{completed visits}}
-{\text{available measured slots}}.
-\]
+> **Average utilization** = **completed appointments** ÷ **available measured appointment slots**
 
-Class 1 and Class 2 remain different simulated patient populations in every regime. Class 1 is called the **priority group** only when \(Q>0\). When \(Q=0\), both groups book through the general first-come-first-served pool.
+Class 1 and Class 2 remain different simulated patient populations in every regime. Class 1 is called the **priority group** only when `Q > 0`. When `Q = 0`, both groups book through the general first-come-first-served pool.
 
 ## Overall policy comparison
 
@@ -488,13 +557,30 @@ noshow_pattern <- avg_pairwise |>
     noshow_low_2
   ) |>
   summarise(
+    n_backgrounds = n_distinct(background_id),
     median_delta_pp =
       100 * median(delta_average_utilization, na.rm = TRUE),
+    mean_delta_pp =
+      100 * mean(delta_average_utilization, na.rm = TRUE),
     .groups = "drop"
   ) |>
   mutate(
     comparison_label = comparison_labels[comparison],
     noshow_low_2 = factor(noshow_low_2)
+  )
+
+noshow_dip_16 <- noshow_pattern |>
+  filter(
+    comparison == "both_flexible_vs_baseline",
+    rho == 1.6,
+    as.character(noshow_low_2) == "0.3"
+  )
+
+noshow_dip_20 <- noshow_pattern |>
+  filter(
+    comparison == "both_flexible_vs_baseline",
+    rho == 2.0,
+    as.character(noshow_low_2) == "0.3"
   )
 
 ggplot(
@@ -526,6 +612,8 @@ ggplot(
   theme_report()
 ```
 
+The lines connect grouped medians rather than following the same backgrounds as demand changes. For the 0.30 general-group no-show line in the both-flexible panel, the 1.6 point summarizes `r noshow_dip_16$n_backgrounds` backgrounds and the 2.0 point summarizes `r noshow_dip_20$n_backgrounds`. The medians move from `r paste0(formatC(noshow_dip_16$median_delta_pp, format = "f", digits = 2), " pp")` to `r paste0(formatC(noshow_dip_20$median_delta_pp, format = "f", digits = 2), " pp")`, while the means move from `r paste0(formatC(noshow_dip_16$mean_delta_pp, format = "f", digits = 2), " pp")` to `r paste0(formatC(noshow_dip_20$mean_delta_pp, format = "f", digits = 2), " pp")`. The visible dip is therefore mainly a median-and-composition effect, not evidence that raising demand from 1.6 to 2.0 reduces reservation value. Each point contains a different mixture of horizons, capacities, group shares, thresholds, cancellation rates, and balking behavior. The same caution applies to the reservation-only panel.
+
 With same-day release:
 
 - Demand remains the strongest separator between ties and meaningful utilization gains.
@@ -539,7 +627,7 @@ The figure below focuses on **both-flexible**, where the horizon, reserved quant
 
 ```{r}
 #| label: fig-optimized-parameters
-#| fig-cap: "Median jointly optimized policy parameters by demand and priority-group share."
+#| fig-cap: "Median jointly optimized parameters for the both-flexible policy. Lines connect different background groups and candidate values are discrete; they should not be read as smooth response curves."
 #| fig-width: 10.5
 #| fig-height: 7
 
@@ -550,6 +638,14 @@ joint_policy <- avg_outcomes |>
       100 * selected_Q / slots_per_day
   )
 
+window_point_rho2_share03 <- joint_policy |>
+  filter(
+    rho == 2.0,
+    class1_share == 0.3,
+    selected_Q > 0,
+    selected_window >= 1
+  )
+
 parameter_summary <- bind_rows(
   joint_policy |>
     group_by(rho, class1_share) |>
@@ -558,7 +654,7 @@ parameter_summary <- bind_rows(
         selected_horizon_days,
         na.rm = TRUE
       ),
-      metric = "Selected horizon (days)",
+      metric = "Selected booking horizon (days)",
       .groups = "drop"
     ),
   joint_policy |>
@@ -582,7 +678,7 @@ parameter_summary <- bind_rows(
         selected_window,
         na.rm = TRUE
       ),
-      metric = "Reservation window (days)",
+      metric = "Reservation-window length (days)",
       .groups = "drop"
     )
 ) |>
@@ -608,17 +704,21 @@ ggplot(
   ) +
   labs(
     x = "Demand-to-capacity ratio",
-    y = NULL,
+    y = "Median selected parameter\n(days or % of daily capacity)",
     colour = "Priority-group share"
   ) +
   theme_report()
 ```
 
+These lines also connect grouped medians over a discrete search grid; they are not smooth response curves. At a demand-to-capacity ratio of 2.0 and a priority-group share of 0.3, the six-day reservation-window point summarizes `r nrow(window_point_rho2_share03)` backgrounds with positive reservations. Their selected windows range from `r min(window_point_rho2_share03$selected_window)` to `r max(window_point_rho2_share03$selected_window)` days. Six days is therefore the middle of a wide distribution, not a uniquely preferred window for every 30% priority-group scenario. A plausible mechanism is that a moderate priority share sometimes needs a longer near-term window to expose enough Class 1 arrivals to reserved capacity, whereas a very small priority group makes reservations harder to fill and a large priority group can fill them within a shorter window. Because the remaining scenario parameters also vary, this figure does not isolate that mechanism.
+
+The selected booking horizon can be six days because the optimization grid was **2, 6, 10, 14, 18, 22, and 26 days**. The study did not restrict optimized horizons to three weeks or longer. Under congestion, a short horizon can improve utilization by avoiding long-delay offers that trigger balking or higher no-show risk while still leaving enough demand to fill near-term capacity.
+
 Release changes how the nominal reservation parameters should be interpreted:
 
 - The jointly optimized horizon is **2 days** in `r pct(mean(joint_policy$selected_horizon_days == 2))` of backgrounds and **6 days** in `r pct(mean(joint_policy$selected_horizon_days == 6))`.
-- Optimized \(Q\) is often large—commonly 75%–90% of daily capacity across priority-group shares.
-- A large \(Q\) does **not** mean that the same share is withheld from the general group for the full day. Unused reservations are released.
+- Optimized `Q` is often large—commonly 75%–90% of daily capacity across priority-group shares.
+- A large `Q` does **not** mean that the same share is withheld from the general group for the full day. Unused reservations are released.
 - Release therefore makes high nominal reservation caps less costly than under the strict policy.
 - Reservation windows are generally longer than under strict reservation when the horizon is fixed, but remain short under many jointly optimized settings.
 
@@ -748,17 +848,9 @@ The main strict-reservation trade-off appears under congested conditions:
 
 The secondary objective was:
 
-\[
-\text{Priority-weighted served rate}
-=
-\frac{
-2(\text{Class 1 served rate})
-+
-(\text{Class 2 served rate})
-}{3}.
-\]
+> **Priority-weighted served rate** = [2 × **Class 1 served rate** + **Class 2 served rate**] ÷ 3
 
-Class 1 therefore receives **twice the policy weight** of Class 2.
+Class 1 therefore receives **twice the policy weight** of Class 2. The code stores this metric as `weighted_utilization`.
 
 ### What is similar?
 
@@ -881,7 +973,7 @@ The weighted objective still changes reservation design, but release softens the
 - For reservation-only, switching to the weighted optimum changes average utilization by a median of `r pp(median_switch_average("reservation_only"))` and raises the weighted served rate by `r pp(median_switch_weighted("reservation_only"))`.
 - For both-flexible, the corresponding medians are `r pp(median_switch_average("both_flexible"))` and `r pp(median_switch_weighted("both_flexible"))`.
 - Exact reservation cells remain uncommon across objectives, but the median utilization loss is smaller than under strict reservation.
-- The largest differences are in \(Q\), reservation-window length, and Class 1 versus Class 2 access—not in the overall demand pattern.
+- The largest differences are in `Q`, reservation-window length, and Class 1 versus Class 2 access—not in the overall demand pattern.
 
 ## Brief comparison with the companion report
 
@@ -890,7 +982,7 @@ The [strict-reservation report](h1_strict_policy_comparison.html) has the same c
 Compared with strict reservation:
 
 - Release increases the share of backgrounds where reservation-only improves utilization.
-- Release supports much larger nominal \(Q\) values because unused reservations can return to the general pool.
+- Release supports much larger nominal `Q` values because unused reservations can return to the general pool.
 - The twice-weighted Class 1 objective causes a smaller average-utilization loss under release.
 - Strict reservation requires more conservative reserved quantities and shorter reservation windows to avoid stranded capacity.
 
