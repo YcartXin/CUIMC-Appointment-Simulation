@@ -122,26 +122,28 @@ average_metric_col <- resolve_column(
 class1_served_col <- resolve_column(
   seed_outcomes,
   candidates = c(
+    "class_1_percent_serviced",
     "served_rate_1",
     "class1_served_rate",
     "class_1_served_rate",
     "served_rate_class1",
     "service_rate_1"
   ),
-  pattern = "(served|service).*rate.*(_1|class.?1)$|class.?1.*(served|service).*rate",
+  pattern = "class.?1.*(percent.*serviced|served.*rate|service.*rate)|(percent.*serviced|served.*rate|service.*rate).*class.?1",
   description = "Class 1 served rate"
 )
 
 class2_served_col <- resolve_column(
   seed_outcomes,
   candidates = c(
+    "class_2_percent_serviced",
     "served_rate_2",
     "class2_served_rate",
     "class_2_served_rate",
     "served_rate_class2",
     "service_rate_2"
   ),
-  pattern = "(served|service).*rate.*(_2|class.?2)$|class.?2.*(served|service).*rate",
+  pattern = "class.?2.*(percent.*serviced|served.*rate|service.*rate)|(percent.*serviced|served.*rate|service.*rate).*class.?2",
   description = "Class 2 served rate"
 )
 
