@@ -412,6 +412,64 @@ average_pairwise <- pairwise |>
     )
   ) |>
   make_characteristic_rows()
+
+profile_policy_summary <- characteristic_policy_means |>
+  filter(characteristic != "Priority-group share") |>
+  group_by(characteristic, policy_label) |>
+  summarise(
+    backgrounds = n_distinct(background_id),
+    mean_gain_pp = 100 * mean(utilization_gain, na.rm = TRUE),
+    median_gain_pp = 100 * median(utilization_gain, na.rm = TRUE),
+    practically_best_pct = 100 * mean(practically_best, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+status_levels <- c(
+  "supported_increase",
+  "practical_tie",
+  "supported_decrease",
+  "uncertain_increase"
+)
+
+baseline_status_summary <- average_pairwise |>
+  filter(
+    characteristic != "Priority-group share",
+    comparison %in% names(active_comparison_to_policy)
+  ) |>
+  mutate(
+    characteristic = as.character(characteristic),
+    policy_label = as.character(policy_label),
+    average_utilization_change_status =
+      as.character(average_utilization_change_status)
+  ) |>
+  count(
+    characteristic,
+    policy_label,
+    average_utilization_change_status,
+    name = "backgrounds"
+  ) |>
+  complete(
+    nesting(characteristic, policy_label),
+    average_utilization_change_status = status_levels,
+    fill = list(backgrounds = 0L)
+  ) |>
+  pivot_wider(
+    names_from = average_utilization_change_status,
+    values_from = backgrounds,
+    values_fill = 0
+  ) |>
+  arrange(
+    factor(
+      characteristic,
+      levels = c(
+        "Class 1 more no-show sensitive",
+        "Class 1 more balking sensitive",
+        "Class 1 more cancellation prone",
+        "Class 1 jointly delay sensitive"
+      )
+    ),
+    factor(policy_label, levels = policy_order[-1])
+  )
 ```
 
 ## Research question
@@ -502,6 +560,60 @@ kable(
   align = c("l", "l", "r")
 )
 ```
+
+## Phase 1 findings
+
+The existing simulations provide exploratory evidence rather than controlled characteristic effects. Non-target patient behaviours can still differ between Class 1 and Class 2 within these subsets.
+
+Both-flexible searches over a policy space that includes the horizon-only and reservation-only choices. Its selected point estimate therefore cannot be worse than those nested alternatives. The meaningful question is whether its additional gain exceeds **0.005** and is confidence supported.
+
+```{r}
+#| label: tbl-phase1-policy-summary
+#| tbl-cap: "Four-policy summary within the four behaviour-defined patient profiles."
+
+profile_policy_summary |>
+  mutate(
+    `Mean difference from baseline` =
+      sprintf("%.2f pp", mean_gain_pp),
+    `Median difference from baseline` =
+      sprintf("%.2f pp", median_gain_pp),
+    `Practically tied for best` =
+      percent(practically_best_pct / 100, accuracy = 0.1)
+  ) |>
+  select(
+    `Patient characteristic` = characteristic,
+    Policy = policy_label,
+    Backgrounds = backgrounds,
+    `Mean difference from baseline`,
+    `Median difference from baseline`,
+    `Practically tied for best`
+  ) |>
+  kable(align = c("l", "l", "r", "r", "r", "r"))
+```
+
+```{r}
+#| label: tbl-phase1-supported-status
+#| tbl-cap: "Paired classification of each active policy versus baseline."
+
+baseline_status_summary |>
+  mutate(
+    supported_increase = coalesce(supported_increase, 0L),
+    practical_tie = coalesce(practical_tie, 0L),
+    supported_decrease = coalesce(supported_decrease, 0L),
+    uncertain_increase = coalesce(uncertain_increase, 0L)
+  ) |>
+  select(
+    `Patient characteristic` = characteristic,
+    Policy = policy_label,
+    `Supported increase` = supported_increase,
+    `Practical tie` = practical_tie,
+    `Supported decrease` = supported_decrease,
+    `Uncertain increase` = uncertain_increase
+  ) |>
+  kable(align = c("l", "l", "r", "r", "r", "r"))
+```
+
+The mean differences are consistently larger than the medians because a minority of backgrounds produce comparatively large gains. Most comparisons remain practically tied.
 
 ## All four policies side by side
 
@@ -759,7 +871,8 @@ plot_characteristic_by_demand <- function(
     aes(
       x = factor(rho),
       y = median_gain_pp,
-      group = policy_label,
+      ymin = q25_pp,
+      ymax = q75_pp,
       shape = policy_label
     )
   ) +
@@ -769,8 +882,10 @@ plot_characteristic_by_demand <- function(
       linetype = "dashed",
       colour = "grey70"
     ) +
-    geom_line(linewidth = 0.7) +
-    geom_point(size = 2) +
+    geom_pointrange(
+      position = position_dodge(width = 0.60),
+      linewidth = 0.5
+    ) +
     facet_wrap(
       ~characteristic_level,
       scales = "free_y"
@@ -788,6 +903,8 @@ plot_characteristic_by_demand(
 )
 ```
 
+**Interpretation.** Horizon only had a larger mean gain than reservation only (**0.52 pp versus 0.26 pp**). Both-flexible and horizon only were practically tied in **134 of 137** backgrounds. The current evidence therefore suggests that shortening the horizon usually addresses this profile’s main delay-related mechanism without requiring protected slots.
+
 ### Class 1 more balking sensitive
 
 ```{r}
@@ -801,6 +918,8 @@ plot_characteristic_by_demand(
 )
 ```
 
+**Interpretation.** Reservations showed the clearest exploratory interaction with balking sensitivity. Both-flexible produced a supported increase over baseline in **39 of 145** backgrounds, reservation only in **32**, and horizon only in **19**. Reservation only was sometimes better and sometimes worse than horizon only, showing that demand and patient composition still determine which mechanism matters more.
+
 ### Class 1 more cancellation prone
 
 ```{r}
@@ -813,6 +932,8 @@ plot_characteristic_by_demand(
   "Class 1 more cancellation prone"
 )
 ```
+
+**Interpretation.** Higher Class 1 cancellation did not create a general utilization penalty for reservations under day-of release. Reservation only had a larger mean gain than horizon only (**0.92 pp versus 0.63 pp**), while both-flexible and reservation only were practically tied in **249 of 261** backgrounds. Same-day release appears to remove much of the unused-capacity cost, although Class 2 can still lose advance access.
 
 ### Priority-group share
 
@@ -834,6 +955,10 @@ share_plot_data <- characteristic_policy_means |>
   summarise(
     median_gain_pp =
       100 * median(utilization_gain, na.rm = TRUE),
+    q25_pp =
+      100 * quantile(utilization_gain, 0.25, na.rm = TRUE),
+    q75_pp =
+      100 * quantile(utilization_gain, 0.75, na.rm = TRUE),
     .groups = "drop"
   )
 
@@ -842,7 +967,8 @@ ggplot(
   aes(
     x = factor(rho),
     y = median_gain_pp,
-    group = policy_label,
+    ymin = q25_pp,
+    ymax = q75_pp,
     shape = policy_label
   )
 ) +
@@ -852,8 +978,10 @@ ggplot(
     linetype = "dashed",
     colour = "grey70"
   ) +
-  geom_line(linewidth = 0.7) +
-  geom_point(size = 1.8) +
+  geom_pointrange(
+    position = position_dodge(width = 0.60),
+    linewidth = 0.45
+  ) +
   facet_wrap(
     ~characteristic_level,
     ncol = 3,
@@ -867,6 +995,8 @@ ggplot(
   theme_report()
 ```
 
+**Interpretation.** Reservation value was highest on average at a **0.3 Class 1 share** and lowest at **0.9**. A very large Class 1 population already occupies much of the general pool, reducing the incremental value of explicit protection. The relationship is not monotone, so share should be analysed jointly with demand and the selected reservation quantity.
+
 ### Class 1 jointly delay sensitive
 
 ```{r}
@@ -879,6 +1009,8 @@ plot_characteristic_by_demand(
   "Class 1 jointly delay sensitive"
 )
 ```
+
+**Interpretation.** The joint profile did not produce a strong additional benefit from combining the policies: both-flexible and horizon only were practically tied in **41 of 42** backgrounds. This subgroup is small and heterogeneous, and the strict joint definition contains only nine backgrounds.
 
 ## Effects on Class 1 and Class 2
 
@@ -991,6 +1123,8 @@ ggplot(
 
 It excludes the two explicit gain-loss trade-off categories.
 
+Reservation-based policies frequently improve Class 1 served rate while reducing Class 2 served rate. An aggregate utilization gain should therefore not be interpreted as a gain shared by both populations.
+
 ```{r}
 #| label: fig-group-effects-share
 #| fig-cap: "Confidence-supported Class 1 and Class 2 served-rate patterns by priority-group share."
@@ -1030,7 +1164,7 @@ ggplot(
 
 \(Q\) is the number of slots per service day reserved for Class 1 during the reservation window. Under same-day release, unused Class 1 reservations return to the pooled appointment capacity on the service day.
 
-The booking horizon was selected from the discrete candidate grid **2, 6, 10, 14, 18, 22 and 26 days**. Intermediate values were not tested.
+The booking horizon was selected from the discrete candidate grid **2, 6, 10, 14, 18, 22 and 26 days**. Intermediate values were not tested. Baseline and reservation only retain the native scenario horizon, so the optimized-horizon figure includes only horizon only and both-flexible.
 
 ### Booking-horizon selections
 
@@ -1041,7 +1175,10 @@ The booking horizon was selected from the discrete candidate grid **2, 6, 10, 14
 #| fig-height: 10
 
 horizon_distribution <- average_policy_outcomes |>
-  filter(characteristic != "Priority-group share") |>
+  filter(
+    characteristic != "Priority-group share",
+    policy %in% c("horizon_only", "both_flexible")
+  ) |>
   count(
     characteristic,
     policy_label,
@@ -1210,14 +1347,25 @@ kable(
 
 The strict subsets should be used as a robustness check rather than as the main analysis if their sample sizes are too small for stable scenario-level summaries.
 
+The strict no-show and balking subsets preserve the broad direction of the main exploratory results. The strict joint subset contains only nine backgrounds and is too small for a stable general conclusion.
+
 ## Interpretation for the next simulation stage
 
-This document should be used to identify:
+The existing results identify the most useful controlled pilot comparisons:
 
-- which characteristics show the clearest separation among the four policies;
-- where policies are practically tied;
-- which demand ratios and Class 1 shares should receive denser coverage;
-- whether the selected horizon, \(Q\), and reservation window respond consistently to the patient characteristic; and
-- where the Class 1 benefit is accompanied by a Class 2 loss.
+1. **No-show sensitivity:** test whether horizon only remains sufficient when the no-show contrast is isolated from balking and cancellation differences.
+2. **Balking sensitivity:** compare reservation only and both-flexible most closely because reservations showed the clearest exploratory interaction.
+3. **Cancellation propensity:** verify that day-of release continues to protect utilization when Class 1 cancellations are systematically higher.
+4. **Priority-group share:** preserve the full 0.1–0.9 range because reservation value was not monotone.
+5. **Joint delay sensitivity:** include same, mild and strong contrasts, but do not infer the expected result from the small current subgroup.
 
-The next targeted simulation bank should then hold non-target patient behaviour equal within a background and vary the target Class 1 characteristic through **same, mild and strong** contrasts relative to two Class 2 reference profiles.
+For each targeted profile, the new scenario bank should:
+
+- use two Class 2 reference profiles;
+- set Class 1 to the same, mildly more sensitive or strongly more sensitive level;
+- hold non-target behaviours equal between classes within a background;
+- vary clinic-level demand, capacity, native horizon and Class 1 share;
+- evaluate all four policies with paired seeds; and
+- use same-day-release reservations only.
+
+The targeted simulation results should eventually replace causal-sounding interpretations while retaining the same four-policy visual structure.
