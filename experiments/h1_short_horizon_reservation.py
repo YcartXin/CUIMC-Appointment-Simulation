@@ -68,9 +68,10 @@ whether idle reserved capacity actually gets released. Run this script
 twice, once per --variant, as two independent passes (e.g. two separate
 grid job submissions); each pass's output is fully self-contained.
 
-Both balk and no-show thresholds are dynamically capped at horizon_days -
-1 wherever a config is built (see hypothesis_common.build_config), so
-every threshold is guaranteed to sit within whatever horizon is in play.
+The original background bank dynamically caps balking and no-show
+thresholds at horizon_days - 1. A custom bank can instead include
+cap_thresholds_to_horizon=False to preserve the intended patient profile
+when a tested policy shortens the horizon.
 
 COARSE-TO-FINE (Q, WINDOW) SEARCH
 ------------------------------------
@@ -226,6 +227,21 @@ def load_bank(path: Path) -> pd.DataFrame:
     return pd.read_csv(path)
 
 
+def _row_bool(row: pd.Series, column: str, *, default: bool) -> bool:
+    """Read an optional boolean bank column safely after CSV loading."""
+    if column not in row.index or pd.isna(row[column]):
+        return default
+    value = row[column]
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y"}:
+            return True
+        if normalized in {"false", "0", "no", "n"}:
+            return False
+        raise ValueError(f"Invalid boolean value for {column}: {value!r}")
+    return bool(value)
+
+
 def _row_config_kwargs(row: pd.Series) -> dict[str, Any]:
     """Every background parameter except horizon_days.
 
@@ -251,6 +267,11 @@ def _row_config_kwargs(row: pd.Series) -> dict[str, Any]:
         "noshow_threshold_2": int(row["noshow_threshold_2"]),
         "noshow_low_2": float(row["noshow_low_2"]),
         "noshow_high_2": float(row["noshow_high_2"]),
+        "cap_thresholds_to_horizon": _row_bool(
+            row,
+            "cap_thresholds_to_horizon",
+            default=True,
+        ),
     }
 
 

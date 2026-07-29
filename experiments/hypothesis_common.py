@@ -118,6 +118,7 @@ def build_config(
     max_standby_days_2: int | None = None,
     standby_eligible_after_days_1: int | None = None,
     standby_eligible_after_days_2: int | None = None,
+    cap_thresholds_to_horizon: bool = True,
     same_day_cancellation_enabled: bool = False,
     release_unused_reservation_same_day: bool = False,
 ) -> SimulationConfig:
@@ -129,19 +130,14 @@ def build_config(
     grids rather than a sampled scenario bank, so building the config
     directly keeps every experiment script's grid readable in one place.
 
-    Both classes' balk_threshold and noshow_threshold are capped at
-    horizon_days - 1 here, dynamically, rather than being validated at
-    bank-generation time. A threshold sampled at or beyond the booking
-    horizon can never actually see its "post-threshold" probability used
-    -- offered delay tau ranges only 0..horizon_days-1 -- so capping it
-    to horizon_days - 1 makes every (threshold, horizon) combination a
-    well-defined, non-degenerate scenario instead of an invalid one to be
-    filtered out. This matters most at short horizons (as low as 2 days),
-    where every sampled threshold value would otherwise exceed the
-    horizon: at horizon_days=2, both thresholds collapse to 1 for every
-    class, which is the expected, intentional behavior at that extreme
-    (a 2-day horizon has no real room for a pre/post-threshold
-    distinction), not a bug.
+    By default, both classes' balk_threshold and noshow_threshold are
+    capped at horizon_days - 1, preserving the behavior used by the
+    original H1/H2 background bank. Set cap_thresholds_to_horizon=False
+    for controlled patient-profile experiments. In that mode, a threshold
+    beyond the active booking horizon remains unchanged, so every feasible
+    offered delay stays in the pre-threshold region. This prevents a policy
+    that shortens the horizon from mechanically changing the patient
+    characteristic being studied.
 
     same_day_cancellation_enabled and release_unused_reservation_same_day
     both default to False here too, exactly mirroring SimulationConfig's
@@ -150,10 +146,24 @@ def build_config(
     e.g. to compare a "release unused reservation same-day" H1 policy
     variant against the original strict-reservation variant.
     """
-    effective_balk_threshold_1 = min(int(balk_threshold_1), int(horizon_days) - 1)
-    effective_balk_threshold_2 = min(int(balk_threshold_2), int(horizon_days) - 1)
-    effective_noshow_threshold_1 = min(int(noshow_threshold_1), int(horizon_days) - 1)
-    effective_noshow_threshold_2 = min(int(noshow_threshold_2), int(horizon_days) - 1)
+    if cap_thresholds_to_horizon:
+        effective_balk_threshold_1 = min(
+            int(balk_threshold_1), int(horizon_days) - 1
+        )
+        effective_balk_threshold_2 = min(
+            int(balk_threshold_2), int(horizon_days) - 1
+        )
+        effective_noshow_threshold_1 = min(
+            int(noshow_threshold_1), int(horizon_days) - 1
+        )
+        effective_noshow_threshold_2 = min(
+            int(noshow_threshold_2), int(horizon_days) - 1
+        )
+    else:
+        effective_balk_threshold_1 = int(balk_threshold_1)
+        effective_balk_threshold_2 = int(balk_threshold_2)
+        effective_noshow_threshold_1 = int(noshow_threshold_1)
+        effective_noshow_threshold_2 = int(noshow_threshold_2)
 
     classes = {
         1: PatientClassParams(
