@@ -308,3 +308,6 @@ outputs/*.synctex.gz
 outputs/**/*.synctex.gz
 outputs/*.toc
 outputs/**/*.toc
+
+# Large seed-level simulation output; stored in external backup
+full_run_summaries/h1_patient_characteristics_full/release/selected_policy_seed_outcomes.csv
