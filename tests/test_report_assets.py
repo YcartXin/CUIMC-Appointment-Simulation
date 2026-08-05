@@ -9,8 +9,6 @@ from urllib.parse import unquote
 REPO_DIR = Path(__file__).resolve().parents[1]
 DOCS = [
     REPO_DIR / "docs" / "reports" / "metric_analysis" / "metric_analysis.qmd",
-    REPO_DIR / "docs" / "companions" / "Class 1 Balking Sensitivity Analysis.qmd",
-    REPO_DIR / "docs" / "companions" / "Class 1 Balking Threshold Analysis.qmd",
 ]
 OPTIONAL_DOCS = [
     REPO_DIR / "docs" / "reports" / "metric_analysis" / "thorough" / "metric_analysis.md",

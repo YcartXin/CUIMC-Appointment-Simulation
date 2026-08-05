@@ -18,5 +18,5 @@ export PYTHONUNBUFFERED=1 PYTHONHASHSEED=0
 export REPO PYTHON H1PC_FULL_RAW_ROOT="$RAW_ROOT"
 export EVALUATION_SEEDS="${EVALUATION_SEEDS:-10}"
 cd "$LOG_DIR"
-grid_run --grid_submit=batch --grid_ncpus=1 --grid_mem=16G --grid_long "$WORKER_SCRIPT"
+grid_run --grid_submit=batch --grid_ncpus=1 --grid_mem=16G "$WORKER_SCRIPT"
 echo "Finalize job submitted. Monitor with qstat."

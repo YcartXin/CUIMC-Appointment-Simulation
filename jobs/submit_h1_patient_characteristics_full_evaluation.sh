@@ -29,7 +29,6 @@ COMMAND=(
   --grid_array="1-${SHARD_COUNT}/${MAX_CONCURRENT}"
   --grid_ncpus=1
   --grid_mem=8G
-  --grid_long
 )
 if [[ -n "${GRID_EMAIL:-}" ]]; then
   COMMAND+=(--grid_email="$GRID_EMAIL")
