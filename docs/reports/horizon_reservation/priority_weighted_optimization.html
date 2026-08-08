@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Horizon and Reservation Policies: Priority-Weighted Optimization</title>
+  <style>
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+  </style>
+  <link rel="stylesheet" href="report.css" />
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Horizon and Reservation Policies: Priority-Weighted
+Optimization</h1>
+<p class="subtitle">Controlled two-class clinic scheduling
+simulation</p>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#simulation-overview" id="toc-simulation-overview"><span
+class="toc-section-number">1</span> Simulation overview</a>
+<ul>
+<li><a href="#problem-parameters" id="toc-problem-parameters"><span
+class="toc-section-number">1.1</span> Problem parameters</a></li>
+<li><a href="#behavioral-profiles" id="toc-behavioral-profiles"><span
+class="toc-section-number">1.2</span> Behavioral profiles</a>
+<ul>
+<li><a href="#no-show-sensitivity" id="toc-no-show-sensitivity"><span
+class="toc-section-number">1.2.1</span> No-show sensitivity</a></li>
+<li><a href="#balking-sensitivity" id="toc-balking-sensitivity"><span
+class="toc-section-number">1.2.2</span> Balking sensitivity</a></li>
+<li><a href="#cancellation-propensity"
+id="toc-cancellation-propensity"><span
+class="toc-section-number">1.2.3</span> Cancellation propensity</a></li>
+<li><a href="#joint-delay-sensitivity"
+id="toc-joint-delay-sensitivity"><span
+class="toc-section-number">1.2.4</span> Joint delay sensitivity</a></li>
+</ul></li>
+<li><a href="#policy-and-search-parameters"
+id="toc-policy-and-search-parameters"><span
+class="toc-section-number">1.3</span> Policy and search
+parameters</a></li>
+</ul></li>
+<li><a href="#overall-comparison" id="toc-overall-comparison"><span
+class="toc-section-number">2</span> Overall comparison</a></li>
+<li><a href="#horizons-when-shorter-or-longer"
+id="toc-horizons-when-shorter-or-longer"><span
+class="toc-section-number">3</span> Horizons: when shorter or longer</a>
+<ul>
+<li><a href="#horizon-only-policy" id="toc-horizon-only-policy"><span
+class="toc-section-number">3.1</span> Horizon-only policy</a></li>
+<li><a href="#both-flexible-policy" id="toc-both-flexible-policy"><span
+class="toc-section-number">3.2</span> Both-flexible policy</a></li>
+</ul></li>
+<li><a href="#reservations-and-patient-access"
+id="toc-reservations-and-patient-access"><span
+class="toc-section-number">4</span> Reservations and patient access</a>
+<ul>
+<li><a href="#reservation-only-versus-baseline"
+id="toc-reservation-only-versus-baseline"><span
+class="toc-section-number">4.1</span> Reservation only versus
+baseline</a></li>
+<li><a href="#adding-reservations-after-horizon-optimization"
+id="toc-adding-reservations-after-horizon-optimization"><span
+class="toc-section-number">4.2</span> Adding reservations after horizon
+optimization</a></li>
+</ul></li>
+<li><a href="#how-behavior-changes-reservation-outcomes"
+id="toc-how-behavior-changes-reservation-outcomes"><span
+class="toc-section-number">5</span> How behavior changes reservation
+outcomes</a></li>
+<li><a href="#when-class-2-suffers-in-served-rate"
+id="toc-when-class-2-suffers-in-served-rate"><span
+class="toc-section-number">6</span> When Class 2 suffers in served
+rate</a>
+<ul>
+<li><a href="#class-1-population-share"
+id="toc-class-1-population-share"><span
+class="toc-section-number">6.1</span> Class 1 population share</a></li>
+<li><a href="#demand" id="toc-demand"><span
+class="toc-section-number">6.2</span> Demand</a></li>
+</ul></li>
+<li><a href="#utilization-constrained-priority-analysis"
+id="toc-utilization-constrained-priority-analysis"><span
+class="toc-section-number">7</span> Utilization-constrained priority
+analysis</a>
+<ul>
+<li><a href="#overall-result" id="toc-overall-result"><span
+class="toc-section-number">7.1</span> Overall result</a></li>
+<li><a href="#which-policies-are-selected"
+id="toc-which-policies-are-selected"><span
+class="toc-section-number">7.2</span> Which policies are
+selected</a></li>
+<li><a href="#conditions-with-the-strongest-class-1-benefit"
+id="toc-conditions-with-the-strongest-class-1-benefit"><span
+class="toc-section-number">7.3</span> Conditions with the strongest
+Class 1 benefit</a></li>
+<li><a href="#important-limitation" id="toc-important-limitation"><span
+class="toc-section-number">7.4</span> Important limitation</a></li>
+</ul></li>
+<li><a href="#executive-summary" id="toc-executive-summary"><span
+class="toc-section-number">8</span> Executive summary</a></li>
+</ul>
+</nav>
+<p>This report evaluates the same controlled simulation when policy
+parameters are selected to maximize <strong>priority-weighted
+utilization</strong>.</p>
+<p>Each completed Class 1 visit receives twice the value of a completed
+Class 2 visit:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>U</mi><mi>w</mi></msub><mo>=</mo><mfrac><mrow><mn>2</mn><msub><mi>Y</mi><mn>1</mn></msub><mo>+</mo><msub><mi>Y</mi><mn>2</mn></msub></mrow><mrow><mn>2</mn><mi>M</mi></mrow></mfrac><mo>,</mo></mrow><annotation encoding="application/x-tex">
+U_w=\frac{2Y_1+Y_2}{2M},
+</annotation></semantics></math></p>
+<p>where
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>Y</mi><mn>1</mn></msub><annotation encoding="application/x-tex">Y_1</annotation></semantics></math>
+and
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>Y</mi><mn>2</mn></msub><annotation encoding="application/x-tex">Y_2</annotation></semantics></math>
+are completed visits and
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>M</mi><annotation encoding="application/x-tex">M</annotation></semantics></math>
+is measured appointment capacity.</p>
+<p>The objective values each Class 1 completion twice as much. It does
+not require total utilization or Class 2 access to improve.</p>
+<p>The main results use demand-to-capacity ratios from <strong>1.2
+through 2.5</strong>. A ratio of <strong>3.0</strong> is treated as a
+heavy-demand stress condition.</p>
+<h1 data-number="1" id="simulation-overview"><span
+class="header-section-number">1</span> Simulation overview</h1>
+<p>The experiment contains <strong>3,780 clinic
+backgrounds</strong>:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>21</mn><mrow><mspace width="0.333em"></mspace><mtext mathvariant="normal"> behavioral profiles</mtext></mrow><mo>×</mo><mn>180</mn><mrow><mspace width="0.333em"></mspace><mtext mathvariant="normal"> clinic contexts</mtext></mrow><mi>.</mi></mrow><annotation encoding="application/x-tex">
+21\text{ behavioral profiles}\times180\text{ clinic contexts}.
+</annotation></semantics></math></p>
+<p>Five paired search seeds select policy cells. Ten independent
+evaluation seeds produce the reported outcomes and confidence
+intervals.</p>
+<h2 data-number="1.1" id="problem-parameters"><span
+class="header-section-number">1.1</span> Problem parameters</h2>
+<table>
+<colgroup>
+<col style="width: 30%" />
+<col style="width: 40%" />
+<col style="width: 30%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Component</th>
+<th style="text-align: right;">Values</th>
+<th>Interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Demand-to-capacity ratio</td>
+<td style="text-align: right;">1.2, 1.4, 1.7, 2.0, 2.5, 3.0</td>
+<td>Expected total arrivals divided by daily capacity</td>
+</tr>
+<tr class="even">
+<td>Class 1 share</td>
+<td style="text-align: right;">0.1, 0.3, 0.5, 0.7, 0.9</td>
+<td>Share of arrivals belonging to Class 1</td>
+</tr>
+<tr class="odd">
+<td>Daily capacity</td>
+<td style="text-align: right;">30, 50</td>
+<td>Available appointment slots per day</td>
+</tr>
+<tr class="even">
+<td>Native booking horizon</td>
+<td style="text-align: right;">10, 14, 22 days</td>
+<td>Clinic setting before optimization</td>
+</tr>
+<tr class="odd">
+<td>Behavioral profiles</td>
+<td style="text-align: right;">21</td>
+<td>No-show, balking, cancellation, and joint-delay profiles</td>
+</tr>
+<tr class="even">
+<td>Search seeds</td>
+<td style="text-align: right;">5 paired seeds</td>
+<td>Used only to select policy cells</td>
+</tr>
+<tr class="odd">
+<td>Evaluation seeds</td>
+<td style="text-align: right;">10 paired seeds</td>
+<td>Independent seeds used for reported outcomes</td>
+</tr>
+<tr class="even">
+<td>Bootstrap</td>
+<td style="text-align: right;">2,000 paired draws</td>
+<td>Confidence intervals for policy differences</td>
+</tr>
+<tr class="odd">
+<td>Practical threshold</td>
+<td style="text-align: right;">0.005</td>
+<td>Minimum practically meaningful change</td>
+</tr>
+<tr class="even">
+<td>Class 2 constrained tolerance</td>
+<td style="text-align: right;">0.01</td>
+<td>Maximum allowed Class 2 served-rate reduction in the constrained
+analysis</td>
+</tr>
+</tbody>
+</table>
+<p>Class-specific arrival rates are:</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>λ</mi><mn>1</mn></msub><mo>=</mo><mi>ρ</mi><mi>C</mi><msub><mi>s</mi><mn>1</mn></msub><mo>,</mo><mspace width="2.0em"></mspace><msub><mi>λ</mi><mn>2</mn></msub><mo>=</mo><mi>ρ</mi><mi>C</mi><mrow><mo stretchy="true" form="prefix">(</mo><mn>1</mn><mo>−</mo><msub><mi>s</mi><mn>1</mn></msub><mo stretchy="true" form="postfix">)</mo></mrow><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\lambda_1=\rho C s_1,\qquad \lambda_2=\rho C(1-s_1).
+</annotation></semantics></math></p>
+<p>Behavior uses a threshold rule
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="true" form="prefix">(</mo><mi>T</mi><mo>,</mo><msub><mi>p</mi><mrow><mo>≤</mo><mi>T</mi></mrow></msub><mo>,</mo><msub><mi>p</mi><mrow><mo>&gt;</mo><mi>T</mi></mrow></msub><mo stretchy="true" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(T,p_{\leq T},p_{&gt;T})</annotation></semantics></math>.</p>
+<h2 data-number="1.2" id="behavioral-profiles"><span
+class="header-section-number">1.2</span> Behavioral profiles</h2>
+<h3 data-number="1.2.1" id="no-show-sensitivity"><span
+class="header-section-number">1.2.1</span> No-show sensitivity</h3>
+<p>Balking is fixed at
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="true" form="prefix">(</mo><mn>16</mn><mo>,</mo><mn>0.05</mn><mo>,</mo><mn>0.15</mn><mo stretchy="true" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(16,0.05,0.15)</annotation></semantics></math>
+and cancellation at 20% for both classes.</p>
+<table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Class 2 reference</th>
+<th>Class 2 no-show</th>
+<th>Class 1 same</th>
+<th>Class 1 mild</th>
+<th>Class 1 strong</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Low</td>
+<td>(14, 0.05, 0.15)</td>
+<td>(14, 0.05, 0.15)</td>
+<td>(5, 0.05, 0.20)</td>
+<td>(3, 0.05, 0.25)</td>
+</tr>
+<tr class="even">
+<td>Moderate</td>
+<td>(8, 0.05, 0.20)</td>
+<td>(8, 0.05, 0.20)</td>
+<td>(5, 0.05, 0.20)</td>
+<td>(3, 0.05, 0.25)</td>
+</tr>
+</tbody>
+</table>
+<h3 data-number="1.2.2" id="balking-sensitivity"><span
+class="header-section-number">1.2.2</span> Balking sensitivity</h3>
+<p>No-show is fixed at
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="true" form="prefix">(</mo><mn>3</mn><mo>,</mo><mn>0.05</mn><mo>,</mo><mn>0.10</mn><mo stretchy="true" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(3,0.05,0.10)</annotation></semantics></math>
+and cancellation at 20% for both classes.</p>
+<table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Class 2 reference</th>
+<th>Class 2 balking</th>
+<th>Class 1 same</th>
+<th>Class 1 mild</th>
+<th>Class 1 strong</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Low</td>
+<td>(16, 0.05, 0.15)</td>
+<td>(16, 0.05, 0.15)</td>
+<td>(6, 0.05, 0.20)</td>
+<td>(4, 0.05, 0.25)</td>
+</tr>
+<tr class="even">
+<td>Moderate</td>
+<td>(9, 0.05, 0.20)</td>
+<td>(9, 0.05, 0.20)</td>
+<td>(6, 0.05, 0.20)</td>
+<td>(4, 0.05, 0.25)</td>
+</tr>
+</tbody>
+</table>
+<h3 data-number="1.2.3" id="cancellation-propensity"><span
+class="header-section-number">1.2.3</span> Cancellation propensity</h3>
+<p>Balking is
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="true" form="prefix">(</mo><mn>16</mn><mo>,</mo><mn>0.05</mn><mo>,</mo><mn>0.15</mn><mo stretchy="true" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(16,0.05,0.15)</annotation></semantics></math>
+and no-show is
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="true" form="prefix">(</mo><mn>14</mn><mo>,</mo><mn>0.05</mn><mo>,</mo><mn>0.15</mn><mo stretchy="true" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(14,0.05,0.15)</annotation></semantics></math>
+for both classes.</p>
+<table>
+<thead>
+<tr class="header">
+<th>Contrast</th>
+<th style="text-align: right;">Class 1 cancellation</th>
+<th style="text-align: right;">Class 2 cancellation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Same</td>
+<td style="text-align: right;">10%</td>
+<td style="text-align: right;">10%</td>
+</tr>
+<tr class="even">
+<td>Mild</td>
+<td style="text-align: right;">20%</td>
+<td style="text-align: right;">10%</td>
+</tr>
+<tr class="odd">
+<td>Strong</td>
+<td style="text-align: right;">30%</td>
+<td style="text-align: right;">10%</td>
+</tr>
+</tbody>
+</table>
+<h3 data-number="1.2.4" id="joint-delay-sensitivity"><span
+class="header-section-number">1.2.4</span> Joint delay sensitivity</h3>
+<p>Cancellation is fixed at 20% for both classes.</p>
+<table>
+<colgroup>
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+<col style="width: 20%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Class 2 reference</th>
+<th>Class 2 no-show / balking</th>
+<th>Class 1 same</th>
+<th>Class 1 mild</th>
+<th>Class 1 strong</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Low</td>
+<td>(14, .05, .15) / (16, .05, .15)</td>
+<td>Same as Class 2</td>
+<td>(5, .05, .20) / (6, .05, .20)</td>
+<td>(3, .05, .25) / (4, .05, .25)</td>
+</tr>
+<tr class="even">
+<td>Moderate</td>
+<td>(8, .05, .20) / (9, .05, .20)</td>
+<td>Same as Class 2</td>
+<td>(5, .05, .20) / (6, .05, .20)</td>
+<td>(3, .05, .25) / (4, .05, .25)</td>
+</tr>
+</tbody>
+</table>
+<p>Thresholds are not capped when the optimizer selects a shorter
+booking horizon.</p>
+<h2 data-number="1.3" id="policy-and-search-parameters"><span
+class="header-section-number">1.3</span> Policy and search
+parameters</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Policy</th>
+<th>Horizon</th>
+<th>Reservations</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Baseline</td>
+<td>Native horizon</td>
+<td>None</td>
+</tr>
+<tr class="even">
+<td>Horizon only</td>
+<td>Optimized</td>
+<td>None</td>
+</tr>
+<tr class="odd">
+<td>Reservation only</td>
+<td>Native horizon</td>
+<td>Quantity and window optimized</td>
+</tr>
+<tr class="even">
+<td>Both flexible</td>
+<td>Optimized</td>
+<td>Quantity and window optimized</td>
+</tr>
+</tbody>
+</table>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Search parameter</th>
+<th>Values or procedure</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Horizon</td>
+<td>2, 4, 6, …, 26 days</td>
+</tr>
+<tr class="even">
+<td>Reserved quantity
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>Q</mi><annotation encoding="application/x-tex">Q</annotation></semantics></math></td>
+<td>0 through daily capacity; coarse increments of 5 and unit
+refinement</td>
+</tr>
+<tr class="odd">
+<td>Reservation window
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>W</mi><annotation encoding="application/x-tex">W</annotation></semantics></math></td>
+<td>1 through the selected horizon; coarse increments of 2 and unit
+refinement</td>
+</tr>
+<tr class="even">
+<td>Refinement</td>
+<td>Top three coarse reservation cells are refined</td>
+</tr>
+<tr class="odd">
+<td>Release rule</td>
+<td>Unused protected capacity is released to the pooled system on the
+service day</td>
+</tr>
+<tr class="even">
+<td>Tie handling</td>
+<td>Lower
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>Q</mi><annotation encoding="application/x-tex">Q</annotation></semantics></math>,
+shorter window, and shorter horizon break exact objective ties</td>
+</tr>
+</tbody>
+</table>
+<p><strong>How the reported evidence is evaluated:</strong></p>
+<ul>
+<li>Policy cells are selected with five paired search seeds.</li>
+<li>Reported effects use ten independent paired evaluation seeds.</li>
+<li>Pairwise 95% confidence intervals use 2,000 paired bootstrap
+resamples.</li>
+<li>A meaningful served-rate or objective change must be at least 0.005
+and have its confidence interval on the corresponding side of zero.</li>
+<li>Supported neutral requires the entire confidence interval to lie
+within
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="true" form="prefix">[</mo><mi>−</mi><mn>0.005</mn><mo>,</mo><mn>0.005</mn><mo stretchy="true" form="postfix">]</mo></mrow><annotation encoding="application/x-tex">[-0.005,0.005]</annotation></semantics></math>.</li>
+<li>Reservation access outcomes use Class 1 and Class 2
+<strong>served-rate</strong> confidence intervals.</li>
+<li>The words <strong>gain</strong>, <strong>neutral</strong>, and
+<strong>harm</strong> refer to class-specific served rate.</li>
+</ul>
+<h1 data-number="2" id="overall-comparison"><span
+class="header-section-number">2</span> Overall comparison</h1>
+<figure>
+<img src="figures/pw_01_overall_effects.png"
+alt="Distribution of priority-weighted utilization changes in the main demand range." />
+<figcaption aria-hidden="true">Distribution of priority-weighted
+utilization changes in the main demand range.</figcaption>
+</figure>
+<table>
+<colgroup>
+<col style="width: 13%" />
+<col style="width: 17%" />
+<col style="width: 17%" />
+<col style="width: 17%" />
+<col style="width: 17%" />
+<col style="width: 17%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Policy vs baseline</th>
+<th style="text-align: right;">Median weighted change</th>
+<th style="text-align: right;">Meaningful gain</th>
+<th style="text-align: right;">Supported neutral</th>
+<th style="text-align: right;">Uncertain</th>
+<th style="text-align: right;">Meaningful harm</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Horizon only</td>
+<td style="text-align: right;">+0.08 pp</td>
+<td style="text-align: right;">32.2%</td>
+<td style="text-align: right;">63.8%</td>
+<td style="text-align: right;">4.0%</td>
+<td style="text-align: right;">0.0%</td>
+</tr>
+<tr class="even">
+<td>Reservation only</td>
+<td style="text-align: right;">+5.07 pp</td>
+<td style="text-align: right;">96.4%</td>
+<td style="text-align: right;">3.5%</td>
+<td style="text-align: right;">0.1%</td>
+<td style="text-align: right;">0.0%</td>
+</tr>
+<tr class="odd">
+<td>Both flexible</td>
+<td style="text-align: right;">+5.33 pp</td>
+<td style="text-align: right;">96.4%</td>
+<td style="text-align: right;">3.5%</td>
+<td style="text-align: right;">0.1%</td>
+<td style="text-align: right;">0.0%</td>
+</tr>
+</tbody>
+</table>
+<p>Main findings:</p>
+<ul>
+<li>Reservations dominate the priority-weighted objective.</li>
+<li>Horizon flexibility alone produces modest weighted gains.</li>
+<li>Both flexible is only slightly better than reservation only in the
+median background.</li>
+<li>The weighted objective can improve while total utilization remains
+approximately unchanged.</li>
+</ul>
+<p>At
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ρ</mi><mo>=</mo><mn>3.0</mn></mrow><annotation encoding="application/x-tex">\rho=3.0</annotation></semantics></math>:</p>
+<ul>
+<li>Both flexible has a median weighted gain of approximately
+<strong>13.8 percentage points</strong>.</li>
+<li>Reservation only has a median gain of approximately <strong>11.8
+percentage points</strong>.</li>
+<li>Both reservation-based regimes have meaningful gains in all
+stress-condition backgrounds.</li>
+</ul>
+<h1 data-number="3" id="horizons-when-shorter-or-longer"><span
+class="header-section-number">3</span> Horizons: when shorter or
+longer</h1>
+<h2 data-number="3.1" id="horizon-only-policy"><span
+class="header-section-number">3.1</span> Horizon-only policy</h2>
+<p>When no reservations are available, the priority-weighted optimizer
+behaves similarly to the average-utilization optimizer:</p>
+<ul>
+<li>Median selected horizon: <strong>4 days</strong>.</li>
+<li>99.7% of main-range backgrounds select a shorter horizon.</li>
+<li>Longer horizons are almost never selected.</li>
+</ul>
+<p>Shortening the horizon reduces exposure to delay-sensitive behavior
+for both groups. It does not create a strong preferential-access
+mechanism by itself.</p>
+<h2 data-number="3.2" id="both-flexible-policy"><span
+class="header-section-number">3.2</span> Both-flexible policy</h2>
+<p>The combination of reservations and horizon flexibility produces a
+mixed horizon pattern:</p>
+<ul>
+<li>Median selected horizon: <strong>6 days</strong>.</li>
+<li>60.8% select a shorter horizon.</li>
+<li>3.7% retain the native horizon.</li>
+<li>35.5% select a longer horizon.</li>
+</ul>
+<figure>
+<img src="figures/pw_02_horizon_heatmap.png"
+alt="Median horizon selected by the both-flexible policy." />
+<figcaption aria-hidden="true">Median horizon selected by the
+both-flexible policy.</figcaption>
+</figure>
+<figure>
+<img src="figures/pw_03_longer_share.png"
+alt="Share of both-flexible selections that use a horizon longer than the native setting." />
+<figcaption aria-hidden="true">Share of both-flexible selections that
+use a horizon longer than the native setting.</figcaption>
+</figure>
+<p>Longer horizons are most common when:</p>
+<ul>
+<li>Demand is moderate rather than extreme, especially around
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ρ</mi><mo>=</mo><mn>1.4</mn></mrow><annotation encoding="application/x-tex">\rho=1.4</annotation></semantics></math>.</li>
+<li>Class 1 represents approximately 30%–50% of arrivals.</li>
+<li>The profile concerns balking, no-show, or joint delay
+sensitivity.</li>
+</ul>
+<p>Longer horizons are uncommon in the cancellation profiles. They are
+also less common at the highest main-range demand level, where near-term
+congestion makes short horizons more valuable.</p>
+<p>The mechanism is different from horizon-only optimization.
+Reservations protect Class 1 near-term access, allowing the pooled
+booking window to remain longer without removing the priority
+advantage.</p>
+<h1 data-number="4" id="reservations-and-patient-access"><span
+class="header-section-number">4</span> Reservations and patient
+access</h1>
+<figure>
+<img src="figures/pw_04_reservation_outcomes.png"
+alt="Distributional outcomes produced by reservation policies under priority-weighted optimization." />
+<figcaption aria-hidden="true">Distributional outcomes produced by
+reservation policies under priority-weighted optimization.</figcaption>
+</figure>
+<h2 data-number="4.1" id="reservation-only-versus-baseline"><span
+class="header-section-number">4.1</span> Reservation only versus
+baseline</h2>
+<ul>
+<li>97.7% of main-range backgrounds are <strong>Class 1 gain / Class 2
+harm</strong>.</li>
+<li>2.3% are uncertain.</li>
+<li>No background is classified as win–win or Class 1 win / Class 2
+neutral.</li>
+</ul>
+<p>Median effects:</p>
+<ul>
+<li>Class 1 served rate: <strong>+16.2 percentage points</strong>.</li>
+<li>Class 2 served rate: <strong>−18.0 percentage points</strong>.</li>
+<li>Average utilization: approximately unchanged.</li>
+<li>Priority-weighted utilization: <strong>+5.1 percentage
+points</strong>.</li>
+</ul>
+<h2 data-number="4.2"
+id="adding-reservations-after-horizon-optimization"><span
+class="header-section-number">4.2</span> Adding reservations after
+horizon optimization</h2>
+<ul>
+<li>99.4% of backgrounds are Class 1 gain / Class 2 harm.</li>
+<li>0.6% are uncertain.</li>
+<li>Median Class 1 gain is approximately 16.0 percentage points.</li>
+<li>Median Class 2 loss is approximately 16.4 percentage points.</li>
+</ul>
+<p>Priority-weighted optimization therefore uses reservations as an
+access-transfer mechanism. The objective improves because each Class 1
+completion receives twice the value of a Class 2 completion.</p>
+<h1 data-number="5" id="how-behavior-changes-reservation-outcomes"><span
+class="header-section-number">5</span> How behavior changes reservation
+outcomes</h1>
+<figure>
+<img src="figures/pw_05_behavior_tradeoff.png"
+alt="Median Class 1 and Class 2 served-rate changes for reservation only versus baseline." />
+<figcaption aria-hidden="true">Median Class 1 and Class 2 served-rate
+changes for reservation only versus baseline.</figcaption>
+</figure>
+<table>
+<thead>
+<tr class="header">
+<th>Behavioral family</th>
+<th style="text-align: right;">Median Class 1 change</th>
+<th style="text-align: right;">Median Class 2 change</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Balking sensitivity</td>
+<td style="text-align: right;">+16.3 pp</td>
+<td style="text-align: right;">−15.8 pp</td>
+</tr>
+<tr class="even">
+<td>No-show sensitivity</td>
+<td style="text-align: right;">+16.1 pp</td>
+<td style="text-align: right;">−16.4 pp</td>
+</tr>
+<tr class="odd">
+<td>Joint delay sensitivity</td>
+<td style="text-align: right;">+16.1 pp</td>
+<td style="text-align: right;">−16.6 pp</td>
+</tr>
+<tr class="even">
+<td>Cancellation propensity</td>
+<td style="text-align: right;">+21.1 pp</td>
+<td style="text-align: right;">−22.5 pp</td>
+</tr>
+</tbody>
+</table>
+<p>Key points:</p>
+<ul>
+<li>The trade-off is present in every behavioral family.</li>
+<li>Cancellation profiles produce the largest median transfer under the
+weighted objective.</li>
+<li>Mild, same, and strong contrasts have similar median effects.</li>
+<li>Priority weighting, not behavioral heterogeneity alone, drives the
+main shift.</li>
+</ul>
+<p>The same-behavior controls are important. They show that reservations
+prioritize Class 1 even when the two classes have identical delay
+behavior.</p>
+<h1 data-number="6" id="when-class-2-suffers-in-served-rate"><span
+class="header-section-number">6</span> When Class 2 suffers in served
+rate</h1>
+<h2 data-number="6.1" id="class-1-population-share"><span
+class="header-section-number">6.1</span> Class 1 population share</h2>
+<p>For reservation only versus baseline:</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: right;">Class 1 share</th>
+<th style="text-align: right;">Median Class 1 change</th>
+<th style="text-align: right;">Median Class 2 change</th>
+<th style="text-align: right;">Median weighted change</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">0.1</td>
+<td style="text-align: right;">+27.1 pp</td>
+<td style="text-align: right;">−2.7 pp</td>
+<td style="text-align: right;">+2.4 pp</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">0.3</td>
+<td style="text-align: right;">+25.4 pp</td>
+<td style="text-align: right;">−10.7 pp</td>
+<td style="text-align: right;">+6.6 pp</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">0.5</td>
+<td style="text-align: right;">+23.0 pp</td>
+<td style="text-align: right;">−23.0 pp</td>
+<td style="text-align: right;">+9.9 pp</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">0.7</td>
+<td style="text-align: right;">+14.2 pp</td>
+<td style="text-align: right;">−31.1 pp</td>
+<td style="text-align: right;">+10.7 pp</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">0.9</td>
+<td style="text-align: right;">+4.5 pp</td>
+<td style="text-align: right;">−38.0 pp</td>
+<td style="text-align: right;">+3.7 pp</td>
+</tr>
+</tbody>
+</table>
+<p>The weighted objective is most favorable numerically at
+intermediate-to-high Class 1 shares, but the distributional cost to
+Class 2 rises sharply.</p>
+<p>When Class 1 is only 10% of arrivals, its served rate can increase
+substantially with a smaller Class 2 served-rate loss. This is the most
+promising region for a constrained-priority policy.</p>
+<h2 data-number="6.2" id="demand"><span
+class="header-section-number">6.2</span> Demand</h2>
+<ul>
+<li>Class 1 median gain rises from approximately 6 pp at
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ρ</mi><mo>=</mo><mn>1.2</mn></mrow><annotation encoding="application/x-tex">\rho=1.2</annotation></semantics></math>
+to 32 pp at
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ρ</mi><mo>=</mo><mn>2.5</mn></mrow><annotation encoding="application/x-tex">\rho=2.5</annotation></semantics></math>.</li>
+<li>Class 2 median loss grows from approximately 7 pp to 30 pp.</li>
+<li>Weighted gains rise with congestion because protected access becomes
+more consequential.</li>
+</ul>
+<figure>
+<img src="figures/pw_06_class2_harm.png"
+alt="Median Class 2 served-rate change across demand and Class 1 share." />
+<figcaption aria-hidden="true">Median Class 2 served-rate change across
+demand and Class 1 share.</figcaption>
+</figure>
+<p>Class 2 harm is greatest when:</p>
+<ul>
+<li>Demand is high.</li>
+<li>Class 1 is a large share of arrivals.</li>
+<li>The reservation window protects most or all daily capacity.</li>
+</ul>
+<h1 data-number="7" id="utilization-constrained-priority-analysis"><span
+class="header-section-number">7</span> Utilization-constrained priority
+analysis</h1>
+<p>This secondary analysis asks:</p>
+<blockquote>
+<p>Among policy cells that preserve near-best average utilization and
+limit Class 2 harm, which cell provides the highest priority-weighted
+utilization?</p>
+</blockquote>
+<p>A policy cell is eligible when:</p>
+<ol type="1">
+<li>Average utilization is within 0.005 of the maximum available average
+utilization.</li>
+<li>Class 2 served rate is no more than 0.01 below baseline in the
+search sample.</li>
+</ol>
+<p>The eligible cell with the highest priority-weighted utilization is
+frozen and evaluated on the independent seeds.</p>
+<h2 data-number="7.1" id="overall-result"><span
+class="header-section-number">7.1</span> Overall result</h2>
+<p>In the main demand range:</p>
+<ul>
+<li>97.7% of backgrounds have at least one feasible cell in the search
+sample.</li>
+<li>80.4% satisfy both constraints again on the independent evaluation
+seeds.</li>
+<li>60.3% are baseline-equivalent on the weighted objective using the
+0.005 practical threshold.</li>
+</ul>
+<p>Median evaluated changes versus baseline are:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Outcome</th>
+<th style="text-align: right;">Median change</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Class 1 served rate</td>
+<td style="text-align: right;">+1.1 pp</td>
+</tr>
+<tr class="even">
+<td>Class 2 served rate</td>
+<td style="text-align: right;">−0.7 pp</td>
+</tr>
+<tr class="odd">
+<td>Average utilization</td>
+<td style="text-align: right;">approximately 0.0 pp</td>
+</tr>
+<tr class="even">
+<td>Priority-weighted utilization</td>
+<td style="text-align: right;">+0.4 pp</td>
+</tr>
+</tbody>
+</table>
+<p>The constrained analysis sharply reduces the access transfer. It also
+reduces the typical priority benefit.</p>
+<h2 data-number="7.2" id="which-policies-are-selected"><span
+class="header-section-number">7.2</span> Which policies are
+selected</h2>
+<figure>
+<img src="figures/pw_07_constrained_policy_mix.png"
+alt="Selected policy mix under the utilization and Class 2 constraints." />
+<figcaption aria-hidden="true">Selected policy mix under the utilization
+and Class 2 constraints.</figcaption>
+</figure>
+<p>Across the main range:</p>
+<ul>
+<li>Both flexible: 79.7%.</li>
+<li>Horizon only: 9.5%.</li>
+<li>Reservation only: 8.5%.</li>
+<li>Baseline: 2.3%.</li>
+</ul>
+<p>Both flexible is common because the optimizer can jointly adjust the
+horizon, protected quantity, and reservation window to remain near the
+utilization frontier.</p>
+<h2 data-number="7.3"
+id="conditions-with-the-strongest-class-1-benefit"><span
+class="header-section-number">7.3</span> Conditions with the strongest
+Class 1 benefit</h2>
+<figure>
+<img src="figures/pw_08_constrained_class1_gain.png"
+alt="Median Class 1 served-rate gain under the constrained-priority selection." />
+<figcaption aria-hidden="true">Median Class 1 served-rate gain under the
+constrained-priority selection.</figcaption>
+</figure>
+<p>The strongest median gains occur when Class 1 is a small
+population:</p>
+<ul>
+<li>Class 1 share 0.1: median gain <strong>+7.3 percentage
+points</strong>.</li>
+<li>Class 1 share 0.3: median gain <strong>+2.1 percentage
+points</strong>.</li>
+<li>Class 1 shares 0.5–0.9: median gains are generally below 1
+percentage point.</li>
+</ul>
+<p>The single strongest broad condition is approximately:</p>
+<ul>
+<li>Demand ratio 1.4.</li>
+<li>Class 1 share 0.1.</li>
+<li>Median Class 1 gain about <strong>12.3 percentage
+points</strong>.</li>
+</ul>
+<p>Why low Class 1 share is favorable:</p>
+<ul>
+<li>A small number of protected completions produces a large percentage
+improvement for Class 1.</li>
+<li>Those completions represent a smaller portion of total
+capacity.</li>
+<li>The Class 2 served-rate loss can remain near the
+one-percentage-point tolerance.</li>
+</ul>
+<h2 data-number="7.4" id="important-limitation"><span
+class="header-section-number">7.4</span> Important limitation</h2>
+<p>The constraints are applied during search and checked again on
+independent evaluation seeds. Approximately 19.6% of main-range
+selections do not satisfy both constraints out of sample.</p>
+<p>These cases should be treated as unstable rather than as accepted
+constrained policies. A stricter search buffer or additional evaluation
+seeds would reduce this risk.</p>
+<h1 data-number="8" id="executive-summary"><span
+class="header-section-number">8</span> Executive summary</h1>
+<ul>
+<li><strong>Reservations are the main priority mechanism.</strong>
+Reservation only and both flexible produce meaningful weighted gains in
+96.4% of main-range backgrounds.</li>
+<li><strong>The typical weighted gain is substantial.</strong> Median
+gains are approximately 5.1–5.3 percentage points.</li>
+<li><strong>The gain is usually a transfer of access.</strong>
+Reservation only raises Class 1 served rate by 16.2 points and lowers
+Class 2 by 18.0 points in the median background.</li>
+<li><strong>Win–win and win-neutral results do not appear under
+unconstrained priority optimization.</strong> Almost every reservation
+result is Class 1 gain / Class 2 harm.</li>
+<li><strong>Horizon behavior depends on whether reservations are
+available.</strong> Horizon only almost always shortens the booking
+window; both flexible chooses a longer horizon in 35.5% of
+backgrounds.</li>
+<li><strong>Class 2 harm grows with Class 1 share and
+congestion.</strong> Median losses approach 30–40 percentage points in
+high-share settings.</li>
+<li><strong>The constrained analysis identifies a narrower
+opportunity.</strong> With near-optimal utilization and a one-point
+Class 2 tolerance, median Class 1 gain is 1.1 points and Class 2 loss is
+0.7 points.</li>
+<li><strong>Low Class 1 share is the most favorable constrained
+setting.</strong> At a 10% Class 1 share, the median Class 1 gain is 7.3
+points; the strongest demand-share cell reaches about 12.3 points.</li>
+<li><strong>Out-of-sample constraint checks matter.</strong> Only 80.4%
+of main-range selections satisfy both constraints on the independent
+evaluation seeds.</li>
+</ul>
+<hr />
+<p>Data inputs:</p>
+<ul>
+<li><code>full_run_summaries/h1_patient_characteristics_full/release/selected_policy_outcomes.csv</code></li>
+<li><code>full_run_summaries/h1_patient_characteristics_full/release/pairwise_group_deltas.csv</code></li>
+<li><code>full_run_summaries/h1_patient_characteristics_full/release/constrained_priority_outcomes.csv</code></li>
+</ul>
+</body>
+</html>
