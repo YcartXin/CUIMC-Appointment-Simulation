@@ -1,0 +1,1382 @@
+---
+title: "Same-Day Release Policies by Patient Population"
+subtitle: "Controlled 420-background policy comparison"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-fold: true
+    code-summary: "Show analysis code"
+    embed-resources: true
+    theme: cosmo
+execute:
+  echo: false
+  warning: false
+  message: false
+  freeze: auto
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(readr)
+library(scales)
+library(knitr)
+
+find_repo_root <- function(start = getwd()) {
+  current <- normalizePath(start, winslash = "/", mustWork = FALSE)
+
+  repeat {
+    target <- file.path(
+      current,
+      "full_run_summaries",
+      "h1_patient_characteristics_pilot",
+      "release"
+    )
+
+    if (dir.exists(target)) {
+      return(current)
+    }
+
+    parent <- dirname(current)
+
+    if (identical(parent, current)) {
+      stop(
+        "Could not find the repository root. Render this QMD from inside ",
+        "CUIMC-Appointment-Simulation."
+      )
+    }
+
+    current <- parent
+  }
+}
+
+repo_root <- find_repo_root()
+
+results_root <- file.path(
+  repo_root,
+  "full_run_summaries",
+  "h1_patient_characteristics_pilot",
+  "release"
+)
+
+selected <- read_csv(
+  file.path(results_root, "selected_policy_outcomes.csv"),
+  show_col_types = FALSE
+)
+
+pairwise <- read_csv(
+  file.path(results_root, "pairwise_group_deltas.csv"),
+  show_col_types = FALSE
+)
+
+objective_switch <- read_csv(
+  file.path(results_root, "objective_switch_deltas.csv"),
+  show_col_types = FALSE
+)
+
+policy_labels <- c(
+  baseline = "Baseline",
+  horizon_only = "Horizon only",
+  reservation_only = "Reservation only",
+  both_flexible = "Both flexible"
+)
+
+policy_order <- unname(policy_labels)
+
+characteristic_labels <- c(
+  no_show_sensitivity = "No-show sensitivity",
+  balking_sensitivity = "Balking sensitivity",
+  cancellation_propensity = "Cancellation propensity",
+  joint_delay_sensitivity = "Joint delay sensitivity"
+)
+
+characteristic_order <- unname(characteristic_labels)
+
+contrast_order <- c("same", "mild", "strong")
+contrast_labels <- c(
+  same = "Same",
+  mild = "Mild",
+  strong = "Strong"
+)
+
+reference_labels <- c(
+  low = "Low-sensitivity Class 2",
+  moderate = "Moderate-sensitivity Class 2"
+)
+
+theme_report <- function() {
+  theme_minimal(base_size = 12) +
+    theme(
+      panel.grid.minor = element_blank(),
+      plot.title.position = "plot",
+      legend.position = "bottom",
+      strip.text = element_text(face = "bold"),
+      axis.title = element_text(face = "bold")
+    )
+}
+
+fmt_pp <- function(x, digits = 2) {
+  paste0(formatC(100 * x, format = "f", digits = digits), " pp")
+}
+
+average_selected <- selected |>
+  filter(selection_objective == "average_utilization") |>
+  mutate(
+    policy_label = factor(
+      unname(policy_labels[policy]),
+      levels = policy_order
+    ),
+    characteristic_label = factor(
+      unname(characteristic_labels[patient_characteristic]),
+      levels = characteristic_order
+    ),
+    contrast_label = factor(
+      unname(contrast_labels[contrast_level]),
+      levels = unname(contrast_labels[contrast_order])
+    ),
+    reference_label = factor(
+      unname(reference_labels[class2_reference]),
+      levels = unname(reference_labels)
+    )
+  )
+
+baseline_outcomes <- average_selected |>
+  filter(policy == "baseline") |>
+  select(
+    background_id,
+    baseline_average_utilization = average_utilization,
+    baseline_weighted_served_rate = weighted_utilization,
+    baseline_class1_served_rate = class_1_percent_serviced,
+    baseline_class2_served_rate = class_2_percent_serviced
+  )
+
+average_selected <- average_selected |>
+  left_join(baseline_outcomes, by = "background_id") |>
+  mutate(
+    utilization_gain =
+      average_utilization - baseline_average_utilization,
+    weighted_served_rate_gain =
+      weighted_utilization - baseline_weighted_served_rate,
+    class1_served_rate_gain =
+      class_1_percent_serviced - baseline_class1_served_rate,
+    class2_served_rate_gain =
+      class_2_percent_serviced - baseline_class2_served_rate
+  ) |>
+  group_by(background_id) |>
+  mutate(
+    best_average_utilization = max(
+      average_utilization,
+      na.rm = TRUE
+    ),
+    practically_best =
+      average_utilization >= best_average_utilization - 0.005
+  ) |>
+  ungroup()
+
+average_pairwise <- pairwise |>
+  filter(selection_objective == "average_utilization") |>
+  mutate(
+    characteristic_label = factor(
+      unname(characteristic_labels[patient_characteristic]),
+      levels = characteristic_order
+    ),
+    contrast_label = factor(
+      unname(contrast_labels[contrast_level]),
+      levels = unname(contrast_labels[contrast_order])
+    ),
+    reference_label = factor(
+      unname(reference_labels[class2_reference]),
+      levels = unname(reference_labels)
+    ),
+    first_policy_label = factor(
+      unname(policy_labels[first_policy]),
+      levels = policy_order
+    ),
+    second_policy_label = factor(
+      unname(policy_labels[second_policy]),
+      levels = policy_order
+    )
+  )
+
+profile_summary <- average_selected |>
+  group_by(
+    characteristic_label,
+    reference_label,
+    contrast_label,
+    policy_label
+  ) |>
+  summarise(
+    backgrounds = n_distinct(background_id),
+    mean_gain = mean(utilization_gain, na.rm = TRUE),
+    median_gain = median(utilization_gain, na.rm = TRUE),
+    q25_gain = quantile(utilization_gain, 0.25, na.rm = TRUE),
+    q75_gain = quantile(utilization_gain, 0.75, na.rm = TRUE),
+    practically_best_share = mean(practically_best, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+plot_profile <- function(characteristic_value) {
+  plot_data <- profile_summary |>
+    filter(
+      as.character(characteristic_label) ==
+        characteristic_value
+    )
+
+  ggplot(
+    plot_data,
+    aes(
+      x = contrast_label,
+      y = median_gain * 100,
+      ymin = q25_gain * 100,
+      ymax = q75_gain * 100,
+      shape = policy_label
+    )
+  ) +
+    geom_hline(yintercept = 0, colour = "grey55") +
+    geom_hline(
+      yintercept = 0.5,
+      linetype = "dashed",
+      colour = "grey70"
+    ) +
+    geom_pointrange(
+      position = position_dodge(width = 0.65),
+      linewidth = 0.5
+    ) +
+    facet_wrap(
+      ~reference_label,
+      scales = "free_y"
+    ) +
+    labs(
+      x = "Class 1 contrast relative to Class 2",
+      y = "Median average-utilization gain (pp)",
+      shape = "Policy"
+    ) +
+    theme_report()
+}
+
+collapse_group_effect <- function(x) {
+  case_when(
+    x == "both_groups_gain" ~
+      "Both groups gain",
+
+    x == "priority_gains_general_loses" ~
+      "Class 1 gains; Class 2 loses",
+
+    x == "priority_loses_general_gains" ~
+      "Class 2 gains; Class 1 loses",
+
+    x %in% c(
+      "priority_gains_general_tied",
+      "priority_tied_general_gains"
+    ) ~
+      "One group gains; other ties",
+
+    x %in% c(
+      "priority_loses_general_tied",
+      "priority_tied_general_loses",
+      "both_groups_lose"
+    ) ~
+      "Loss with no supported gain",
+
+    TRUE ~
+      "No clear group change"
+  )
+}
+
+group_effect_levels <- c(
+  "Both groups gain",
+  "Class 1 gains; Class 2 loses",
+  "Class 2 gains; Class 1 loses",
+  "One group gains; other ties",
+  "Loss with no supported gain",
+  "No clear group change"
+)
+```
+
+## Main findings
+
+- Most policy differences were practical ties.
+- Horizon flexibility was most useful for strong no-show and joint-delay profiles.
+- Reservations showed their clearest value for balking-sensitive populations.
+- Same-day release limited reservation waste when cancellations were higher.
+- Demand and Class 1 share strongly changed policy value.
+
+## Simulation setup
+
+The analysis contains:
+
+- **420 backgrounds**
+- **21 behavioural profiles**
+- **20 clinic contexts per profile**
+- **Four policies per background**
+- **Five matched seed replications per policy cell**
+- **Same-day release of unused reserved slots**
+
+### Policy parameters
+
+| Policy parameter | Baseline | Horizon only | Reservation only | Both flexible |
+|---|---|---|---|---|
+| Booking horizon \(H\) | Native horizon | Optimized over 2, 6, 10, 14, 18, 22 and 26 days | Native horizon | Optimized over 2, 6, 10, 14, 18, 22 and 26 days |
+| Reserved slots per day \(Q\) | 0 | 0 | Optimized from 0 to daily capacity | Optimized from 0 to daily capacity |
+| Reservation window \(W\) | None | None | Optimized from 1 day to the native horizon when \(Q>0\) | Optimized from 1 day to the selected horizon when \(Q>0\) |
+| Unused reservation release | Not applicable | Not applicable | Released to the pooled capacity on the service day | Released to the pooled capacity on the service day |
+
+The \(Q\)-\(W\) search used:
+
+- Coarse \(Q\) increments of 5
+- Fine \(Q\) increments of 1 near the coarse winner
+- Coarse \(W\) increments of 2 days
+- Fine \(W\) increments of 1 day near the coarse winner
+- \(Q=0\) as a valid option
+
+### Problem parameters
+
+| Problem parameter | Values or construction | Treatment |
+|---|---|---|
+| Demand-to-capacity ratio (`rho`) | 1.0, 1.6, 2.0, 3.0 | Varied; fully crossed with Class 1 share |
+| Class 1 share | 0.1, 0.3, 0.5, 0.7, 0.9 | Varied; fully crossed with `rho` |
+| Daily capacity | 30 or 50 slots | Controlled by balanced assignment; not fully crossed |
+| Native booking horizon | 6, 14 or 22 days | Controlled by balanced assignment; not fully crossed |
+| Class 1 arrival rate | `lambda_1 = rho × capacity × Class 1 share` | Derived |
+| Class 2 arrival rate | `lambda_2 = rho × capacity × (1 − Class 1 share)` | Derived |
+| No-show behaviour | See the behavioural-profile table | Targeted in no-show and joint profiles; otherwise controlled |
+| Balking behaviour | See the behavioural-profile table | Targeted in balking and joint profiles; otherwise controlled |
+| Cancellation probability | See the behavioural-profile table | Targeted in cancellation profiles; otherwise controlled |
+| Non-target behaviour | Same value for both classes | Controlled within each profile |
+| Same-day cancellation capability | Enabled | Fixed |
+| Reservation release rule | Same-day release | Fixed |
+| Threshold capping | Disabled | Fixed |
+
+Capacity and native horizon were assigned deterministically:
+
+- Capacity 30 and 50 each appeared in 10 of the 20 clinic contexts.
+- Native horizons 6, 14 and 22 appeared in 7, 7 and 6 contexts.
+- Each demand-share pair received one capacity-horizon combination.
+- The six possible capacity-horizon combinations were not all tested within every demand-share pair.
+
+### Numerical behavioural profiles
+
+A delay rule is written as:
+
+`(threshold in days, probability at or below threshold, probability above threshold)`
+
+Lower thresholds and higher probabilities indicate greater sensitivity.
+
+| Behavioural family | Class 2 reference | Class 2 values | Class 1: same | Class 1: mild | Class 1: strong |
+|---|---|---|---|---|---|
+| No-show | Low | (20, 5%, 10%) | (20, 5%, 10%) | (14, 10%, 20%) | (7, 20%, 30%) |
+| No-show | Moderate | (14, 10%, 20%) | (14, 10%, 20%) | (7, 20%, 30%) | (4, 30%, 40%) |
+| Balking | Low | (22, 5%, 10%) | (22, 5%, 10%) | (16, 10%, 20%) | (9, 20%, 30%) |
+| Balking | Moderate | (16, 10%, 20%) | (16, 10%, 20%) | (9, 20%, 30%) | (5, 30%, 40%) |
+| Cancellation | Low | 10% | 10% | 20% | 30% |
+| Joint: no-show / balking | Low | (20, 5%, 10%) / (22, 5%, 10%) | Same as Class 2 | (14, 10%, 20%) / (16, 10%, 20%) | (7, 20%, 30%) / (9, 20%, 30%) |
+| Joint: no-show / balking | Moderate | (14, 10%, 20%) / (16, 10%, 20%) | Same as Class 2 | (7, 20%, 30%) / (9, 20%, 30%) | (4, 30%, 40%) / (5, 30%, 40%) |
+
+### Non-target behaviour held fixed
+
+| Targeted behavioural family | Behaviour held fixed for both classes |
+|---|---|
+| No-show sensitivity | Balking = (22 days, 10%, 20%); cancellation = 20% |
+| Balking sensitivity | No-show = (4 days, 5%, 10%); cancellation = 20% |
+| Cancellation propensity | Balking = (16 days, 10%, 20%); no-show = (14 days, 10%, 20%) |
+| Joint delay sensitivity | Cancellation = 20%; no-show and balking are both targeted |
+
+“Same” means that the two classes have identical targeted behaviour.
+
+All non-target behavioural parameters are also identical between classes.
+
+Class 1 share is not a behavioural profile:
+
+- It is the proportion of arrivals belonging to Class 1.
+- It is varied within every behavioural profile.
+- The 21 profiles do not count Class 1 share as an additional profile.
+
+### Matched seeds and paired confidence intervals
+
+Each policy cell was simulated with five seed values.
+
+- The same seed identifiers were used for the policies compared within a background.
+- The policies can follow different queue paths after their decisions diverge.
+- The comparison still matches Policy A seed 1 with Policy B seed 1, and so on.
+
+For each matched seed:
+
+> **Seed-level policy difference = Policy A outcome − Policy B outcome**
+
+The paired 95% confidence interval was constructed as follows:
+
+- Calculate the five matched seed differences.
+- Resample those five differences with replacement.
+- Calculate a mean difference for each resample.
+- Repeat 2,000 times.
+- Use the 2.5th and 97.5th percentiles as the interval endpoints.
+
+It is called **paired** because the resampling uses within-seed policy differences.
+
+Pairing removes variation shared by the two runs and usually gives a cleaner policy comparison.
+
+A change below **0.005**, or 0.5 percentage points, is treated as a practical tie.
+
+## Overall four-policy comparison
+
+### How to read the figure
+
+- Each panel represents one behavioural characteristic.
+- The top-left panel represents **no-show sensitivity**.
+- It combines six no-show profiles and 20 clinic contexts per profile.
+- Each point is the median policy gain across those 120 backgrounds.
+- Gain is measured against the baseline from the **same background**.
+- The vertical range is the interquartile range.
+- The outcome is overall clinic utilization, not Class 1 utilization alone.
+- The dashed line marks a gain of **0.5 percentage points**.
+
+```{r}
+#| label: fig-overall-four-policy
+#| fig-cap: "Median average-utilization gain relative to the same background's baseline. Intervals show the interquartile range, not a confidence interval. All panels use the same y-axis."
+#| fig-width: 12
+#| fig-height: 7.5
+
+overall_summary <- average_selected |>
+  group_by(characteristic_label, policy_label) |>
+  summarise(
+    median_gain = median(utilization_gain, na.rm = TRUE),
+    q25_gain = quantile(utilization_gain, 0.25, na.rm = TRUE),
+    q75_gain = quantile(utilization_gain, 0.75, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+ggplot(
+  overall_summary,
+  aes(
+    x = policy_label,
+    y = median_gain * 100,
+    ymin = q25_gain * 100,
+    ymax = q75_gain * 100
+  )
+) +
+  geom_hline(yintercept = 0, colour = "grey55") +
+  geom_hline(
+    yintercept = 0.5,
+    linetype = "dashed",
+    colour = "grey70"
+  ) +
+  geom_pointrange(linewidth = 0.6) +
+  facet_wrap(
+    ~characteristic_label,
+    ncol = 2
+  ) +
+  labs(
+    x = NULL,
+    y = "Average-utilization gain (percentage points)"
+  ) +
+  theme_report() +
+  theme(
+    axis.text.x = element_text(
+      angle = 25,
+      hjust = 1
+    )
+  )
+```
+
+
+### Baseline utilization
+
+```{r}
+#| label: tbl-baseline-utilization
+#| tbl-cap: "Baseline average utilization by behavioural family."
+
+baseline_utilization_table <- average_selected |>
+  filter(policy == "baseline") |>
+  group_by(characteristic_label) |>
+  summarise(
+    Backgrounds = n_distinct(background_id),
+    median_utilization = median(average_utilization, na.rm = TRUE),
+    q25_utilization = quantile(average_utilization, 0.25, na.rm = TRUE),
+    q75_utilization = quantile(average_utilization, 0.75, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  transmute(
+    `Behavioural family` = characteristic_label,
+    Backgrounds,
+    `Median baseline utilization` =
+      percent(median_utilization, accuracy = 0.1),
+    `Interquartile range` =
+      paste0(
+        percent(q25_utilization, accuracy = 0.1),
+        "–",
+        percent(q75_utilization, accuracy = 0.1)
+      )
+  )
+
+kable(
+  baseline_utilization_table,
+  align = c("l", "r", "r", "r")
+)
+```
+
+### Why are the median gains small?
+
+- Baseline utilization was already high in many backgrounds.
+- Many low-demand and symmetric-profile backgrounds had almost no recoverable utilization loss.
+- The median combines contexts where the policy helped with contexts where it did not.
+- Class 1 sometimes represented only 10% or 30% of arrivals.
+- A large Class 1 improvement can therefore produce a small change in overall utilization.
+- Reservation policies often redistributed service between classes rather than creating many additional completed appointments.
+
+Joint sensitivity does not imply an additive gain:
+
+- Balking and no-show are competing outcomes.
+- A patient who rejects an offered delay cannot later no-show for that appointment.
+- Shortening the horizon can address both mechanisms, but it cannot recover the same patient twice.
+- The median also includes same, mild and strong contrasts under both Class 2 references.
+- Some individual joint-sensitivity backgrounds had gains above one percentage point.
+- The median across the entire family remained below one percentage point.
+
+### How often was the gain clear?
+
+The next figure compares each active policy directly with baseline.
+
+```{r}
+#| label: fig-baseline-evidence
+#| fig-cap: "Evidence classification for average-utilization changes relative to baseline. Each bar sums to 100% of backgrounds within a behavioural characteristic and policy."
+#| fig-width: 13
+#| fig-height: 8
+
+evidence_levels <- c(
+  "Supported increase",
+  "Meaningful but uncertain increase",
+  "Practical tie"
+)
+
+baseline_evidence <- average_pairwise |>
+  filter(second_policy == "baseline") |>
+  mutate(
+    evidence = recode(
+      average_utilization_change_status,
+      supported_increase = "Supported increase",
+      uncertain_increase = "Meaningful but uncertain increase",
+      practical_tie = "Practical tie",
+      supported_decrease = "Supported decrease",
+      uncertain_decrease = "Meaningful but uncertain decrease"
+    ),
+    evidence = factor(
+      evidence,
+      levels = c(
+        evidence_levels,
+        "Meaningful but uncertain decrease",
+        "Supported decrease"
+      )
+    )
+  ) |>
+  count(
+    characteristic_label,
+    first_policy_label,
+    evidence,
+    name = "Backgrounds"
+  ) |>
+  group_by(
+    characteristic_label,
+    first_policy_label
+  ) |>
+  mutate(
+    share = Backgrounds / sum(Backgrounds)
+  ) |>
+  ungroup()
+
+ggplot(
+  baseline_evidence,
+  aes(
+    x = first_policy_label,
+    y = share,
+    fill = evidence
+  )
+) +
+  geom_col(width = 0.72) +
+  facet_wrap(
+    ~characteristic_label,
+    ncol = 2
+  ) +
+  scale_y_continuous(labels = percent_format()) +
+  labs(
+    x = NULL,
+    y = "Share of backgrounds",
+    fill = "Result relative to baseline"
+  ) +
+  theme_report() +
+  theme(
+    axis.text.x = element_text(
+      angle = 25,
+      hjust = 1
+    )
+  )
+```
+
+The categories answer different questions:
+
+- **Supported increase**
+  - Mean gain is at least 0.005.
+  - The 95% interval defined above is above zero.
+  - The gain is both practically meaningful and statistically supported.
+
+- **Meaningful but uncertain increase**
+  - Mean gain is at least 0.005.
+  - The confidence interval still includes zero.
+  - More replication may be needed.
+
+- **Practical tie**
+  - The absolute mean difference is below 0.005.
+  - The difference is too small to treat as operationally important.
+  - Statistical significance is not used to promote a very small effect.
+
+This figure conveys **how consistently** a policy helped across backgrounds.
+
+It does not convey the size of the gain. The preceding figure shows magnitude.
+
+### How to read the profile figures
+
+The next four figures use the same summary structure:
+
+- Each point is the median across **20 clinic contexts**.
+- A point is specific to one Class 2 reference, one contrast level and one policy.
+- Those 20 contexts vary demand, Class 1 share, capacity and native horizon.
+- The vertical line is the **interquartile range** across the 20 contexts.
+- It is not a confidence interval.
+
+## No-show sensitivity
+
+```{r}
+#| label: fig-no-show-profiles
+#| fig-cap: "Median policy gain across 20 clinic contexts for each no-show reference and contrast. Lines show interquartile ranges."
+#| fig-width: 11
+#| fig-height: 5.5
+
+plot_profile("No-show sensitivity")
+```
+
+- Under the **low Class 2 reference**, policy gains remained small.
+- Under the **moderate reference**, strong Class 1 sensitivity increased the value of shorter horizons.
+- In the moderate/strong profile:
+  - Horizon only averaged about **0.50 pp** above baseline.
+  - Both flexible averaged about **0.55 pp**.
+  - Reservation only averaged about **0.05 pp**.
+- Both flexible often selected \(Q=0\) in the strong profiles.
+- Main implication: **shorter horizons addressed the no-show mechanism more directly than reservations.**
+
+::: {.callout-tip}
+**Why can reservations affect no-show outcomes?**
+
+- A reservation does not change either class's no-show rule.
+- It can give Class 1 access to a nearer appointment.
+- If the new delay moves from above the no-show threshold to at or below it, the assigned no-show probability falls from the high value to the low value.
+- If the delay remains on the same side of the threshold, the assigned probability does not change.
+- The realized no-show rate can still move irregularly because the policy changes which patients obtain appointments.
+:::
+
+::: {.callout-note}
+**The “same” profiles are negative controls.**
+
+- Class 1 and Class 2 have identical cancellation, balking and no-show parameters.
+- Reservation-only median gains were about **0.08 pp** under the low reference.
+- They were about **0.15 pp** under the moderate reference.
+- All 40 reservation-only comparisons with baseline were practical ties.
+- These small positive points should not be treated as meaningful evidence of a reservation benefit.
+- Finite-run variation and selecting the best \(Q\)-\(W\) cell from many candidates can move the selected point estimate slightly above zero.
+:::
+
+## Balking sensitivity
+
+```{r}
+#| label: fig-balking-profiles
+#| fig-cap: "Median policy gain across 20 clinic contexts for each balking reference and contrast. Lines show interquartile ranges."
+#| fig-width: 11
+#| fig-height: 5.5
+
+plot_profile("Balking sensitivity")
+```
+
+- Balking profiles produced the largest reservation-related gains.
+- Both flexible averaged approximately **0.6–0.8 pp** above baseline across the six profiles.
+- Reservation only usually performed similarly to horizon only in utilization.
+- The two policies worked through different mechanisms:
+  - Horizon only changed the set of delays offered.
+  - Reservations protected near-term capacity for Class 1.
+- Stronger sensitivity did **not** create a perfectly monotonic increase.
+- Demand and Class 1 share still mattered.
+
+## Cancellation propensity
+
+```{r}
+#| label: fig-cancellation-profiles
+#| fig-cap: "Median policy gain across 20 clinic contexts as Class 1 cancellation probability increases. Lines show interquartile ranges."
+#| fig-width: 10
+#| fig-height: 5
+
+plot_profile("Cancellation propensity")
+```
+
+- Same-day release prevented a broad utilization penalty from unused reservations.
+- Reservation only averaged approximately:
+  - **0.31 pp** when cancellation rates were equal.
+  - **0.25 pp** under the mild contrast.
+  - **0.22 pp** under the strong contrast.
+- Both flexible followed the same pattern.
+- Higher cancellation reduced reservation value modestly.
+- It did not make reservation policies generally worse than baseline.
+
+## Joint delay sensitivity
+
+```{r}
+#| label: fig-joint-profiles
+#| fig-cap: "Median policy gain across 20 clinic contexts for each joint-sensitivity reference and contrast. Lines show interquartile ranges."
+#| fig-width: 11
+#| fig-height: 5.5
+
+plot_profile("Joint delay sensitivity")
+```
+
+### Why are most effects close to zero?
+
+```{r}
+#| label: tbl-joint-delay-exposure
+#| tbl-cap: "Baseline delay exposure and policy gains in the joint-sensitivity profiles."
+
+joint_baseline_exposure <- average_selected |>
+  filter(
+    as.character(characteristic_label) == "Joint delay sensitivity",
+    policy == "baseline"
+  ) |>
+  group_by(
+    reference_label,
+    contrast_label,
+    noshow_threshold_1,
+    balk_threshold_1
+  ) |>
+  summarise(
+    median_baseline_delay =
+      median(class_1_mean_offered_booking_delay, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+joint_horizon_summary <- average_selected |>
+  filter(
+    as.character(characteristic_label) == "Joint delay sensitivity",
+    policy == "horizon_only"
+  ) |>
+  group_by(reference_label, contrast_label) |>
+  summarise(
+    median_horizon_gain =
+      100 * median(utilization_gain, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+joint_both_summary <- average_selected |>
+  filter(
+    as.character(characteristic_label) == "Joint delay sensitivity",
+    policy == "both_flexible"
+  ) |>
+  group_by(reference_label, contrast_label) |>
+  summarise(
+    median_both_gain =
+      100 * median(utilization_gain, na.rm = TRUE),
+    meaningful_contexts =
+      sum(utilization_gain >= 0.005, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+joint_exposure_table <- joint_baseline_exposure |>
+  left_join(
+    joint_horizon_summary,
+    by = c("reference_label", "contrast_label")
+  ) |>
+  left_join(
+    joint_both_summary,
+    by = c("reference_label", "contrast_label")
+  ) |>
+  transmute(
+    `Class 2 reference` = reference_label,
+    `Class 1 contrast` = contrast_label,
+    `Median baseline Class 1 offered delay` =
+      paste0(
+        formatC(
+          median_baseline_delay,
+          format = "f",
+          digits = 2
+        ),
+        " days"
+      ),
+    `Class 1 no-show / balk threshold` =
+      paste0(
+        noshow_threshold_1,
+        " / ",
+        balk_threshold_1,
+        " days"
+      ),
+    `Median horizon-only gain` =
+      paste0(
+        formatC(
+          median_horizon_gain,
+          format = "f",
+          digits = 2
+        ),
+        " pp"
+      ),
+    `Median both-flexible gain` =
+      paste0(
+        formatC(
+          median_both_gain,
+          format = "f",
+          digits = 2
+        ),
+        " pp"
+      ),
+    `Both-flexible contexts ≥0.5 pp` =
+      paste0(meaningful_contexts, " of 20")
+  )
+
+kable(
+  joint_exposure_table,
+  align = c("l", "l", "r", "r", "r", "r", "r")
+)
+```
+
+- Most baseline offers were already shorter than the Class 1 thresholds.
+- The policies therefore changed only the tail of long-delay offers.
+- In the strongest moderate profile:
+  - No-show probability is still 30% at short delays.
+  - Balking probability is still 30% at short delays.
+  - Moving an offer below the threshold changes 40% to 30%; it does not reduce the probability to zero.
+- Balking and no-show are competing outcomes.
+  - A patient who balks never reaches the no-show stage.
+  - The two potential improvements cannot simply be added.
+- Overall utilization counts completed slots across both classes.
+  - Avoiding a Class 1 balk may change who receives a slot without increasing the number of completed slots.
+  - A utilization gain appears only when the policy prevents a slot from ultimately going unused.
+- Large gains were concentrated in a minority of congested contexts.
+- When more than half of the 20 context-level gains are very small, the median is also very small.
+
+The clearest response occurred in the moderate/strong profile.
+
+- Horizon flexibility shortened the delay distribution.
+- Reservations added value only in selected contexts.
+- Both flexible combined those mechanisms.
+- The result was context-specific rather than universal.
+
+## Priority-group share
+
+```{r}
+#| label: fig-priority-share
+#| fig-cap: "Four-policy comparison by Class 1 share. Points show median gains; intervals show the interquartile range across the 21 patient profiles and four demand levels."
+#| fig-width: 11
+#| fig-height: 5.5
+
+share_summary <- average_selected |>
+  group_by(class1_share, policy_label) |>
+  summarise(
+    median_gain = median(utilization_gain, na.rm = TRUE),
+    q25_gain = quantile(utilization_gain, 0.25, na.rm = TRUE),
+    q75_gain = quantile(utilization_gain, 0.75, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+ggplot(
+  share_summary,
+  aes(
+    x = factor(class1_share),
+    y = median_gain * 100,
+    ymin = q25_gain * 100,
+    ymax = q75_gain * 100,
+    shape = policy_label
+  )
+) +
+  geom_hline(yintercept = 0, colour = "grey55") +
+  geom_hline(
+    yintercept = 0.5,
+    linetype = "dashed",
+    colour = "grey70"
+  ) +
+  geom_pointrange(
+    position = position_dodge(width = 0.65),
+    linewidth = 0.5
+  ) +
+  labs(
+    x = "Class 1 share",
+    y = "Median average-utilization gain (pp)",
+    shape = "Policy"
+  ) +
+  theme_report()
+```
+
+- Reservation only was most useful at Class 1 shares of **0.1–0.5**.
+- Its mean gain fell to about **0.11 pp** at a Class 1 share of 0.9.
+- Horizon-only value did not fall in the same way.
+- A large Class 1 population already occupies much of the pooled capacity.
+- Additional priority protection then provides less incremental value.
+
+## Clinic context
+
+The next figure shows where each active policy improved utilization.
+
+- Each cell is a grouped median.
+- It aggregates over patient profiles, capacities and native horizons.
+- It should be read as a pattern map, not as a controlled one-variable trend.
+
+```{r}
+#| label: fig-demand-share-heatmap
+#| fig-cap: "Median average-utilization gain by demand-to-capacity ratio, Class 1 share and active policy."
+#| fig-width: 12
+#| fig-height: 7
+
+context_summary <- average_selected |>
+  filter(policy != "baseline") |>
+  group_by(
+    policy_label,
+    rho,
+    class1_share
+  ) |>
+  summarise(
+    median_gain_pp =
+      100 * median(utilization_gain, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    rho = factor(rho),
+    class1_share = factor(class1_share)
+  )
+
+fill_limit <- quantile(
+  abs(context_summary$median_gain_pp),
+  0.95,
+  na.rm = TRUE
+)
+
+ggplot(
+  context_summary,
+  aes(
+    x = class1_share,
+    y = rho,
+    fill = median_gain_pp
+  )
+) +
+  geom_tile(
+    colour = "white",
+    linewidth = 0.3
+  ) +
+  geom_text(
+    aes(
+      label = formatC(
+        median_gain_pp,
+        format = "f",
+        digits = 1
+      )
+    ),
+    size = 3
+  ) +
+  facet_wrap(
+    ~policy_label,
+    ncol = 3
+  ) +
+  scale_fill_gradient2(
+    low = "#B2182B",
+    mid = "white",
+    high = "#2166AC",
+    midpoint = 0,
+    limits = c(-fill_limit, fill_limit),
+    oob = squish,
+    name = "Median gain\n(pp)"
+  ) +
+  labs(
+    x = "Class 1 share",
+    y = "Demand-to-capacity ratio"
+  ) +
+  theme_report()
+```
+
+- Policy value was generally low under light demand.
+- Differences became more visible under congestion.
+- Reservation value depended strongly on the size of Class 1.
+- Both flexible was most useful where horizon and reservation mechanisms both remained active.
+
+## Effects on Class 1 and Class 2
+
+Patient-group effects remain comparisons with baseline.
+
+```{r}
+#| label: fig-group-effects
+#| fig-cap: "Confidence-supported Class 1 and Class 2 served-rate patterns for each active policy compared with baseline."
+#| fig-width: 13
+#| fig-height: 8
+
+group_effect_summary <- average_pairwise |>
+  filter(second_policy == "baseline") |>
+  mutate(
+    group_effect = factor(
+      collapse_group_effect(
+        patient_group_supported_tradeoff
+      ),
+      levels = group_effect_levels
+    )
+  ) |>
+  count(
+    characteristic_label,
+    first_policy_label,
+    group_effect,
+    name = "n"
+  ) |>
+  group_by(
+    characteristic_label,
+    first_policy_label
+  ) |>
+  mutate(share = n / sum(n)) |>
+  ungroup()
+
+ggplot(
+  group_effect_summary,
+  aes(
+    x = first_policy_label,
+    y = share,
+    fill = group_effect
+  )
+) +
+  geom_col(width = 0.72) +
+  facet_wrap(
+    ~characteristic_label,
+    ncol = 2
+  ) +
+  scale_y_continuous(labels = percent_format()) +
+  labs(
+    x = NULL,
+    y = "Share of backgrounds",
+    fill = "Supported group pattern"
+  ) +
+  theme_report() +
+  theme(
+    axis.text.x = element_text(
+      angle = 25,
+      hjust = 1
+    )
+  )
+```
+
+- Horizon only usually left both groups tied.
+- Reservation policies often increased Class 1 served rate while reducing Class 2 served rate.
+- This pattern was strongest in balking and symmetric-reference profiles.
+- An average-utilization gain should not be described as a gain shared by both groups.
+
+“Loss with no supported gain” combines:
+
+- Class 1 loses while Class 2 ties.
+- Class 2 loses while Class 1 ties.
+- Both groups lose.
+
+It excludes explicit gain-loss trade-offs.
+
+## Selected policy parameters
+
+### Booking horizon
+
+The figure includes the two policies that optimize \(H\).
+
+```{r}
+#| label: fig-horizon-selections
+#| fig-cap: "Distribution of selected booking horizons for horizon only and both flexible."
+#| fig-width: 12
+#| fig-height: 7
+
+horizon_distribution <- average_selected |>
+  filter(
+    policy %in% c("horizon_only", "both_flexible")
+  ) |>
+  count(
+    characteristic_label,
+    policy_label,
+    selected_horizon_days,
+    name = "n"
+  ) |>
+  group_by(
+    characteristic_label,
+    policy_label
+  ) |>
+  mutate(share = n / sum(n)) |>
+  ungroup() |>
+  mutate(
+    selected_horizon_days = factor(
+      selected_horizon_days,
+      levels = c(2, 6, 10, 14, 18, 22, 26)
+    )
+  )
+
+ggplot(
+  horizon_distribution,
+  aes(
+    x = policy_label,
+    y = share,
+    fill = selected_horizon_days
+  )
+) +
+  geom_col(width = 0.72) +
+  facet_wrap(
+    ~characteristic_label,
+    ncol = 2
+  ) +
+  scale_y_continuous(labels = percent_format()) +
+  labs(
+    x = NULL,
+    y = "Share of backgrounds",
+    fill = "Selected horizon\n(days)"
+  ) +
+  theme_report() +
+  theme(
+    axis.text.x = element_text(
+      angle = 20,
+      hjust = 1
+    )
+  )
+```
+
+- Short horizons dominated no-show and joint-delay profiles.
+- Balking profiles also commonly selected two days.
+- Cancellation profiles retained more medium-length horizons.
+- The result reflects the discrete candidate grid.
+
+### Reservation quantity and window
+
+The figure reports the optimized \(Q\) and \(W\) values defined in the policy-parameter table.
+
+```{r}
+#| label: fig-reservation-parameters
+#| fig-cap: "Selected reservation quantity and window for reservation only and both flexible. Points show medians; intervals show interquartile ranges."
+#| fig-width: 13
+#| fig-height: 8
+
+reservation_long <- bind_rows(
+  average_selected |>
+    filter(
+      policy %in% c(
+        "reservation_only",
+        "both_flexible"
+      )
+    ) |>
+    transmute(
+      characteristic_label,
+      policy_label,
+      metric = "Reserved quantity (% of capacity)",
+      value = 100 * selected_Q / slots_per_day
+    ),
+
+  average_selected |>
+    filter(
+      policy %in% c(
+        "reservation_only",
+        "both_flexible"
+      ),
+      selected_Q > 0,
+      selected_window >= 1
+    ) |>
+    transmute(
+      characteristic_label,
+      policy_label,
+      metric = "Positive-Q reservation window (days)",
+      value = selected_window
+    )
+)
+
+reservation_summary <- reservation_long |>
+  group_by(
+    characteristic_label,
+    policy_label,
+    metric
+  ) |>
+  summarise(
+    median = median(value, na.rm = TRUE),
+    q25 = quantile(value, 0.25, na.rm = TRUE),
+    q75 = quantile(value, 0.75, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+ggplot(
+  reservation_summary,
+  aes(
+    x = policy_label,
+    y = median,
+    ymin = q25,
+    ymax = q75
+  )
+) +
+  geom_pointrange(linewidth = 0.6) +
+  facet_grid(
+    metric ~ characteristic_label,
+    scales = "free_y"
+  ) +
+  labs(
+    x = NULL,
+    y = "Selected parameter"
+  ) +
+  theme_report() +
+  theme(
+    axis.text.x = element_text(
+      angle = 25,
+      hjust = 1
+    )
+  )
+```
+
+- Balking profiles selected the largest reservations.
+- Strong no-show and joint profiles often selected small \(Q\) or no reservation.
+- Reservation windows were usually short when the selected horizon was short.
+- \(Q\), window and horizon should be interpreted jointly.
+
+## Priority-weighted served rate
+
+The secondary objective is:
+
+> **Priority-weighted served rate = (2 × Class 1 served rate + Class 2 served rate) ÷ 3**
+
+Class 1 receives twice the policy weight of Class 2.
+
+The code calls this metric `weighted_utilization`.
+
+### What changed when the optimization objective changed?
+
+```{r}
+#| label: tbl-objective-switch
+#| tbl-cap: "Effect of switching from average-utilization-optimal to priority-weighted-optimal policy cells."
+
+switch_summary <- objective_switch |>
+  mutate(
+    policy_label = factor(
+      unname(policy_labels[policy]),
+      levels = policy_order
+    )
+  ) |>
+  group_by(policy_label) |>
+  summarise(
+    Backgrounds = n_distinct(background_id),
+    `Same policy cell` =
+      percent(mean(same_policy_cell, na.rm = TRUE), accuracy = 0.1),
+    `Median average-utilization change` =
+      fmt_pp(
+        median(delta_average_utilization, na.rm = TRUE)
+      ),
+    `Median weighted-served-rate change` =
+      fmt_pp(
+        median(delta_weighted_utilization, na.rm = TRUE)
+      ),
+    `Median Class 1 served-rate change` =
+      fmt_pp(
+        median(delta_class_1_percent_serviced, na.rm = TRUE)
+      ),
+    `Median Class 2 served-rate change` =
+      fmt_pp(
+        median(delta_class_2_percent_serviced, na.rm = TRUE)
+      ),
+    .groups = "drop"
+  ) |>
+  rename(Policy = policy_label)
+
+kable(
+  switch_summary,
+  align = c("l", "r", "r", "r", "r", "r", "r")
+)
+```
+
+- Many backgrounds selected the same policy cell under both objectives.
+- Where selections changed:
+  - Class 1 served rate generally increased.
+  - Class 2 served rate often decreased.
+  - Average utilization sometimes fell.
+- The weighted objective changes **who is served**, not only how much capacity is used.
+
+```{r}
+#| label: fig-objective-switch
+#| fig-cap: "Average-utilization and priority-weighted-served-rate changes when switching to the priority-weighted-optimal policy cell."
+#| fig-width: 10
+#| fig-height: 5.5
+
+switch_long <- objective_switch |>
+  mutate(
+    policy_label = factor(
+      unname(policy_labels[policy]),
+      levels = policy_order
+    )
+  ) |>
+  select(
+    policy_label,
+    delta_average_utilization,
+    delta_weighted_utilization
+  ) |>
+  pivot_longer(
+    cols = starts_with("delta_"),
+    names_to = "metric",
+    values_to = "change"
+  ) |>
+  mutate(
+    metric = recode(
+      metric,
+      delta_average_utilization =
+        "Average utilization",
+      delta_weighted_utilization =
+        "Priority-weighted served rate"
+    )
+  )
+
+ggplot(
+  switch_long,
+  aes(
+    x = policy_label,
+    y = change * 100
+  )
+) +
+  geom_hline(yintercept = 0, colour = "grey55") +
+  geom_boxplot(
+    outlier.alpha = 0.2,
+    width = 0.65
+  ) +
+  facet_wrap(
+    ~metric,
+    scales = "free_y"
+  ) +
+  labs(
+    x = NULL,
+    y = "Change after objective switch (pp)"
+  ) +
+  theme_report() +
+  theme(
+    axis.text.x = element_text(
+      angle = 25,
+      hjust = 1
+    )
+  )
+```
+
+## Conclusions
+
+| Patient characteristic | Main result | Most relevant comparison |
+|---|---|---|
+| More no-show sensitive | Horizon flexibility was the main useful mechanism | Horizon only vs both flexible |
+| More balking sensitive | Reservations showed their strongest value | Reservation only vs horizon only |
+| More cancellation prone | Day-of release limited reservation waste | Reservation only vs baseline |
+| Jointly delay sensitive | Strong moderate-reference profiles favoured short horizons | Horizon only vs both flexible |
+| Priority-group share | Reservation value declined when Class 1 was already very large | Reservation only across shares |
+
+### What the results support
+
+- Retain all four policy regimes.
+- Retain same-day release only.
+- Retain the same, mild and strong contrasts.
+- Fully cross capacity and native horizon in the confirmatory run.
+- Preserve the full Class 1 share range.
+- Use this report structure for the final document.
+- Treat practical ties as findings, not failures to select a winner.
+
+### What requires confirmation
+
+- Exact effect sizes.
+- Capacity-specific conclusions.
+- Native-horizon-specific conclusions.
+- Fine interactions among profile, demand and share.
+- Confirmatory statements about patient-group trade-offs.

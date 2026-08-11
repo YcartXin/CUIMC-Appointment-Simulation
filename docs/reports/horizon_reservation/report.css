@@ -1,0 +1,43 @@
+:root { color-scheme: light; }
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 32px 340px 48px 48px;
+  line-height: 1.5;
+  color: #222;
+  background: #fff;
+}
+header#title-block-header { margin-bottom: 1.5rem; }
+h1, h2, h3 { line-height: 1.2; margin-top: 1.4em; }
+h1 { font-size: 2.05rem; }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.25em; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0 1.4em; font-size: 0.94rem; }
+th, td { border: 1px solid #ddd; padding: 7px 9px; vertical-align: top; }
+th { background: #f3f3f3; text-align: left; }
+img { max-width: 100%; height: auto; display: block; margin: 1.1em auto 0.3em; }
+figure { margin: 1.4em 0; }
+figcaption { color: #555; font-size: 0.9rem; margin: 0.35em 0 1.3em; }
+nav#TOC {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  width: 275px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: #fafafa;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 14px 18px;
+  font-size: 0.9rem;
+}
+nav#TOC::before { content: "Contents"; display: block; font-weight: 700; font-size: 1rem; margin-bottom: 0.6rem; }
+nav#TOC ul { padding-left: 1.05rem; }
+nav#TOC > ul { padding-left: 0; list-style: none; }
+nav#TOC a { color: #333; text-decoration: none; }
+nav#TOC a:hover { text-decoration: underline; }
+math[display="block"] { margin: 1rem 0; }
+@media (max-width: 1250px) {
+  body { padding-right: 48px; }
+  nav#TOC { position: static; width: auto; max-height: none; margin-bottom: 24px; }
+}

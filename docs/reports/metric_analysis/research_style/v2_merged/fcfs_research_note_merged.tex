@@ -1,0 +1,579 @@
+% ============================================================
+%  Interpreting FCFS Appointment Simulation Results Under
+%  the Current Formulation
+%  Metric behavior, access losses, and model checks
+% ============================================================
+
+\documentclass[11pt]{article}
+
+\usepackage[margin=1.0in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{array}
+\usepackage[table]{xcolor}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{enumitem}
+\usepackage{caption}
+
+\hypersetup{colorlinks=true,linkcolor=black,urlcolor=blue,citecolor=black}
+
+\graphicspath{%
+  {../../figures/}%
+  {../../../../../outputs/class1_balking/figures/}%
+  {../../../../../outputs/class1_balking_threshold/figures/}%
+}
+
+\sloppy
+\setcounter{tocdepth}{2}
+
+\newcommand{\mainfigure}[3]{%
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{#1}
+    \caption{#2}
+    \label{#3}
+  \end{figure}%
+}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\title{\textbf{Interpreting FCFS Appointment Simulation Results\\
+       Under the Current Formulation}\\[4pt]
+       \large Metric behavior, access losses, and model checks}
+\author{CUIMC Appointment Simulation}
+\date{May 2026}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Abstract}
+
+This note interprets simulation outputs from a first-contact FCFS
+appointment model.  It is an \emph{interpretation note}, not an
+empirical claim about real clinic operations.  All statements are
+conditional on the current model formulation, and numbers should be
+read as model outputs, not clinical measurements.
+
+\medskip
+
+\textbf{Main finding.}  Under the current formulation, average
+utilization and the overall served rate separate sharply.  At
+baseline, average utilization is \textbf{0.839} while the overall
+served rate is \textbf{0.269}.  This gap is mechanically plausible
+rather than paradoxical: utilization is normalized by the number of
+available slots, while the served rate is normalized by the number of
+patient arrivals.  With 100 arrivals per day and 32 slots per day the
+system is structurally oversubscribed.  Even if every scheduled slot
+were completed without any no-show, only $32/100 = 0.32$ of arrivals
+could be served.  The observed served rate of 0.269 is further reduced
+below this ceiling by no-shows.
+
+\medskip
+
+\textbf{Baseline loss decomposition.}
+Of all arrivals at baseline, approximately 0.356 balk (reject the
+offered appointment), 0.323 cancel after booking, and 0.052 are
+no-shows.  No-offer (horizon-full rejection) is zero at baseline,
+confirming that the booking horizon is not saturated under baseline
+demand.  The low served rate is therefore driven primarily by balking
+and post-booking cancellation, not by horizon saturation.
+
+\medskip
+
+\textbf{Offered vs.\ accepted wait.}
+Mean offered wait (9.30 days at baseline) includes both patients who
+accepted and patients who later balked.  Mean accepted wait (8.35
+days) excludes balked patients and is therefore a selected,
+downward-biased measure of the delay experience.  Offered wait should
+always be reported alongside the no-offer share, because patients who
+receive no offer are excluded from both wait metrics.
+
+\section{Simulation Mechanics Relevant for Interpretation}
+
+The points below are necessary for reading the metric outputs
+correctly.  They describe the current implementation rather than
+design aspirations.
+
+\begin{itemize}[leftmargin=1.5em, itemsep=3pt]
+  \item \textbf{Finite booking horizon.}  The simulation maintains a
+    rolling calendar of $H = 14$ residual days.  When all days are
+    fully booked, the next arrival receives no offer.
+  \item \textbf{Two patient classes.}  Each class has its own Poisson
+    arrival rate, balking rule, no-show rule, and cancellation probability.
+  \item \textbf{Class-specific Poisson arrivals.}
+    $M_1^D \sim \mathrm{Poisson}(\lambda_1)$ and
+    $M_2^D \sim \mathrm{Poisson}(\lambda_2)$ independently each day.
+  \item \textbf{Arrivals pooled and randomly permuted.}  All arrivals
+    are combined and randomly shuffled into a single FCFS queue.  No
+    class is given scheduling priority.
+  \item \textbf{Earliest available slot offered.}  Each patient is
+    offered the smallest $r \in \{1,\ldots,H-1\}$ with remaining
+    capacity.  The offered delay $\tau$ equals this residual day $r$.
+  \item \textbf{Offered delay $\tau$ recorded before balking.}
+    The value $\tau$ is logged at the time of the offer, regardless of
+    whether the patient subsequently accepts or balks.
+  \item \textbf{Balking depends on $\tau$.}  A class-$i$ patient
+    accepts with probability $1 - b_i(\tau)$, where $b_i(\cdot)$ is a
+    step function with higher rejection above a class-specific threshold.
+    A balked patient leaves permanently.
+  \item \textbf{No-show depends on original $\tau$.}  No-show
+    probability $\xi_i(\tau)$ is anchored to the \emph{original}
+    offered delay, not the remaining wait on the day of service.
+  \item \textbf{Future cancellations only.}  At the start of each day,
+    each booked patient on a future residual day ($r \geq 1$) cancels
+    independently with probability $\phi_i$.  Canceled slots are
+    returned to the pool and can be rebooked.
+  \item \textbf{No same-day cancellations.}  Patients at $r = 0$
+    either attend or are no-shows.
+  \item \textbf{No rebooking of no-show slots.}  No-show slots count
+    as lost capacity.
+  \item \textbf{No-offer rule when horizon is full.}  A patient with
+    no slot available is recorded as \code{no\_offer} and excluded
+    from the offered-wait distribution.
+  \item \textbf{Utilization counts completed visits per slot.}
+    $\frac{1}{D}\sum_d \frac{\text{served slots}_d}{S}$.
+    No-shows do not contribute.
+\end{itemize}
+
+\section{Baseline Diagnosis}
+
+\subsection{Baseline Parameter Setup}
+
+\begin{itemize}[leftmargin=1.5em, itemsep=2pt]
+  \item Two symmetric classes: $\lambda_1 = \lambda_2 = 50$ per day,
+    total $\lambda = 100$.
+  \item $S = 32$ slots per day; $H = 14$-day booking horizon.
+  \item Cancellation probability: $\phi_1 = \phi_2 = 0.10$.
+  \item Balking threshold: 9 days; high-delay balking probability:
+    0.50; low: 0.00 (step = 0.50).
+  \item No-show threshold: 6 days; high-delay no-show probability:
+    0.30; low: 0.00 (step = 0.30).
+\end{itemize}
+
+\subsection{Baseline Metric Table}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.18}
+\begin{tabular}{lrr}
+\toprule
+Metric & Baseline & Scenario~2 \\
+\midrule
+Average utilization & 0.839 & 1.000 \\
+Overall served rate & 0.269 & 0.395 \\
+Mean accepted wait (days) & 8.35 & 4.29 \\
+Mean offered wait (days) & 9.30 & 5.06 \\
+Class served-rate gap ($\Delta_{\text{access}}$) & 0.001 & $-$0.008 \\
+Class delay gap ($\Delta_{\text{delay}}$) & 0.003 & 0.005 \\
+\bottomrule
+\end{tabular}
+\caption{Baseline and Scenario~2 summary metrics.  Scenario~2 changes
+  several assumptions simultaneously and is a comparison point, not a
+  one-parameter causal test.}
+\end{table}
+
+\subsection{Utilization--Access Gap}
+
+\[
+  \text{average utilization} = \frac{\text{completed visits}}{\text{available slots}},
+  \qquad
+  \text{overall served rate} = \frac{\text{completed visits}}{\text{arrivals}}.
+\]
+
+\subsection{Demand-to-Capacity Calculation}
+
+With $\lambda = 100$ and $S = 32$, the demand-to-capacity ratio is
+$100/32 \approx 3.1$.  Even with zero no-shows and zero cancellations,
+the served rate is bounded by $32/100 = 0.32$.  The observed 0.269
+falls below this ceiling because no-shows eliminate completed visits
+after scheduling.
+
+\section{Arrival Outcome Decomposition}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.18}
+\begin{tabular}{lrl}
+\toprule
+Outcome & Share & Mechanism \\
+\midrule
+Served   & 0.269 & Accepted, did not cancel, attended \\
+Balked   & 0.356 & Offered a slot; rejected due to long delay \\
+Canceled & 0.323 & Accepted; canceled before service day \\
+No-show  & 0.052 & Accepted; not canceled; did not attend \\
+No-offer & 0.000 & Horizon full; no slot offered \\
+\midrule
+Total & $\approx 1.000$ & \\
+\bottomrule
+\end{tabular}
+\caption{Arrival outcome decomposition at baseline.}
+\end{table}
+
+\textbf{Baseline is not horizon-saturated.}
+No-offer is zero, so access failure is not caused by the horizon filling.
+
+\textbf{Low served rate is driven by balking and cancellation.}
+Together they account for $0.356 + 0.323 = 0.679$ of arrivals.
+Reducing no-shows alone would not materially raise the served rate.
+
+\textbf{High cancellation is mechanically plausible.}
+A patient booked 10 days ahead faces about 10 independent cancellation
+draws.  With $\phi = 0.10$, the survival probability is
+$(0.90)^{10} \approx 0.35$.  This should be verified in code to
+confirm cancellation is applied \emph{once per residual day per
+patient}, not once per booking.
+
+\mainfigure{fcfs_arrival_outcome_decomposition.png}{%
+  Arrival outcome decomposition under demand pressure.
+  At baseline ($\lambda = 100$), no-offer is zero.
+  No-offer becomes substantial only above approximately $\lambda = 110$.
+  Balking and cancellation dominate at baseline.}{fig:outcome-decomp}
+
+\section{Cross-Metric Diagnostics}
+
+\mainfigure{metric_access_drivers.png}{%
+  Overall served rate as demand changes.  Class~1 varies on the x-axis
+  while Class~2 stays fixed at baseline.}{fig:access-drivers}
+
+\mainfigure{fcfs_capacity_stress_curves.png}{%
+  FCFS capacity stress curves ($\lambda = 30$ to $170$, 50/50 mix,
+  three seeds averaged).  Utilization stays near 0.84 across a wide
+  demand range while served rate falls steeply.  No-offer becomes
+  material only above approximately $\lambda = 110$.}{fig:stress-curves}
+
+Three diagnostic patterns emerge.
+
+\textbf{1.~Utilization can stay near 0.84 while served rate falls.}
+Slots are still occupied by patients who accept; completed visits per
+slot stays high even as the served fraction of arrivals collapses.
+
+\textbf{2.~Accepted wait is selected downward by balking.}
+Patients who would have waited longest have left the system.  Offered
+wait includes those rejected patients and is the less biased measure.
+
+\textbf{3.~No-offer becomes important only above $\lambda \approx 110$.}
+At baseline demand no-offer is zero.  The no-offer share must be
+reported separately whenever it is non-negligible.
+
+\section{Metric Hierarchy Under This Formulation}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{p{0.16\textwidth}p{0.20\textwidth}p{0.26\textwidth}p{0.27\textwidth}}
+\toprule
+Metric & What it measures & Interpretation & Main caveat \\
+\midrule
+Overall served rate
+  & Fraction of arrivals completing a visit
+  & Primary access metric
+  & Bounded above by $S/\lambda$ \\[4pt]
+Average utilization
+  & Fraction of slots filled by completed visits
+  & Capacity-use metric
+  & Not an access metric \\[4pt]
+Mean offered wait
+  & Avg delay offered to all patients receiving an offer
+  & Broader congestion measure
+  & Excludes no-offer patients \\[4pt]
+Mean accepted wait
+  & Avg delay among patients who booked
+  & Patient-level delay for those who accepted
+  & Selected downward by balking \\[4pt]
+Balking rate
+  & Fraction of offered patients rejecting the delay
+  & Diagnostic for rejected offers
+  & Not a success metric \\[4pt]
+Class served-rate gap
+  & Class~1 served rate minus Class~2
+  & Class-level access disparities
+  & Near zero under symmetric parameters \\
+\bottomrule
+\end{tabular}
+\caption{Metric hierarchy under the current FCFS formulation.}
+\end{table}
+
+\section{Sensitivity Screen: Main Patterns}
+
+\mainfigure{metric_utilization_drivers.png}{%
+  Average utilization driver plots.  No-show behavior is the clearest
+  utilization driver.}{fig:util-drivers}
+
+\mainfigure{metric_wait_drivers.png}{%
+  Mean offered wait driver plots.  Arrival pressure is the strongest
+  driver.  Higher balking or cancellation can shorten offered wait for
+  reasons that worsen access rather than improve it.}{fig:wait-drivers}
+
+\textbf{Demand pressure} raises offered wait and reduces served rate
+monotonically.  Utilization is relatively insensitive across a wide
+demand range.
+
+\textbf{No-show behavior} is the primary utilization driver.
+The regression screen (Appendix~\ref{app:regression}) identifies the
+no-show threshold as the strongest single predictor of utilization.
+
+\textbf{Cancellation} has ambiguous aggregate effects.  Cancelled
+slots are returned to the pool and can be rebooked, so higher
+cancellation can shorten offered wait while still reducing completed
+visits per original patient.  The regression screen shows a
+\emph{positive} coefficient for cancellation on both utilization and
+served rate, which is counterintuitive and should be verified at code
+level (Section~\ref{sec:validation}).
+
+\textbf{Balking} can reduce accepted wait while reducing access.
+This is the main argument for reporting offered wait rather than
+accepted wait as the primary delay metric.
+
+\textbf{Class gaps} arise from asymmetric behavioral parameters.
+Cancellation probability differences are the largest class-access
+driver in the regression screen.
+
+\section{Balking Deep Dive: Selection vs.\ Access}
+
+\mainfigure{percent_serviced_by_class.png}{%
+  Class~1 high-balking-probability sweep: served rate by class.
+  As Class~1 rejection probability rises, Class~1 access falls while
+  Class~2 access rises slightly.}{fig:balk-deep-served}
+
+\mainfigure{mean_accepted_delay_by_class.png}{%
+  Class~1 high-balking-probability sweep: mean accepted delay by class.
+  Class~1 accepted delay falls as balking rises because long-delay
+  patients exit the accepted sample.  This is a selection effect.}{fig:balk-deep-accepted}
+
+\textbf{Main point.}  Increasing balking can make accepted wait appear
+to improve while access worsens.  Offered wait and served rate together
+are necessary to interpret the change correctly.
+
+\section{Class-Gap Interpretation Under FCFS}
+
+Under the current formulation, class labels are \emph{exchangeable}
+when parameters are symmetric.  Arrivals are pooled and randomly
+permuted; no class receives FCFS priority.
+
+\textbf{Symmetric parameters imply expected class gap near zero.}
+The observed baseline gap of 0.001 is consistent with simulation noise.
+
+\textbf{Gap drivers} in order of absolute standardized coefficient
+(Appendix~\ref{app:regression}):
+\begin{enumerate}[leftmargin=2em, itemsep=3pt]
+  \item Cancellation probability gap: $\hat{\beta} = -0.452$
+  \item Balking threshold gap: $\hat{\beta} = +0.429$
+  \item Balking step gap: $\hat{\beta} = -0.349$
+  \item No-show threshold gap: $\hat{\beta} = +0.268$
+  \item No-show step gap: $\hat{\beta} = -0.211$
+  \item Class~1 arrival share: $\hat{\beta} = -0.120$
+\end{enumerate}
+
+\section{What Seems Mechanically Robust vs.\ What Needs Validation}
+\label{sec:validation}
+
+\subsection{Mechanically Robust}
+
+\begin{itemize}[leftmargin=1.5em, itemsep=4pt]
+  \item Utilization and served rate have different denominators.
+    High utilization can coexist with low served rate by definition.
+  \item The demand ceiling: served rate cannot exceed $32/100 = 0.32$
+    without overbooking.
+  \item Offered wait is less selected than accepted wait.
+  \item No-offer is a distinct access failure excluded from wait metrics.
+  \item Class labels are exchangeable under symmetric assumptions.
+  \item No-offer is zero at baseline; failures are behavioral, not
+    capacity.
+\end{itemize}
+
+\subsection{Needs Validation or Calibration}
+
+\begin{itemize}[leftmargin=1.5em, itemsep=4pt]
+  \item \textbf{Cancellation applied once per residual day.}
+    Verify in code: one draw per patient per day, not one draw per
+    booking.
+  \item \textbf{Positive cancellation coefficient on served rate.}
+    Counterintuitive; verify what fraction of canceled slots are
+    rebooked.
+  \item \textbf{No-offer propagation within a day.}
+    Confirm all remaining queue patients receive no-offer when horizon
+    is full; confirm permutation is re-drawn each day.
+  \item \textbf{No-show slots never rebooked.}  Deliberate choice;
+    should be stated explicitly when comparing to literature models.
+  \item \textbf{Same-day cancellations excluded.}  All same-day losses
+    route through no-show.
+  \item \textbf{Class-gap stability with more seeds.}  Current grids
+    use one seed per grid point.
+  \item \textbf{Realism of the demand/capacity ratio.}  3.1 arrivals
+    per slot is a stress setting, not a calibrated clinic baseline.
+  \item \textbf{Behavioral parameter calibration.}  Balking step 0.50,
+    no-show step 0.30, and cancellation 0.10 are assumed, not
+    estimated.
+\end{itemize}
+
+\section{Summary for Discussion}
+
+The simulation output suggests the following under the current
+formulation.
+
+Utilization near 0.84 and served rate near 0.27 can coexist because
+they measure different things.  The structural ratio
+$\lambda/S \approx 3.1$ constrains served rate below 0.32 even before
+behavioral losses.  Balking and cancellation reduce it further and
+dominate no-show in the baseline decomposition.
+
+The metric ordering is: (1) overall served rate for access, (2) average
+utilization for slot use, (3) mean offered wait for patient-facing
+delay, (4) no-offer share as a separate indicator, (5) mean accepted
+wait as a secondary selected metric, (6) balking rate and class gap as
+diagnostics.
+
+The sensitivity screen is mechanically consistent with this ordering.
+Several findings should be checked before outputs support design
+decisions.
+
+\bigskip
+\textbf{Questions for discussion:}
+\begin{enumerate}[leftmargin=2em, itemsep=4pt]
+  \item Is the baseline demand/capacity ratio intentional as a stress
+    scenario, or should it be recalibrated?
+  \item Is the positive cancellation coefficient verified at code level?
+    What fraction of canceled slots are rebooked?
+  \item Should same-day cancellations be allowed?
+  \item Should no-show slots be rebooked?
+  \item Are threshold-jump step functions the right behavioral model,
+    or should smoother functions be explored?
+  \item Are the class behavioral parameters population-specific or
+    sensitivity levers only?
+\end{enumerate}
+
+\appendix
+
+\section{Exact Metric Definitions and Notation}
+\label{app:metrics}
+
+Let $i \in \{1,2\}$, $D$ = measured days, $S$ = slots/day, $H$ =
+horizon length. For class $i$: $A_i$ arrivals, $B_i$ booked,
+$K_i$ balked, $O_i = B_i + K_i$ offered, $N_i$ no-offer,
+$C_i$ canceled, $H_i$ no-shows, $V_i$ served.
+$A_i = V_i + C_i + H_i + K_i + N_i$.
+
+\begin{align*}
+  \code{percent\_serviced}_i &= V_i / A_i, \\
+  \code{overall\_percent\_serviced} &= \textstyle\sum_i V_i / \sum_i A_i, \\
+  \code{average\_utilization} &= \frac{1}{D}\sum_d \text{served slots}_d / S, \\
+  \code{mean\_offered\_booking\_delay} &= \textstyle\sum_i \text{total offered delay}_i / \sum_i O_i, \\
+  \code{mean\_accepted\_booking\_delay} &= \textstyle\sum_i \text{total accepted delay}_i / \sum_i B_i, \\
+  \code{balking\_rate} &= \textstyle\sum_i K_i / \sum_i O_i, \\
+  \Delta_{\text{access}} &= \code{percent\_serviced}_1 - \code{percent\_serviced}_2, \\
+  \Delta_{\text{delay}} &= \bar{\tau}^{\text{offered}}_2 - \bar{\tau}^{\text{offered}}_1, \\
+  \Delta_{\text{balking}} &= K_1/O_1 - K_2/O_2.
+\end{align*}
+
+\textbf{Behavioral step functions:}
+\[
+  b_i(\tau) = \begin{cases}
+    b_i^{\text{low}} & \tau < \theta_i^{\text{balk}}, \\
+    b_i^{\text{high}} & \tau \geq \theta_i^{\text{balk}}.
+  \end{cases}
+\]
+Balking step $= b_i^{\text{high}} - b_i^{\text{low}}$.
+No-show $\xi_i(\tau)$ has the same structure.
+
+\section{Sensitivity Design}
+\label{app:sensitivity-design}
+
+All grids centered on \code{configs/baseline.yaml}.
+One-axis slices vary Class~1 while Class~2 stays at baseline.
+Two-class heatmaps vary both classes independently.
+Each grid point uses seed 2027; multi-seed comparisons average
+seeds 2027, 2028, 2029.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{p{0.26\textwidth}rrr}
+\toprule
+Parameter & Baseline & Range & Grid size \\
+\midrule
+Arrivals (per class), 1D slices & 50 & 25--75 & continuous \\
+Total arrivals, FCFS stress & 100 & 30--170 & continuous \\
+Balking step & 0.50 & 0.00--1.00 & 21 \\
+Balking threshold (days) & 9 & 0--13 & 14 \\
+No-show step & 0.30 & 0.00--1.00 & 21 \\
+No-show threshold (days) & 6 & 0--13 & 14 \\
+Cancellation probability & 0.10 & 0.00--0.30 & 21 \\
+\bottomrule
+\end{tabular}
+\caption{Sensitivity parameter ranges.}
+\end{table}
+
+\textbf{Regression screen:} 240 randomized settings (seed 9137);
+two seeds (4101, 4102) averaged per setting; 12 features (total
+arrival rate, Class~1 share, average level and Class~1$-$Class~2
+gap for each behavioral parameter); OLS with HC3 robust SEs;
+only $p < 0.05$ coefficients shown.
+
+\textbf{Balking deep dives:} Class~1 high-balking-probability sweep
+over $\{0.0, 0.1, \ldots, 0.9\}$; Class~1 threshold sweep over
+$\{3,\ldots,13\}$; 100 seeds per point; Class~2 fixed at baseline.
+
+\section{Supplementary Sensitivity Plots}
+\label{app:sensitivity-plots}
+
+\mainfigure{no_show_step_interaction_heatmap.png}{No-show step heatmap. Left: utilization. Right: Class~1 served-rate gap.}{fig:app-noshow-step}
+\mainfigure{no_show_threshold_interaction_heatmap.png}{No-show threshold heatmap. Left: utilization. Right: Class~1 gap.}{fig:app-noshow-thresh}
+\mainfigure{cancellation_probability_interaction_heatmap.png}{Cancellation heatmap. Left: served rate. Right: Class~1 gap.}{fig:app-cancel}
+\mainfigure{balking_step_interaction_heatmap.png}{Balking step heatmap. Left: served rate. Right: Class~1 gap.}{fig:app-balk-step}
+\mainfigure{balking_threshold_interaction_heatmap.png}{Balking threshold heatmap. Left: offered wait. Right: Class~1 gap.}{fig:app-balk-thresh}
+\mainfigure{arrival_mix_interaction_heatmap.png}{Arrival mix heatmap. Left: served rate. Right: offered wait.}{fig:app-arrival-mix}
+\mainfigure{scenario_metric_comparison.png}{Scenario-level metric comparison (baseline vs.\ Scenario~2).}{fig:app-scenario}
+\mainfigure{balking_threshold_jump_heatmaps.png}{Common balking threshold and jump level.}{fig:app-balk-common}
+\mainfigure{no_show_threshold_jump_heatmaps.png}{Common no-show threshold and jump level.}{fig:app-noshow-common}
+
+\section{Regression Screen}
+\label{app:regression}
+
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{p{0.17\textwidth}p{0.27\textwidth}rp{0.20\textwidth}r}
+\toprule
+Target & Feature & Std.\ coef. & 95\% HC3 CI & HC3 $p$ \\
+\midrule
+Utilization & Avg no-show threshold & $+0.512$ & $[0.433,\;0.591]$ & $<0.001$ \\
+Utilization & Avg no-show step & $-0.423$ & $[-0.501,\;-0.346]$ & $<0.001$ \\
+Utilization & Avg cancellation prob. & $+0.320$ & $[0.247,\;0.393]$ & $<0.001$ \\
+Utilization & Total arrival rate & $-0.109$ & $[-0.188,\;-0.031]$ & $0.006$ \\
+Utilization & Avg balking threshold & $-0.086$ & $[-0.162,\;-0.009]$ & $0.028$ \\
+\midrule
+Overall served rate & Total arrival rate & $-0.774$ & $[-0.855,\;-0.694]$ & $<0.001$ \\
+Overall served rate & Avg no-show threshold & $+0.251$ & $[0.193,\;0.308]$ & $<0.001$ \\
+Overall served rate & Avg no-show step & $-0.175$ & $[-0.232,\;-0.119]$ & $<0.001$ \\
+Overall served rate & Avg cancellation prob. & $+0.117$ & $[0.058,\;0.176]$ & $<0.001$ \\
+\midrule
+Offered wait & Total arrival rate & $+0.576$ & $[0.499,\;0.653]$ & $<0.001$ \\
+Offered wait & Avg cancellation prob. & $-0.441$ & $[-0.506,\;-0.376]$ & $<0.001$ \\
+Offered wait & Avg balking threshold & $+0.278$ & $[0.202,\;0.353]$ & $<0.001$ \\
+Offered wait & Avg balking step & $-0.206$ & $[-0.291,\;-0.122]$ & $<0.001$ \\
+\midrule
+Class gap & Cancellation prob.\ gap & $-0.452$ & $[-0.558,\;-0.347]$ & $<0.001$ \\
+Class gap & Balking threshold gap & $+0.429$ & $[0.331,\;0.528]$ & $<0.001$ \\
+Class gap & Balking step gap & $-0.349$ & $[-0.431,\;-0.266]$ & $<0.001$ \\
+Class gap & No-show threshold gap & $+0.268$ & $[0.179,\;0.357]$ & $<0.001$ \\
+Class gap & No-show step gap & $-0.211$ & $[-0.286,\;-0.136]$ & $<0.001$ \\
+Class gap & Class~1 arrival share & $-0.120$ & $[-0.209,\;-0.030]$ & $0.009$ \\
+\bottomrule
+\end{tabular}
+\caption{Significant standardized regression coefficients ($p<0.05$, HC3 robust SEs).
+  Gap = Class~1 minus Class~2 value.}
+\end{table}
+
+\mainfigure{regression_significant_standardized_coefficients.png}{%
+  Significant standardized regression coefficients with 95\% HC3
+  confidence intervals.}{fig:app-regression}
+
+\end{document}

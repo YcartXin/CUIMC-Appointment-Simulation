@@ -1,0 +1,250 @@
+% ============================================================
+%  FCFS Appointment Simulation Results
+%  Supervisor brief
+% ============================================================
+
+\documentclass[11pt]{article}
+
+\usepackage[margin=0.85in]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+
+\setlist[itemize]{leftmargin=1.25em,itemsep=2pt,topsep=3pt}
+\setlist[enumerate]{leftmargin=1.5em,itemsep=3pt,topsep=3pt}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\title{FCFS Appointment Simulation Results\\[0.25em]
+\large Supervisor Brief}
+\author{Alexandre Sepulveda de Dietrich\\[0.2em]
+\small Under the supervision of Prof.\ Carri Chan}
+\date{May 2026}
+
+\begin{document}
+\maketitle
+
+\section*{Executive Summary}
+
+The main result is that capacity utilization and patient access separate sharply
+in the current FCFS stress-test simulation. At baseline, average utilization is
+\(0.839\), but only \(0.269\) of arrivals complete a visit. This is not a
+contradiction. Utilization is normalized by the number of appointment slots,
+while served rate is normalized by arrivals. With \(100\) arrivals per day and
+\(32\) slots per day, the served rate is mechanically bounded near
+\(32/100=0.32\), even before no-shows, cancellations, and balking.
+
+The baseline loss pattern is dominated by balking and cancellation, not by a
+lack of slot offers. Of all arrivals, \(26.9\%\) are served, \(35.6\%\) balk,
+\(32.3\%\) cancel, \(5.2\%\) no-show, and \(0.0\%\) receive no offer. The zero
+no-offer rate matters: at the baseline demand level, the horizon does not fully
+saturate because daily cancellations keep freeing future capacity. Access
+losses are therefore mainly behavioral/post-booking losses under long offered
+delays, not immediate ``no slot available'' failures.
+
+A controlled no-balking diagnostic shows that eliminating balking does not
+increase completed utilization. Across 30 seeds, utilization changes from
+\(0.8418\) to \(0.8404\), while booked rate rises by \(5.85\) percentage
+points. The additional accepted bookings are offset by no-offer accumulation
+\((0.0000 \rightarrow 0.2966)\) and higher cancellation exposure
+\((0.3248 \rightarrow 0.3836)\). Under the current formulation, balking mainly
+changes where unmet demand is recorded; it does not solve the completed-visit
+bottleneck.
+
+The sensitivity analysis gives a clear hierarchy of mechanisms. Total arrival
+rate is the dominant driver of served rate and offered wait. No-show behavior
+is the most direct driver of completed utilization because no-show slots are
+not rebooked. Balking affects who receives access through the shared FCFS pool,
+but has little direct effect on aggregate utilization near the baseline.
+Accepted wait is a selective metric because high-delay patients are more likely
+to balk; offered wait is a better congestion measure, but it must be reported
+with no-offer share because patients with no offer are absent from all wait
+metrics.
+
+\textbf{Bottom line.} For this stress-test baseline, the most defensible access
+summary is not utilization alone. It should report served rate, offered wait,
+no-offer share, and the arrival outcome decomposition together. The current
+simulation results describe the mechanics of this model under severe capacity
+pressure; they should not be interpreted as calibrated clinic estimates.
+
+\newpage
+
+\section{Takeaway 1: Utilization Is Not Access}
+
+The baseline demand-to-capacity ratio is the key fact: the model sends \(100\)
+arrivals per day into \(32\) available daily slots. This is a deliberate stress
+test. It is useful for understanding metric behavior, but it is not a calibrated
+clinic setting.
+
+\[
+  \text{average utilization}
+  = \frac{\text{completed visits}}{\text{available slots}},
+  \qquad
+  \text{served rate}
+  = \frac{\text{completed visits}}{\text{arrivals}}.
+\]
+
+Because the denominators differ, utilization can remain high while access is
+poor. The service system can fill most slots and still serve only a small share
+of patients when demand is several times larger than supply. At baseline, the
+maximum possible served rate is near \(0.32\); the observed value is \(0.269\)
+after no-shows and cancellations. This is why utilization alone would be a
+misleading summary of patient access in this scenario.
+
+\begin{table}[h]
+\centering
+\small
+\renewcommand{\arraystretch}{1.12}
+\begin{tabularx}{0.92\textwidth}{Yrr}
+\toprule
+Metric & Baseline value & Interpretation \\
+\midrule
+Average utilization & 0.839 & Completed visits per available slot \\
+Overall served rate & 0.269 & Completed visits per arrival \\
+Mean offered wait & 9.30 days & Delay among patients receiving an offer \\
+Mean accepted wait & 8.35 days & Delay among patients accepting the offer \\
+Overall balking rate & 0.356 & Offered patients who reject long delays \\
+Class served-rate gap & 0.001 & Near zero under symmetric class parameters \\
+\bottomrule
+\end{tabularx}
+\caption{Baseline FCFS stress-test metrics from the main note.}
+\end{table}
+
+\section{Takeaway 2: The Main Losses Are Balking and Cancellation}
+
+Every arrival is assigned to one outcome category. The baseline decomposition
+shows that most losses occur after a slot is offered or booked. No-offer is
+zero, so the baseline failure mode is not horizon saturation.
+
+\begin{table}[h]
+\centering
+\small
+\renewcommand{\arraystretch}{1.12}
+\begin{tabularx}{0.92\textwidth}{Yrl}
+\toprule
+Outcome & Share of arrivals & Main interpretation \\
+\midrule
+Served & 0.269 & Completed visit \\
+Balked & 0.356 & Received an offer, rejected the delay \\
+Canceled & 0.323 & Booked, then canceled before service \\
+No-show & 0.052 & Booked, did not attend \\
+No-offer & 0.000 & Horizon full before any offer \\
+Unresolved & \(<0.001\) & Not resolved before simulation end \\
+\bottomrule
+\end{tabularx}
+\caption{Baseline arrival outcome decomposition.}
+\end{table}
+
+The cancellation share is high, but it is mechanically consistent with the
+model's daily cancellation rule and long booking delays. With a mean accepted
+wait of about \(8.35\) days and a \(10\%\) daily cancellation probability, a
+rough survival calculation gives \(0.9^{8.35}\approx0.416\), or an implied
+cumulative cancellation risk near \(58\%\) among long-wait bookings. The
+observed cancellation share among booked patients is therefore directionally
+consistent with the implementation.
+
+The important interpretation is not that cancellation is empirically realistic.
+It is that long booking delays compound daily cancellation exposure, and the
+simulation is behaving consistently with that assumption.
+
+\section{Takeaway 3: Removing Balking Does Not Recover Capacity}
+
+The cleanest diagnostic in the note is the 30-seed comparison between the
+baseline and a no-balking counterfactual. If balking were the main capacity
+bottleneck, suppressing it should increase completed utilization. It does not.
+
+\begin{table}[h]
+\centering
+\small
+\renewcommand{\arraystretch}{1.10}
+\begin{tabularx}{\textwidth}{Yrrr}
+\toprule
+Metric & Baseline & No-balking & Change \\
+\midrule
+Average utilization & 0.8418 & 0.8404 & \(-0.0014\) \\
+Overall served rate & 0.2692 & 0.2682 & \(-0.0011\) \\
+Booked rate & 0.6450 & 0.7034 & \(+0.0585\) \\
+Balked share & 0.3550 & 0.0000 & \(-0.3550\) \\
+Canceled share & 0.3248 & 0.3836 & \(+0.0588\) \\
+No-offer share & 0.0000 & 0.2966 & \(+0.2966\) \\
+Mean accepted wait & 8.33 d & 9.45 d & \(+1.12\) d \\
+\bottomrule
+\end{tabularx}
+\caption{Controlled no-balking diagnostic over 30 seeds.}
+\end{table}
+
+The mechanism is a shift in accounting. Without balking, more patients accept
+appointments, but those bookings extend farther into the horizon, increase
+cancellation exposure, and create no-offer arrivals once the horizon fills.
+Completed visits remain essentially unchanged. This is why balking should be
+treated as an access-allocation and loss-channel mechanism, not as a direct
+aggregate utilization lever.
+
+\section{Takeaway 4: Driver Hierarchy and Reporting Implications}
+
+The one-at-a-time sensitivity slices and randomized regression screen are
+consistent. They identify different mechanisms rather than one universal
+``best'' metric.
+
+\begin{table}[h]
+\centering
+\small
+\renewcommand{\arraystretch}{1.12}
+\begin{tabularx}{\textwidth}{L{0.23\textwidth}L{0.31\textwidth}Y}
+\toprule
+Result target & Strongest evidence & Interpretation \\
+\midrule
+Overall served rate & Arrival rate coefficient \(\beta=-0.774\) & Demand pressure dominates access when capacity is fixed. \\
+Mean offered wait & Arrival rate coefficient \(\beta=+0.576\) & More demand pushes offers farther into the booking horizon. \\
+Utilization & No-show threshold coefficients \(+0.342\), \(+0.366\); no-show step coefficients \(-0.289\), \(-0.294\) & No-show behavior directly changes completed visits because missed slots are not rebooked. \\
+Balking effect & Balking-step utilization effect near zero in OAT; separate regression \(\beta=+0.016\), \(p=0.72\) & Balking reallocates access and loss channels more than it changes aggregate slot completion. \\
+Class access gap & Behavioral parameters have opposite-sign own-class and cross-class effects & FCFS is neutral in rule form, but shared capacity transmits behavioral differences into class-level access gaps. \\
+\bottomrule
+\end{tabularx}
+\caption{Highest-signal sensitivity findings from the main note.}
+\end{table}
+
+Two reporting choices follow directly from these results. First, offered wait
+should be preferred over accepted wait when diagnosing congestion because
+offered delay is recorded before the balking decision. Accepted wait excludes
+patients who rejected high-delay offers, so it can appear to improve exactly
+when access is worsening. Second, offered wait should always be paired with
+no-offer share. Once the horizon saturates, no-offer patients receive no delay
+information and are excluded from wait metrics entirely.
+
+\section{Caveats for Interpretation}
+
+\begin{itemize}
+  \item The baseline is a stress test, not a calibrated clinical scenario. The
+  \(3.1{:}1\) demand-to-capacity ratio is intentionally severe.
+  \item The findings describe the mechanics of the current FCFS formulation.
+  They should not be interpreted as causal estimates for real appointment
+  systems.
+  \item The symmetric baseline has essentially no class gap, as expected.
+  Class-gap estimates near this baseline are noisy with few seeds; stronger
+  equity conclusions require more replicated simulations.
+\end{itemize}
+
+\section*{Where to Dig in the Full Note}
+
+\begin{tabularx}{\textwidth}{L{0.33\textwidth}Y}
+\toprule
+Brief topic & Full-note reference \\
+\midrule
+Baseline setup and metric definitions & Sections 2.1--2.3; Appendix A \\
+Utilization vs.\ served-rate gap & Section 2.3; Section 5 \\
+Baseline outcome decomposition & Section 3.1; Table 2 \\
+Balking suppression diagnostic & Section 3.2; Table 3; Section 7 for the balking deep dive \\
+Offered vs.\ accepted wait & Sections 4 and 5.1--5.3 \\
+Sensitivity driver hierarchy & Sections 6.1--6.5; Appendix D for the regression table \\
+Class-gap interpretation & Sections 6.5 and 8 \\
+Robust findings and caveats & Sections 9.1--9.2; Section 10 for discussion questions \\
+\bottomrule
+\end{tabularx}
+
+\end{document}

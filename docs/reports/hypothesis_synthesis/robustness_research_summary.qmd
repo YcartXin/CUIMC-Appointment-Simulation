@@ -1,0 +1,1177 @@
+---
+title: "Robustness Study of Class-Specific Appointment-Scheduling Hypotheses"
+subtitle: "Research design, confirmation procedure, and final conclusions"
+format:
+  html:
+    embed-resources: true
+    toc: true
+    toc-depth: 3
+    smooth-scroll: true
+jupyter: python3
+execute:
+  echo: false
+  warning: false
+  error: true
+---
+
+```{python}
+from pathlib import Path
+import pandas as pd
+import numpy as np
+from IPython.display import HTML, Markdown, display
+
+candidate_paths = [
+    Path("stage2_final_status.csv"),
+    Path("data/stage2_final_status.csv"),
+    Path("outputs/robustness/stage2/final/stage2_final_status.csv"),
+    Path("../outputs/robustness/stage2/final/stage2_final_status.csv"),
+    Path("../../outputs/robustness/stage2/final/stage2_final_status.csv"),
+    Path("../../../outputs/robustness/stage2/final/stage2_final_status.csv"),
+]
+
+status_path = next((path for path in candidate_paths if path.exists()), None)
+if status_path is None:
+    raise FileNotFoundError(
+        "Could not locate stage2_final_status.csv. Place it beside this QMD, "
+        "under data/, or keep the QMD within three directory levels of the "
+        "repository's outputs/robustness/stage2/final/ folder."
+    )
+
+status = pd.read_csv(status_path)
+
+# H8's predicted direction was flipped after review: the supported claim is now
+# that an equal increase in the between-class post-threshold balking gap affects
+# Class 1 served rate *less* than an equal increase in Class 1's within-class
+# balking step. The classifier recorded the original orientation, so we swap
+# supported <-> reversed for H8 at the source. Every downstream count, crosstab,
+# and representative-case selection then reflects the flipped hypothesis.
+_FLIPPED_HYPOTHESES = {"H8"}
+_flip_map = {"supported": "reversed", "reversed": "supported"}
+_flip_mask = status["hypothesis"].isin(_FLIPPED_HYPOTHESES)
+status.loc[_flip_mask, "final_classification"] = (
+    status.loc[_flip_mask, "final_classification"].map(lambda v: _flip_map.get(v, v))
+)
+
+active = status.loc[status["final_classification"] != "inactive"].copy()
+
+classification_order = ["supported", "reversed", "inconclusive"]
+
+def pct(n, d):
+    return 100.0 * n / d if d else np.nan
+
+def classification_summary(hypothesis):
+    subset = active.loc[active["hypothesis"] == hypothesis]
+    counts = subset["final_classification"].value_counts()
+    total = len(subset)
+    return {
+        "active_n": total,
+        "supported_n": int(counts.get("supported", 0)),
+        "reversed_n": int(counts.get("reversed", 0)),
+        "inconclusive_n": int(counts.get("inconclusive", 0)),
+        "supported_pct": pct(counts.get("supported", 0), total),
+        "reversed_pct": pct(counts.get("reversed", 0), total),
+        "inconclusive_pct": pct(counts.get("inconclusive", 0), total),
+    }
+
+scenario_labels = {
+    "anchor": "Anchor",
+    "sobol_symmetric": "Sobol symmetric",
+    "asymmetric_stress": "Asymmetric stress",
+}
+
+
+def _evidence_table(subset, dimension, dimension_label):
+    table = pd.crosstab(subset[dimension], subset["final_classification"])
+    for column in classification_order:
+        if column not in table.columns:
+            table[column] = 0
+    table = table[classification_order]
+    table["Active n"] = table.sum(axis=1)
+    output = pd.DataFrame({
+        dimension_label or dimension: table.index,
+        "Active n": table["Active n"],
+        "Supported": [
+            f"{n} ({pct(n, d):.1f}%)"
+            for n, d in zip(table["supported"], table["Active n"])
+        ],
+        "Reversed": [
+            f"{n} ({pct(n, d):.1f}%)"
+            for n, d in zip(table["reversed"], table["Active n"])
+        ],
+        "Inconclusive": [
+            f"{n} ({pct(n, d):.1f}%)"
+            for n, d in zip(table["inconclusive"], table["Active n"])
+        ],
+    })
+    return output.reset_index(drop=True)
+
+
+def classification_by(hypothesis, dimension, dimension_label=None):
+    """Classification split by a dimension present in the final-status file."""
+    subset = active.loc[active["hypothesis"] == hypothesis]
+    return _evidence_table(subset, dimension, dimension_label)
+
+
+# The per-hypothesis ``*_scenario_effects.csv`` files carry the full background
+# parameter set and effect estimates that the final-status file does not. We
+# locate the robustness output root from the resolved status path so the
+# evidence sections can read them and split classifications by any parameter.
+def _find_robustness_root(start):
+    for parent in [start, *start.parents]:
+        candidate = parent / "outputs" / "robustness"
+        if (candidate / "h1" / "summary" / "h1_scenario_effects.csv").exists():
+            return candidate
+    for parent in start.parents:
+        if parent.name == "robustness" and (
+            parent / "h1" / "summary" / "h1_scenario_effects.csv"
+        ).exists():
+            return parent
+    return None
+
+
+robustness_root = _find_robustness_root(status_path.resolve().parent)
+_effects_cache = {}
+
+
+def load_effects(hypothesis):
+    """Return one row per background: full parameters plus final classification."""
+    key = hypothesis.lower()
+    if key in _effects_cache:
+        return _effects_cache[key]
+    if robustness_root is None:
+        raise FileNotFoundError(
+            "Could not locate outputs/robustness/. The parameter-level evidence "
+            "tables need the per-hypothesis *_scenario_effects.csv files; render "
+            "this QMD from within the repository."
+        )
+    effects = pd.read_csv(
+        robustness_root / key / "summary" / f"{key}_scenario_effects.csv"
+    )
+    effects["background_id"] = effects["background_id"].astype(str)
+    final = status.loc[
+        status["hypothesis"] == hypothesis.upper(),
+        ["background_id", "final_classification"],
+    ].copy()
+    final["background_id"] = final["background_id"].astype(str)
+    merged = effects.merge(final, on="background_id", how="inner")
+    _effects_cache[key] = merged
+    return merged
+
+
+def classification_by_param(hypothesis, dimension, dimension_label=None):
+    """Classification split by any background parameter, read from the effects file."""
+    merged = load_effects(hypothesis)
+    subset = merged.loc[merged["final_classification"] != "inactive"]
+    return _evidence_table(subset, dimension, dimension_label)
+
+
+def _format_cell(value):
+    if isinstance(value, float):
+        if np.isnan(value):
+            return ""
+        text = f"{value:.3f}"
+        if "." in text:
+            text = text.rstrip("0").rstrip(".")
+        return text
+    return value
+
+
+def representative_cases(
+    hypothesis,
+    target,
+    columns_map,
+    sort_by,
+    ascending,
+    *,
+    n=3,
+    dedup_col=None,
+):
+    """Return the n clearest cases of a given final classification for a hypothesis."""
+    merged = load_effects(hypothesis)
+    subset = merged.loc[merged["final_classification"] == target].copy()
+    subset = subset.sort_values(sort_by, ascending=ascending)
+    if dedup_col is not None:
+        subset = subset.drop_duplicates(subset=dedup_col, keep="first")
+    subset = subset.head(n)
+    output = subset[list(columns_map.keys())].rename(columns=columns_map)
+    output = output.reset_index(drop=True)
+    for column in output.columns:
+        output[column] = output[column].map(_format_cell)
+    return output
+
+def show_table(frame, classes="evidence-table"):
+    table_html = frame.to_html(
+        index=False,
+        escape=False,
+        classes=classes,
+        border=0,
+    )
+    display(HTML(f'<div class="table-scroll">{table_html}</div>'))
+
+
+def _active_effects(hypothesis):
+    merged = load_effects(hypothesis)
+    return merged.loc[merged["final_classification"] != "inactive"]
+
+
+def component_rate(hypothesis, column):
+    """Share of active backgrounds whose recorded component status is supported."""
+    subset = _active_effects(hypothesis)
+    total = len(subset)
+    supported = int((subset[column] == "supported").sum())
+    return f"{supported}/{total} ({pct(supported, total):.0f}%)"
+
+
+def token_pass_rate(hypothesis, fail_substrings):
+    """Share of active backgrounds that did NOT fail a given sub-check."""
+    subset = _active_effects(hypothesis)
+    total = len(subset)
+    failed = subset["failure_component"].fillna("").str.contains("|".join(fail_substrings))
+    passed = int((~failed).sum())
+    return f"{passed}/{total} ({pct(passed, total):.0f}%)"
+
+
+def shape_leg_rate(hypothesis, present_in_shapes):
+    """For H4: share of active backgrounds whose offered-delay curve shows a leg."""
+    subset = _active_effects(hypothesis)
+    total = len(subset)
+    is_supported = subset["final_classification"] == "supported"
+    has_shape = subset["failure_component"].fillna("").str.contains("|".join(present_in_shapes))
+    present = int((is_supported | has_shape).sum())
+    return f"{present}/{total} ({pct(present, total):.0f}%)"
+
+
+def h5_part_rates():
+    """Derive H5's two parts from the per-step effects file, at the background level.
+
+    A background satisfies a part when at least one of its primary low-to-moderate
+    step comparisons meets that part's criterion and none reverse it.
+    """
+    step = pd.read_csv(robustness_root / "h5" / "summary" / "h5_step_effects.csv")
+    step["background_id"] = step["background_id"].astype(str)
+    active_ids = set(active.loc[active["hypothesis"] == "H5", "background_id"].astype(str))
+    primary = step.loc[
+        (step["is_primary_step"] == True)  # noqa: E712
+        & (step["background_id"].isin(active_ids))
+    ]
+    total = len(active_ids)
+
+    def rate(column):
+        supported = 0
+        for _, group in primary.groupby("background_id"):
+            values = set(group[column])
+            if "supported" in values and "reversed" not in values:
+                supported += 1
+        return f"{supported}/{total} ({pct(supported, total):.0f}%)"
+
+    return {
+        "accepted_delay": rate("accepted_delay_component"),
+        "selection_gap": rate("selection_gap_component"),
+        "served_rate": rate("served_rate_component"),
+    }
+
+
+def render_grouped_table(groups):
+    """Render the grouped overall-conclusions table: a header row per hypothesis
+    followed by one indented row per hypothesis component."""
+    parts_html = [
+        '<table class="grouped-summary" border="0"><thead><tr>'
+        "<th>Hypothesis / component</th>"
+        "<th>Holds in (of active)</th>"
+        "<th>When it applies</th>"
+        "<th>Evidence</th>"
+        "</tr></thead><tbody>"
+    ]
+    for group in groups:
+        parts_html.append(
+            '<tr class="group-header">'
+            f'<td><span class="hyp-id">{group["id"]}</span> {group["statement"]}</td>'
+            f'<td>{group["overall"]}</td>'
+            f'<td>{group["verdict"]}</td>'
+            f'<td>{group["evidence"]}</td>'
+            "</tr>"
+        )
+        for part in group["parts"]:
+            parts_html.append(
+                '<tr class="part-row">'
+                f'<td class="part-label">{part["label"]}</td>'
+                f'<td>{part["holds"]}</td>'
+                f'<td>{part["when"]}</td>'
+                "<td></td>"
+                "</tr>"
+            )
+    parts_html.append("</tbody></table>")
+    display(HTML(f'<div class="table-scroll">{"".join(parts_html)}</div>'))
+```
+
+<style>
+body {
+  line-height: 1.5;
+}
+
+.grouped-summary {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.8rem 0 1.2rem 0;
+  font-size: 0.93rem;
+}
+
+.grouped-summary th,
+.grouped-summary td {
+  border: 1px solid #d9d9d9;
+  padding: 0.55rem 0.65rem;
+  vertical-align: top;
+  text-align: left;
+}
+
+.grouped-summary th {
+  background: #f3f4f6;
+  font-weight: 650;
+}
+
+.grouped-summary tr.group-header > td {
+  background: #eef1f5;
+  border-top: 2px solid #b9c0cc;
+}
+
+.grouped-summary tr.group-header .hyp-id {
+  font-weight: 700;
+  margin-right: 0.35rem;
+}
+
+.grouped-summary tr.part-row .part-label {
+  padding-left: 1.6rem;
+  color: #333;
+}
+
+.grouped-summary tr.part-row td {
+  background: #ffffff;
+  font-size: 0.9rem;
+}
+
+.grouped-summary tr.part-row .part-label::before {
+  content: "\21B3";
+  color: #9aa3b0;
+  margin-right: 0.4rem;
+}
+
+.summary-table,
+.evidence-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.8rem 0 1.2rem 0;
+  font-size: 0.93rem;
+}
+
+.summary-table th,
+.summary-table td,
+.evidence-table th,
+.evidence-table td {
+  border: 1px solid #d9d9d9;
+  padding: 0.55rem 0.65rem;
+  vertical-align: top;
+}
+
+.summary-table th,
+.evidence-table th {
+  background: #f3f4f6;
+  font-weight: 650;
+}
+
+.summary-table td:first-child {
+  white-space: nowrap;
+  font-weight: 650;
+}
+
+.verdict-strong {
+  font-weight: 650;
+}
+
+.verdict-contested {
+  font-weight: 650;
+}
+
+.note-box {
+  border-left: 4px solid #b8b8b8;
+  padding: 0.7rem 1rem;
+  margin: 1rem 0;
+  background: #f7f7f7;
+}
+
+.back-link {
+  margin-top: 1rem;
+  font-size: 0.92rem;
+}
+
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  margin: 0.8rem 0 1.2rem 0;
+}
+
+.parameter-table {
+  min-width: 900px;
+}
+
+.parameter-table td:first-child {
+  min-width: 190px;
+  font-weight: 650;
+}
+
+.parameter-table td:nth-child(2) {
+  min-width: 185px;
+  white-space: nowrap;
+}
+
+.parameter-table td:nth-child(3) {
+  min-width: 460px;
+}
+</style>
+
+## Purpose
+
+This document summarizes how the robustness research was conducted and gives the final conclusion for each of eight hypotheses about a two-class FCFS clinic appointment system. The primary evidence comes from the Stage 1 robustness screen and the Stage 2 confirmation analysis. Detailed evidence is shown only for hypotheses whose conclusions are conditional or contested.
+
+## How the research was run
+
+### 1. Simulation model
+
+The model represents a rolling clinic booking calendar with two patient classes, pooled FCFS allocation, class-specific booking horizons, cancellations, delay-dependent balking, and delay-dependent no-shows. The main outcomes are served rate, utilization, offered delay, accepted delay, and between-class gaps in those metrics.
+
+### 2. Operating-scenario design
+
+The Stage 1 scenario bank contained 384 operating environments, drawn from three families that describe *how each scenario was sampled* rather than any clinical feature:
+
+- **Anchor (32).** Deterministic, hand-picked configurations that guarantee coverage of the important extremes — every demand-by-capacity combination, plus horizon and behavioral corner cases.
+- **Sobol symmetric (224).** Quasi-random points from a scrambled Sobol sequence, which fills the multidimensional parameter space far more evenly than ordinary random sampling. "Symmetric" means both classes share the same booking-horizon, cancellation, balking, and no-show parameters; only their arrival shares differ.
+- **Asymmetric stress (128).** Each is built from a symmetric parent by pushing one, two, or three class-specific behaviors apart (for example, Class 1 cancels while Class 2 does not), holding the remaining parent values fixed. These test whether a hypothesis still holds when the two classes genuinely differ.
+
+The anchor and Sobol families together make up the 256 behaviorally symmetric scenarios; the asymmetric stress family supplies the remaining 128.
+
+The following table gives the parameter values available to the scenario generator. These values define the design space; the 384 scenarios are a structured subset of the full Cartesian product rather than every possible combination.
+
+```{python}
+parameter_design = pd.DataFrame([
+    {
+        "Parameter": "Demand-to-capacity ratio (ρ)",
+        "Values used": "<code>0.8, 1.25, 2.0, 3.1, 4.0</code>",
+        "How it was varied": (
+            "Controlled system load. Total daily arrivals were set as "
+            "<code>λ_total = ρ × daily capacity</code>."
+        ),
+    },
+    {
+        "Parameter": "Class 1 arrival share",
+        "Values used": "<code>0.1, 0.3, 0.5, 0.7, 0.9</code>",
+        "How it was varied": (
+            "Split total demand between the two classes: "
+            "<code>λ₁ = share × λ_total</code> and "
+            "<code>λ₂ = (1 − share) × λ_total</code>."
+        ),
+    },
+    {
+        "Parameter": "Daily capacity",
+        "Values used": "<code>16, 32, 64 slots</code>",
+        "How it was varied": (
+            "Changed the absolute scale of the clinic while ρ controlled "
+            "demand relative to capacity."
+        ),
+    },
+    {
+        "Parameter": "Booking horizon",
+        "Values used": "<code>7, 14, 21, 28 days</code>",
+        "How it was varied": (
+            "Set the maximum future booking window. Both classes shared the "
+            "horizon in symmetric scenarios; horizons could differ in "
+            "asymmetric stress scenarios."
+        ),
+    },
+    {
+        "Parameter": "Cancellation probability",
+        "Values used": "<code>0, 0.1, 0.3, 0.5</code>",
+        "How it was varied": (
+            "Applied to future accepted bookings. The classes shared the rate "
+            "in symmetric scenarios and could receive different rates in "
+            "asymmetric scenarios."
+        ),
+    },
+    {
+        "Parameter": "Balking threshold",
+        "Values used": "<code>4, 6, 9, 12 days</code>",
+        "How it was varied": (
+            "Separated pre-threshold and post-threshold balking behavior. "
+            "Only thresholds satisfying <code>τ_b &lt; H − 1</code> were valid."
+        ),
+    },
+    {
+        "Parameter": "Pre-threshold balking probability (b₀)",
+        "Values used": "<code>0, 0.1, 0.3, 0.5, 0.7</code>",
+        "How it was varied": (
+            "Set the probability of rejecting an offered appointment at or "
+            "below the balking threshold."
+        ),
+    },
+    {
+        "Parameter": "Post-threshold balking probability (b₁)",
+        "Values used": "<code>0, 0.1, 0.3, 0.5, 0.7</code>",
+        "How it was varied": (
+            "Set the probability of rejecting an offer above the threshold. "
+            "Only combinations satisfying <code>b₁ ≥ b₀</code> were retained."
+        ),
+    },
+    {
+        "Parameter": "No-show threshold",
+        "Values used": "<code>4, 6, 9, 12 days</code>",
+        "How it was varied": (
+            "Separated pre-threshold and post-threshold no-show behavior. "
+            "Only thresholds satisfying <code>τ_n &lt; H − 1</code> were valid."
+        ),
+    },
+    {
+        "Parameter": "Pre-threshold no-show probability (n₀)",
+        "Values used": "<code>0, 0.3, 0.5, 0.7</code>",
+        "How it was varied": (
+            "Set the no-show probability for accepted bookings at or below "
+            "the no-show threshold."
+        ),
+    },
+    {
+        "Parameter": "Post-threshold no-show probability (n₁)",
+        "Values used": "<code>0, 0.1, 0.3, 0.5, 0.7</code>",
+        "How it was varied": (
+            "Set the no-show probability for accepted bookings above the "
+            "threshold. Only combinations satisfying <code>n₁ ≥ n₀</code> "
+            "were retained."
+        ),
+    },
+])
+
+show_table(parameter_design, classes="evidence-table parameter-table")
+```
+
+For each hypothesis, the parameter being tested was treated as the focal variable. That focal variable was removed from the background definition, and backgrounds that became identical were deduplicated. This produced approximately 360–383 distinct backgrounds per hypothesis.
+
+Within each background, the focal variable was swept across a fixed set of arms or levels. The table below lists what each hypothesis varied and the levels it used; the hypothesis statements themselves are in the overall-conclusions table above.
+
+```{python}
+hypothesis_arms = pd.DataFrame([
+    {
+        "Hypothesis": "H1",
+        "Focal variable (arms)": "Class 1 cancellation probability",
+        "Levels tested": "<code>0, 0.1, 0.3, 0.5</code> (low vs high contrast)",
+    },
+    {
+        "Hypothesis": "H2",
+        "Focal variable (arms)": "Class 1 loss channel: balking-only vs no-show-only",
+        "Levels tested": "matched realized losses of ≈ 5%, 10%, 20% of Class 1 arrivals",
+    },
+    {
+        "Hypothesis": "H3",
+        "Focal variable (arms)": "Class 1 post-threshold no-show probability (raised to 0.70)",
+        "Levels tested": "evaluated at no-show thresholds <code>4, 6, 9, 12</code> days",
+    },
+    {
+        "Hypothesis": "H4",
+        "Focal variable (arms)": "Common post-threshold balking probability",
+        "Levels tested": "<code>0, 0.1, 0.3, 0.5, 0.7</code>",
+    },
+    {
+        "Hypothesis": "H5",
+        "Focal variable (arms)": "Class 1 balking step (b₁ − b₀)",
+        "Levels tested": "<code>0, 0.1, 0.3, 0.5</code> (primary steps 0.1, 0.3)",
+    },
+    {
+        "Hypothesis": "H6",
+        "Focal variable (arms)": "Class 1 balking threshold (dense one-day sweep)",
+        "Levels tested": "<code>0 … H₁ − 2</code> days",
+    },
+    {
+        "Hypothesis": "H7",
+        "Focal variable (arms)": "Between-class gap placed pre- vs post-threshold",
+        "Levels tested": "gap magnitude g = <code>0.05, 0.10, 0.20, 0.30, 0.50</code>",
+    },
+    {
+        "Hypothesis": "H8",
+        "Focal variable (arms)": "Baseline / step-up (+0.10) / gap-up (+0.10)",
+        "Levels tested": "starting step S₁ and gap G₁ ∈ <code>0.0, 0.1, 0.2, 0.3, 0.4</code>",
+    },
+])
+
+show_table(hypothesis_arms, classes="evidence-table parameter-table")
+```
+
+### 3. Stage 1 robustness screen
+
+Each background was combined with the hypothesis-specific experimental arms or parameter levels. Every arm was then run with 20 paired seeds, numbered 1000–1019. Pairing means that the same seed was used across the arms being compared, which reduces simulation noise in the estimated treatment difference.
+
+The number of raw simulation executions therefore followed:
+
+**Number of raw runs = backgrounds × arms or parameter levels × seeds.**
+
+This is why a hypothesis could require roughly 30,000 individual simulation runs but still produce only about 300–380 final background classifications.
+
+Stage 1 classified each background as:
+
+- **supported** when the effect was practically meaningful, in the predicted direction, and statistically precise;
+- **reversed** when the effect was practically meaningful and precise in the opposite direction;
+- **inconclusive** when the mechanism was active but the evidence did not decisively meet either directional criterion; or
+- **inactive** when the focal mechanism was not meaningfully engaged.
+
+The practical thresholds were 0.005 for utilization and served-rate effects, 0.25 days for delay effects, and 0.0025 for comparative-effect hypotheses.
+
+### 4. Stage 2 confirmation
+
+Stage 2 reran every Stage 1 reversal and only those inconclusive cases whose point estimates already met the practical-effect requirements but whose confidence intervals were not decisive. It used 100 new paired seeds, numbered 2000–2099.
+
+For rerun backgrounds, the Stage 2 classification replaced the Stage 1 classification. Backgrounds not selected for Stage 2 retained their Stage 1 result.
+
+### 5. Final interpretation
+
+Inactive configurations are excluded from substantive percentages because they do not provide evidence for or against the hypothesis. Across all hypotheses, 1,699 hypothesis-background classifications were inactive. They are summarized methodologically rather than listed individually.
+
+## Overall conclusions {#summary-table}
+
+The table is grouped by hypothesis and ordered from the strongest result to the weakest. Each hypothesis is broken into its component claims, and the **When it applies** column records the operating conditions under which that component holds. Percentages are shares of *active* backgrounds (the inactive configurations are excluded).
+
+```{python}
+def overall_line(hypothesis):
+    r = classification_summary(hypothesis)
+    return (
+        f'{r["supported_pct"]:.0f}% supported, '
+        f'{r["reversed_pct"]:.0f}% reversed, '
+        f'{r["inconclusive_pct"]:.0f}% inconclusive '
+        f'(n = {r["active_n"]})'
+    )
+
+
+def supported_fraction(hypothesis):
+    r = classification_summary(hypothesis)
+    return f'{r["supported_n"]}/{r["active_n"]} supported ({r["supported_pct"]:.0f}%)'
+
+
+link = {
+    "H1": '<a href="#h1-evidence">Evidence</a>',
+    "H4": '<a href="#h4-evidence">Evidence</a>',
+    "H5": '<a href="#h5-evidence">Evidence</a>',
+    "H6": '<a href="#h6-evidence">Evidence</a>',
+    "H7": '<a href="#h7-evidence">Evidence</a>',
+    "H8": '<a href="#h8-evidence">Evidence</a>',
+}
+
+h5_parts = h5_part_rates()
+
+groups = [
+    {
+        "id": "H3",
+        "statement": "Increasing post-threshold no-show probability reduces utilization more when the no-show threshold is lower.",
+        "overall": overall_line("H3"),
+        "verdict": "Strong; supported throughout, never reversed.",
+        "evidence": "No separate section",
+        "parts": [
+            {
+                "label": "Higher post-threshold no-show lowers utilization",
+                "holds": component_rate("H3", "utilization_direction_component"),
+                "when": "holds in every active background.",
+            },
+            {
+                "label": "The reduction is larger at a lower threshold",
+                "holds": component_rate("H3", "threshold_gradient_component"),
+                "when": "fails only in heavily loaded (ρ ≥ 2), cancellation-free backgrounds, where every offer already waits longer than the highest threshold tested, so all thresholds catch the same appointments and the loss is identical.",
+            },
+        ],
+    },
+    {
+        "id": "H2",
+        "statement": "At matched losses, balking preserves utilization while no-shows do not. The affected class's served rate falls in both cases.",
+        "overall": overall_line("H2"),
+        "verdict": "Directionally solid; never reversed.",
+        "evidence": "No separate section",
+        "parts": [
+            {
+                "label": "Balking preserves utilization while no-show reduces it",
+                "holds": token_pass_rate("H2", ["utilization"]),
+                "when": "needs surplus demand (ρ ≥ 2): a balked slot stays useful only if someone is waiting to take it. At light load nothing backfills the freed slot, so both channels lower utilization alike and the differential vanishes.",
+            },
+            {
+                "label": "The affected class's served rate falls under both",
+                "holds": token_pass_rate("H2", ["balk_served"]),
+                "when": "the exception is confined to the balking arm. It holds when Class 1 is balanced or a minority; when Class 1 dominates (share 0.7–0.9), its own surplus patients backfill the balked slots, so the served count stays capacity-bound and the rate barely moves. The no-show arm falls at every share.",
+            },
+        ],
+    },
+    {
+        "id": "H6",
+        "statement": "Threshold changes that reclassify offer-heavy delay days have larger served-rate effects.",
+        "overall": overall_line("H6"),
+        "verdict": "Moderate; weakens only at peak demand.",
+        "evidence": link["H6"],
+        "parts": [
+            {
+                "label": "Offer-heavier delay days give larger served-rate jumps (direction)",
+                "holds": token_pass_rate("H6", ["spearman_below", "relationship_reversed"]),
+                "when": "the binding part; fails increasingly with demand (0% at ρ = 0.8 → 50% at ρ = 4.0) and at short horizons (47% at 7 days vs 19% at 21–28). All four confirmed reversals sit at ρ = 4.0 with 7–14-day horizons.",
+            },
+            {
+                "label": "The biggest jump is real, not noise (material and precise)",
+                "holds": token_pass_rate("H6", ["largest_jump_not_material"]),
+                "when": "fails in two regions: the lightest load (43% at ρ = 0.8, where every jump is too small to clear the 0.005 bar) and a dominant Class 1 share (failures rise from 5% at share 0.1 to 49% at 0.9).",
+            },
+            {
+                "label": "The biggest jump comes from an offer-heavy (above-median) delay day",
+                "holds": token_pass_rate("H6", ["largest_jump_not_in_upper_mass_half"]),
+                "when": "fails only under heavy demand (0% at ρ ≤ 1.25, rising to 28% at ρ = 4.0) and more at short horizons (18% at 7 days vs 5% at 28), where offers pile up at the horizon edge and scramble which day produces the biggest jump.",
+            },
+        ],
+    },
+    {
+        "id": "H1",
+        "statement": "Higher Class 1 cancellation can shorten offered delay under high demand, but lowers Class 1 served rate.",
+        "overall": overall_line("H1"),
+        "verdict": "Conditional; needs oversubscription and a non-dominant Class 1.",
+        "evidence": link["H1"],
+        "parts": [
+            {
+                "label": "Class 1 served rate falls",
+                "holds": component_rate("H1", "class1_served_component"),
+                "when": "given a non-dominant Class 1 (share ≤ 0.5) and ρ ≥ 2, it is supported in 132 of 138 backgrounds (96%). The reversals sit almost entirely at a dominant share (35 of 37 at 0.7–0.9). The inconclusives are a light-load story: 101 of 115 fall at ρ ≤ 1.25, where cancellation frees slots nobody is waiting for, so the served rate barely moves.",
+            },
+            {
+                "label": "Mean offered delay falls",
+                "holds": component_rate("H1", "offered_delay_component"),
+                "when": "strengthens with demand (77% supported at ρ = 2 → 95% at ρ = 4) and never reverses. The inconclusives are again light load — 101 of 129 at ρ ≤ 1.25, where offered delay is already near zero and cannot fall by the 0.25-day bar; most of the rest sit at ρ = 2, where the drop is real but small.",
+            },
+        ],
+    },
+    {
+        "id": "H7",
+        "statement": "An equal balking difference between classes produces a larger served-rate gap when placed below the threshold.",
+        "overall": overall_line("H7"),
+        "verdict": "Contested; flips when system cancellation is absent.",
+        "evidence": link["H7"],
+        "parts": [
+            {
+                "label": "Pre-threshold placement gives the larger gap (single comparative claim)",
+                "holds": supported_fraction("H7"),
+                "when": "support strengthens with system cancellation: 62% at 0.1, and ~88–90% at ≥ 0.3, where it holds in every reasonable scenario. Reverses at zero cancellation (56%), where offers pile up above the threshold, plus two extreme corners at ≥ 0.3 where pre-threshold no-show is severe (0.7). The 9 inconclusives are ties — both placements give practically the same gap — at heavy demand with light cancellation.",
+            },
+        ],
+    },
+    {
+        "id": "H8",
+        "statement": "An equal increase in the between-class post-threshold balking gap affects Class 1 served rate less than an equal increase in Class 1's within-class balking step.",
+        "overall": overall_line("H8"),
+        "verdict": "Supported; the within-class step usually dominates.",
+        "evidence": link["H8"],
+        "parts": [
+            {
+                "label": "Within-class step outweighs the between-class gap (single comparative claim)",
+                "holds": supported_fraction("H8"),
+                "when": "holds across most of the space; reverses (the gap dominates) only under light, balanced, cancellation-free load with an already-large within-class step.",
+            },
+        ],
+    },
+    {
+        "id": "H4",
+        "statement": "Under heavy oversubscription, moderate balking increases offered delay before higher balking reduces it.",
+        "overall": overall_line("H4"),
+        "verdict": "Narrow; the rise leg is the bottleneck.",
+        "evidence": link["H4"],
+        "parts": [
+            {
+                "label": "Offered delay rises (no balking → mid level)",
+                "holds": shape_leg_rate("H4", ["increasing_curve"]),
+                "when": "sharply conditional: given cancellation 0.1 and a 7–14-day horizon, the rise appears in 22 of 25 backgrounds (88%). Full support is 16 of 25 (64%) there; adding a mid-range balking threshold (6–9 days) brings it to 13 of 13. On the same horizons the rise appears in 0% of zero-cancellation and 11% of heavy-cancellation (0.5) backgrounds.",
+            },
+            {
+                "label": "Offered delay then falls (mid → high level)",
+                "holds": shape_leg_rate("H4", ["decreasing_curve"]),
+                "when": "fails with no cancellation, where the full schedule keeps delay at its maximum (50% fail); with heavy cancellation (0.5), where offers stay at or below the balking threshold (80%); on 7-day horizons, where the moves are too small to clear 0.25 days (63%); and in six moderate-cancellation cases where the dip after the peak is under 0.25 days.",
+            },
+        ],
+    },
+    {
+        "id": "H5",
+        "statement": "At low-to-moderate levels, a larger Class 1 balking step lowers accepted delay mainly through selection rather than congestion relief.",
+        "overall": overall_line("H5"),
+        "verdict": "Weak; the selection mechanism rarely engages. Supported when accepted delay falls ≥ 0.25 days, falls at least 0.25 days more than offered delay (selection, not congestion relief), and served rate falls.",
+        "evidence": link["H5"],
+        "parts": [
+            {
+                "label": "A larger balking step lowers accepted delay",
+                "holds": h5_parts["accepted_delay"],
+                "when": "holds at similar rates across demand levels; best at a mid Class 1 share (66% at 0.5), weakest at the extremes (33% at share 0.1, 48% at 0.9). Failures are drops too small to clear 0.25 days, not rises.",
+            },
+            {
+                "label": "The drop is selection, not congestion relief",
+                "holds": h5_parts["selection_gap"],
+                "when": "the binding part. Fails mostly at low demand (93% at ρ = 1.25, 80% at ρ = 2), where the step relieves congestion so offered delay falls too, and at small Class 1 shares (≈75% at 0.1–0.3). At high demand it holds in 42% at ρ = 3.1 and 52% at ρ = 4.0, rising to 56% with a Class 1 share of 0.5 or above.",
+            },
+            {
+                "label": "The balking step decreases served rate",
+                "holds": h5_parts["served_rate"],
+                "when": "where the 14 reversals live: the higher step *raised* Class 1's served rate, because freed capacity shortened offers below the loss thresholds. These sit at a dominant share (0.7–0.9, 9 of 14) and long horizons (21–28 days, 11 of 14).",
+            },
+        ],
+    },
+]
+
+render_grouped_table(groups)
+```
+
+A note on H3: the 14 backgrounds where the gradient part fails all combine heavy demand (ρ ≥ 2) with zero cancellation, where every offer waits longer than the highest threshold tested (12 days), so every threshold reclassifies the same appointments and the loss is identical. These are ties rather than contradictions; any amount of cancellation restores the gradient.
+
+A note on H2's "matched losses": for each background, a balking-only arm and a no-show-only arm are calibrated to remove the *same realized share* of Class 1 arrivals (approximately 5%, 10%, and 20%), so the two arms differ only in the loss channel. About 14% of H2's active backgrounds are inconclusive because this calibration could not hit its targets, not because the hypothesis failed.
+
+The order reflects overall strength of standing: H3 and H2 are never reversed, H6 and H1 are supported but conditional, H7 and H8 are majority-supported yet two-directional, H4 is real but narrow, and H5's selection mechanism rarely engages. The sections below give the evidence for each hypothesis with a contested or conditional component, in the same order.
+
+# Evidence for conditional and contested hypotheses
+
+The sections below run from the most reliable conditional result to the weakest. Each starts with the support criterion, then the parameter that separates the outcomes, then representative cases, then the region where the evidence stays inconclusive. The goal is to identify, for each hypothesis, the operating conditions that decide whether it holds.
+
+## H6: Reclassified delay days {#h6-evidence}
+
+H6 received moderate support: supported in 62.6% of active backgrounds, reversed in only 1.9%, and inconclusive in 35.5%. Stage 2 confirmed four of the five original reversals.
+
+**Support criterion.** Each one-day threshold move reclassifies the offers waiting exactly one specific number of days — one delay day. A background supports H6 when the rank correlation between a delay day's share of offers and the served-rate jump its reclassification produces is at least +0.50, *and* the single largest jump is both material (≥ 0.005 served rate) and comes from a delay day holding an above-median share of offers. A reversal is the same picture with a correlation of −0.50 or stronger.
+
+### Evidence by demand-to-capacity ratio
+
+```{python}
+show_table(classification_by("H6", "rho", "Demand-to-capacity ratio"))
+```
+
+Demand is the variable that moves the result. Support peaks at ρ = 1.25 (87.0%) and declines monotonically as the system saturates, falling to about half at ρ = 3.1 and 4.0, and every confirmed reversal occurs at ρ = 4.0. The reason is mechanical: below saturation offers spread smoothly across delay days, so reclassifying an offer-heavy day reliably moves more served patients; at extreme demand the calendar fills to the horizon and offers concentrate on a few days, so the ordering between a day's offer share and its served-rate effect becomes noisy and can locally invert.
+
+### The four confirmed reversal cases
+
+```{python}
+h6_effects = load_effects("H6")
+h6_reversed = h6_effects.loc[
+    h6_effects["final_classification"] == "reversed",
+    [
+        "background_id",
+        "source_scenario_ids",
+        "scenario_type",
+        "rho",
+        "class1_share",
+        "slots_per_day",
+        "horizon_class1",
+        "spearman_bucket_mass_vs_jump",
+    ],
+].copy().sort_values("spearman_bucket_mass_vs_jump")
+h6_reversed = h6_reversed.rename(columns={
+    "background_id": "Background",
+    "source_scenario_ids": "Source scenario",
+    "scenario_type": "Scenario family",
+    "rho": "Demand ratio",
+    "class1_share": "Class 1 share",
+    "slots_per_day": "Daily slots",
+    "horizon_class1": "Horizon",
+    "spearman_bucket_mass_vs_jump": "Rank correlation",
+})
+h6_reversed["Scenario family"] = h6_reversed["Scenario family"].map(scenario_labels)
+h6_reversed["Rank correlation"] = h6_reversed["Rank correlation"].map(lambda x: f"{x:.2f}")
+show_table(h6_reversed)
+```
+
+All four reversals share ρ = 4.0, short horizons (7–14 days), and a strongly negative rank correlation, confirming that at peak demand with a tight booking window the offer-share relationship does not merely weaken but can flip.
+
+**When it is inconclusive.** Inconclusive backgrounds cluster at ρ = 3.1–4.0, where the correlation is often in the predicted direction but the largest jump is not large enough to clear the materiality and precision bars.
+
+**Conclusion.** Retain H6 as a moderate, directionally robust result, with the explicit qualification that the relationship is strongest below saturation and is neither monotone nor deterministic at the heaviest demand.
+
+<p class="back-link"><a href="#summary-table">Back to the overall conclusions</a></p>
+
+## H1: Cancellation and high-demand rebooking {#h1-evidence}
+
+H1 is a high-demand rebooking result, not a universal cancellation result. Final support was 49.4% across active backgrounds, with 10.9% confirmed reversals and 39.6% inconclusive. All 37 Stage 1 reversals remained reversed after 100 new seeds.
+
+**Support criterion.** In a sufficiently loaded background (ρ ≥ 2.0), H1 is supported when raising Class 1 cancellation *both* lowers Class 1's served rate (by ≥ 0.005, confidence interval below zero) *and* shortens mean offered delay (by ≥ 0.25 days, interval below zero). A reversal is either component moving significantly the other way. Two background parameters jointly decide the outcome: demand and the Class 1 arrival share.
+
+### Evidence by demand-to-capacity ratio
+
+```{python}
+show_table(classification_by("H1", "rho", "Demand-to-capacity ratio"))
+```
+
+No background at ρ = 0.8 or 1.25 supports the full hypothesis; support appears at ρ = 2.0 and is strongest at ρ = 4.0. The mechanism needs enough waiting demand to refill the capacity that cancellations release.
+
+### Evidence by Class 1 arrival share
+
+```{python}
+show_table(classification_by("H1", "class1_share", "Class 1 arrival share"))
+```
+
+Reversals are absent at shares of 0.5 or below and rise sharply as Class 1 dominates: 35 of the 37 confirmed reversals sit at a share of 0.7 or 0.9, and at 0.9 only 24.2% of backgrounds support H1 while 33.3% reverse it.
+
+### Representative reversed cases
+
+```{python}
+show_table(representative_cases(
+    "H1",
+    "reversed",
+    {
+        "background_id": "Background",
+        "rho": "Demand ratio",
+        "class1_share": "Class 1 share",
+        "horizon_class1": "Horizon",
+        "cancel_class2_background": "Class 2 cancellation",
+        "delta_class1_served_rate": "Δ Class 1 served rate",
+        "delta_mean_offered_delay": "Δ offered delay (days)",
+    },
+    sort_by=["class1_share", "delta_class1_served_rate"],
+    ascending=[False, False],
+    dedup_col="rho",
+))
+```
+
+In each case Class 1 supplies most arrivals, so its own cancellations are the bulk of the freed slots; with no second class large enough to absorb them, higher cancellation *raises* Class 1's served rate — the opposite of the predicted drop — even while offered delay still falls.
+
+**When it is inconclusive.** Inconclusive backgrounds concentrate at ρ ≤ 1.25 and at minority Class 1 shares, where both the served-rate and the delay effects are present but too small to clear both bars.
+
+**Conclusion.** Retain H1, limited to oversubscribed systems, and drop the assumption that the rebooking benefit survives when the high-cancellation class dominates demand.
+
+<p class="back-link"><a href="#summary-table">Back to the overall conclusions</a></p>
+
+## H7: Location of the between-class balking difference {#h7-evidence}
+
+H7 is genuinely contested: supported in 62.7% of active backgrounds and reversed in 28.4%. All 29 Stage 1 reversals remained reversed after the 100-seed confirmation, so the split is real rather than noise.
+
+**Support criterion.** H7 is supported when an equal between-class balking difference produces a *larger* between-class served-rate gap when placed below the threshold than above it (by ≥ 0.0025, interval above zero), and reversed when the post-threshold placement produces the larger gap by the same margin.
+
+Reading this by demand or class mix is uninformative — reversals occur at every demand level and every class mix. The variable that actually separates the outcomes is the **system cancellation rate**.
+
+### Evidence by system cancellation probability
+
+```{python}
+show_table(classification_by_param("H7", "cancel_class2", "System cancellation probability"))
+```
+
+The pattern is sharp. With no cancellation, H7 reverses in 56.0% of backgrounds; support then strengthens with cancellation — 62% at 0.1 and roughly 88–90% at 0.3 and above, where it holds in every reasonable scenario. The mechanism is the position of offered delay relative to the threshold. Cancellation churns the calendar and pulls offers back below the balking threshold, so the pre-threshold difference binds as the hypothesis assumes. Without that churn, offered delays pile up above the threshold, the post-threshold difference dominates, and the ranking flips.
+
+### Representative reversed cases
+
+```{python}
+show_table(representative_cases(
+    "H7",
+    "reversed",
+    {
+        "background_id": "Background",
+        "rho": "Demand ratio",
+        "class1_share": "Class 1 share",
+        "cancel_class2": "Cancellation",
+        "balk_threshold_class1": "Balk threshold",
+        "balk_low_class1": "Pre-thr. balk",
+        "noshow_low_class1": "Pre-thr. no-show",
+        "average_pre_minus_post_absolute_served_gap": "Pre − post gap",
+    },
+    sort_by=["average_pre_minus_post_absolute_served_gap"],
+    ascending=[True],
+    dedup_col="rho",
+))
+```
+
+Every clear reversal sits at zero cancellation, and the strongest cases also place high balking or no-show probability *below* the threshold — exactly the corner where offered delay rarely falls into the pre-threshold band.
+
+### The two exceptions above 0.3 cancellation
+
+```{python}
+h7_effects = load_effects("H7")
+h7_exceptions = h7_effects.loc[
+    (h7_effects["final_classification"] == "reversed")
+    & (h7_effects["cancel_class2"] >= 0.3),
+    [
+        "background_id",
+        "rho",
+        "class1_share",
+        "horizon_class1",
+        "cancel_class2",
+        "balk_threshold_class1",
+        "balk_low_class1",
+        "noshow_low_class1",
+        "average_pre_minus_post_absolute_served_gap",
+    ],
+].copy().sort_values("average_pre_minus_post_absolute_served_gap")
+h7_exceptions = h7_exceptions.rename(columns={
+    "background_id": "Background",
+    "rho": "Demand ratio",
+    "class1_share": "Class 1 share",
+    "horizon_class1": "Horizon",
+    "cancel_class2": "Cancellation",
+    "balk_threshold_class1": "Balk threshold",
+    "balk_low_class1": "Pre-thr. balk",
+    "noshow_low_class1": "Pre-thr. no-show",
+    "average_pre_minus_post_absolute_served_gap": "Pre − post gap",
+})
+for column in h7_exceptions.columns:
+    h7_exceptions[column] = h7_exceptions[column].map(_format_cell)
+show_table(h7_exceptions)
+```
+
+Both exceptions are extreme corners rather than counterexamples to the mechanism: peak demand (ρ = 4.0) with a pre-threshold no-show probability of 0.7 (one also stacks pre-threshold balking on a 7-day horizon). With losses that severe *below* the threshold, the short-wait region self-destructs regardless of churn, so the post-threshold placement still produces the larger gap. Outside such corners, H7 holds throughout at cancellation of 0.3 or above.
+
+**When it is inconclusive.** Inconclusive backgrounds are rare (9 cases, 8.8%) and are ties rather than noise: in all nine the pre-minus-post gap is within ±0.003 of zero, meaning the two placements produced practically the same served-rate gap. They cluster at heavy demand (8 of 9 at ρ = 3.1–4.0) with light cancellation — the boundary regime where churn splits offers roughly evenly across the threshold, so neither placement dominates.
+
+**Conclusion.** Do not present H7 as a fixed ranking of pre- versus post-threshold differences. The location that matters is set by how much cancellation churn pushes offered delay across the threshold: with churn, the pre-threshold location dominates as predicted; without it, the ranking reverses.
+
+<p class="back-link"><a href="#summary-table">Back to the overall conclusions</a></p>
+
+## H8: Within-class step versus between-class gap {#h8-evidence}
+
+In its flipped direction, H8 is majority-supported: an equal increase in Class 1's own within-class balking step moves its served rate *more* than an equal increase in the between-class post-threshold gap in 46.3% of active backgrounds. The between-class gap wins (a reversal) in only 13.0%, and 40.7% are inconclusive. Of the 61 Stage 1 cases where the gap dominated, 57 held up in Stage 2; those are the confirmed reversals.
+
+**Support criterion.** H8 is supported when an equal increase in Class 1's within-class balking step moves its served rate more than an equal increase in the between-class post-threshold gap (by ≥ 0.0025, interval above zero). A reversal is the between-class gap producing the larger move by the same margin.
+
+### Evidence by demand-to-capacity ratio
+
+```{python}
+show_table(classification_by("H8", "rho", "Demand-to-capacity ratio"))
+```
+
+Demand decides it. The reversals — where the between-class gap wins — concentrate at the mildest load (ρ = 1.25, 33%) and fall steadily as demand rises, to 8% at ρ = 4.0. The within-class step dominates most clearly at moderate load (ρ = 2.0, 64% supported); at the heaviest demand many backgrounds turn inconclusive as the two effects shrink toward each other.
+
+### Representative reversed cases
+
+```{python}
+show_table(representative_cases(
+    "H8",
+    "reversed",
+    {
+        "background_id": "Background",
+        "rho": "Demand ratio",
+        "class1_share": "Class 1 share",
+        "start_within_step": "Within-step start",
+        "start_post_gap": "Post-gap start",
+        "cancel_class2": "Cancellation",
+        "absolute_gap_effect": "Gap effect",
+        "absolute_step_effect": "Step effect",
+        "absolute_effect_difference": "Gap − step",
+    },
+    sort_by=["absolute_effect_difference"],
+    ascending=[False],
+))
+```
+
+The 16 reversals occupy one narrow corner: low demand, a balanced-to-moderate Class 1 share, no cancellation, and a large baseline within-class step (within-step start ≈ 0.4). Only there does widening the between-class gap outweigh the within-class step. Everywhere else the within-class step has the larger effect, as the hypothesis now predicts.
+
+**When it is inconclusive.** Inconclusive backgrounds spread across the higher-demand range, where the two effects are close in size and neither margin clears the comparative bar.
+
+**Conclusion.** Retain H8 in its flipped direction. The within-class balking step usually has the larger effect on Class 1 served rate; the between-class gap overtakes it only under light, balanced, cancellation-free load with an already-large within-class step.
+
+<p class="back-link"><a href="#summary-table">Back to the overall conclusions</a></p>
+
+## H4: Non-monotone offered delay under heavy demand {#h4-evidence}
+
+H4 is a narrow mechanism, not a general feature of heavy oversubscription. Only 26 of 126 active backgrounds (20.6%) show the predicted hump-shaped offered-delay response; none show the opposite U-shape, and 100 remain inconclusive because the expected hump does not clear the practical and precision bars.
+
+**Support criterion.** Sweeping the balking level upward from zero, H4 is supported when mean offered delay first rises by at least 0.25 days and then falls by at least 0.25 days, with both legs of the curve statistically clear. Because no background reversed, the only question for H4 is which conditions make the hump visible.
+
+### Evidence by cancellation probability
+
+```{python}
+show_table(classification_by_param("H4", "cancel_class1", "Cancellation probability"))
+```
+
+This replaces the earlier scenario-family table, which only described the sampling design and identified no parameter. Cancellation is the informative variable, and its effect is non-monotone: the hump is almost never visible without cancellation (2.9% at 0), peaks at a moderate rate (38.0% at 0.1), and fades again under heavy cancellation (6.7% at 0.5). A moderate amount of churn is what lets a middle balking level lengthen the queue before higher balking drains it; with no churn the queue never builds, and with heavy churn it never holds.
+
+### Evidence by Class 1 booking horizon
+
+```{python}
+show_table(classification_by("H4", "horizon_class1", "Class 1 horizon"))
+```
+
+The hump also needs a short-to-moderate horizon. Support falls from about 30% at 7–14 days to zero at 28 days, because a long booking window flattens the offered-delay response to balking.
+
+### Representative supported cases
+
+```{python}
+show_table(representative_cases(
+    "H4",
+    "supported",
+    {
+        "background_id": "Background",
+        "rho": "Demand ratio",
+        "class1_share": "Class 1 share",
+        "horizon_class1": "Horizon",
+        "cancel_class1": "Cancellation",
+        "balk_threshold_class1": "Balk threshold",
+        "hump_rise_from_low": "Rise (days)",
+        "hump_fall_to_high": "Fall (days)",
+    },
+    sort_by=["hump_rise_from_low"],
+    ascending=[False],
+    dedup_col="class1_share",
+))
+```
+
+The clearest humps share one recipe: peak demand, a moderate cancellation rate, a 14-day horizon, and a mid-range balking threshold.
+
+**When it is inconclusive.** The 100 inconclusive backgrounds are those missing the recipe — long horizons, or zero/heavy cancellation — where the curve is flat or simply decreasing rather than humped.
+
+**Conclusion.** Narrow H4 to state that a hump can appear under heavy demand *when cancellation is moderate and the horizon is short*, rather than treating it as the typical heavy-demand response.
+
+<p class="back-link"><a href="#summary-table">Back to the overall conclusions</a></p>
+
+## H5: Selection versus congestion relief {#h5-evidence}
+
+H5 received weak support: 17.3% of active backgrounds supported the selection mechanism, 8.6% reversed it, and 74.1% were inconclusive. Stage 2 converted three original reversals to inconclusive; 14 remained reversed.
+
+**Support criterion.** Three checks apply at each balking step. (1) Class 1's accepted delay falls by at least 0.25 days. (2) Accepted delay falls at least 0.25 days *more than offered delay falls* — this is the selection condition: any drop in offered delay is congestion relief, the whole system speeding up, so only the part of the accepted-delay drop beyond it counts as selection. (3) Class 1's served rate falls materially, confirming the step has a real cost. A background is supported if at least one comparison passes all three checks and none reverse, and reversed if any check reverses in any comparison.
+
+### Evidence by Class 1 arrival share
+
+```{python}
+show_table(classification_by("H5", "class1_share", "Class 1 arrival share"))
+```
+
+The selection story breaks down when Class 1 dominates: no background at a 0.9 share supports H5 and 24.0% reverse it, while the clearest support sits near a balanced mix.
+
+### Evidence by demand-to-capacity ratio
+
+```{python}
+show_table(classification_by("H5", "rho", "Demand-to-capacity ratio"))
+```
+
+Reversals are most common at the lowest active demand (ρ = 1.25, 33.3%); at higher demand most backgrounds are inconclusive rather than supported.
+
+### Representative reversed cases
+
+```{python}
+show_table(representative_cases(
+    "H5",
+    "reversed",
+    {
+        "background_id": "Background",
+        "rho": "Demand ratio",
+        "class1_share": "Class 1 share",
+        "horizon_class1": "Horizon",
+        "balk_threshold_class1": "Balk threshold",
+        "n_reversed_primary_comparisons": "Reversed comparisons",
+    },
+    sort_by=["class1_share", "n_reversed_primary_comparisons"],
+    ascending=[False, False],
+    dedup_col="rho",
+))
+```
+
+The reversals are served-rate reversals, not accepted-delay rises: in every reversed comparison the higher step *raised* Class 1's served rate (by +0.005 to +0.38), while accepted and offered delay both fell by around five days. Balking away far offers frees so much capacity that offers collapse below the loss thresholds, rescuing more patients than the step loses — the same shorter-offers rescue mechanism behind H1's reversals, triggered by balking instead of cancellation. It needs a dominant Class 1 share (so the freed slots return to Class 1) and a long horizon (so there is a deep post-threshold region to free).
+
+**When it is inconclusive.** Inconclusive backgrounds dominate everywhere, and especially at high demand: the selection signal is usually too small to clear the accepted-delay bar even when its sign is correct. Step size reinforces this — no 0.10 balking step met all criteria, while the larger 0.30 and 0.50 steps produced most of the support.
+
+**Conclusion.** Do not retain H5 as a general low-to-moderate-step claim. Selection can lower accepted delay, but it is reliably detectable only near a balanced class mix, away from the lowest demand, and usually only at larger balking steps.
+
+<p class="back-link"><a href="#summary-table">Back to the overall conclusions</a></p>
+
+## Final research conclusions
+
+The robustness analysis separates mechanisms that are broadly reliable from mechanisms visible only in selected baseline sweeps:
+
+- **Strong:** H3.
+- **Directionally stable without confirmed contradiction:** H2.
+- **Moderate but conditional:** H6 and H1.
+- **Majority-supported but two-directional:** H7 and H8.
+- **Narrow:** H4.
+- **Weak:** H5.
+
+The principal contribution of the robustness analysis is therefore not simply a support rate. It identifies which mechanisms can be treated as general features of the simulated booking system and which require explicit operating-condition qualifications.
+i
