@@ -1,0 +1,4 @@
+Policy,Median ΔU: win-win objective minus average-U objective (pp),Mean ΔU: win-win objective minus average-U objective (pp),Median ΔSR1 (pp),Median ΔSR2 (pp),Same selected cell (%)
+Horizon only,0.0,-0.7701767123287543,0.0,0.0,38.72222222222222
+Reservation only,-0.22922374429221737,-0.9209245560628961,-14.437335262437461,12.250912970535099,7.166666666666667
+Both flexible,-0.02374429223748198,-0.7631598173515888,-6.0180322068057235,4.662333884948899,3.0

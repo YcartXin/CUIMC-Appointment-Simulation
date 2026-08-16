@@ -1,0 +1,224 @@
+---
+title: "Average Utilization vs Revenue-Weighted Service Optimization"
+subtitle: "Same-scenario comparison in the expanded two-class clinic scheduling experiment"
+format:
+  html:
+    toc: true
+    toc-location: right
+    toc-title: "Contents"
+    toc-depth: 3
+    number-sections: true
+    css: report.css
+    embed-resources: true
+execute:
+  echo: false
+---
+
+This report answers a different question from the earlier revenue-weighted report:
+
+> **For the same clinic background and the same policy regime, what changes when the optimizer targets average utilization instead of revenue-weighted service?**
+
+The comparison is therefore **objective-to-objective**, not simply policy-to-baseline.
+
+The Revenue-Weighted Service Objective is
+
+$$
+R_\alpha=\alpha Y_1+Y_2,
+$$
+
+where $Y_1$ and $Y_2$ are completed Class 1 and Class 2 visits. We evaluate **$\alpha=1.3,1.6,$ and $2.0$**. The multiplier is a relative service-value assumption.
+
+At $\alpha=1$, maximizing $R_\alpha$ is ranking-equivalent to maximizing total completed visits and therefore average utilization within a clinic background.
+
+# Comparison design
+
+The expanded experiment contains 5,670 clinic backgrounds. Headline comparisons use the **3,600 heterogeneous main-range backgrounds** with $\rho\leq2.5$. Same-behavior controls are excluded from all headline summaries.
+
+For every background and policy regime:
+
+1. the **average-utilization optimizer** selects its best policy cell on the five search seeds;
+2. the **revenue-weighted optimizer** independently selects its best policy cell for a given $\alpha$;
+3. both frozen cells are evaluated on the **same ten independent evaluation seeds**;
+4. this report compares their evaluated metrics **within the same background**.
+
+The primary quantities below are therefore matched differences:
+
+$$
+\text{Revenue-optimized outcome}-
+\text{Average-utilization-optimized outcome}.
+$$
+
+This is the cleanest way to answer how changing the objective changes the policy and its consequences.
+
+Policy regimes remain:
+
+| Policy | Horizon | Reservations |
+|---|---|---|
+| Horizon only | Optimized | None |
+| Reservation only | Native horizon | Quantity and window optimized |
+| Both flexible | Optimized | Quantity and window optimized |
+
+Unused protected capacity is released on the service day.
+
+# Headline result: what does revenue optimization add?
+
+![Median additional revenue-weighted service obtained by switching from average-utilization optimization to revenue-weighted optimization within the same clinic backgrounds.](figures/rwc_01_incremental_revenue.png)
+
+| $\alpha$ | Policy | Additional $R_\alpha$ vs utilization-opt | Change in average utilization | Change in Class 1 served rate | Change in Class 2 served rate |
+|---:|---|---:|---:|---:|---:|
+| 1.3 | Horizon only | 0.00% | 0.00 pp | 0.00 pp | 0.00 pp |
+| 1.3 | Reservation only | +0.09% | 0.00 pp | +1.10 pp | −0.42 pp |
+| 1.3 | Both flexible | **+0.77%** | **−0.01 pp** | **+4.42 pp** | **−6.73 pp** |
+| 1.6 | Horizon only | 0.00% | 0.00 pp | 0.00 pp | 0.00 pp |
+| 1.6 | Reservation only | +0.23% | 0.00 pp | +1.32 pp | −0.78 pp |
+| 1.6 | Both flexible | **+1.41%** | **−0.02 pp** | **+4.61 pp** | **−7.07 pp** |
+| 2.0 | Horizon only | 0.00% | 0.00 pp | 0.00 pp | 0.00 pp |
+| 2.0 | Reservation only | +0.42% | 0.00 pp | +1.38 pp | −0.91 pp |
+| 2.0 | Both flexible | **+2.08%** | **−0.03 pp** | **+4.72 pp** | **−7.60 pp** |
+
+The core result is straightforward:
+
+**Switching from average-utilization optimization to revenue-weighted optimization buys additional weighted service primarily by reallocating access toward Class 1, not by serving more patients overall.**
+
+Under both-flexible optimization:
+
+- extra $R_\alpha$ rises from **+0.77%** at $\alpha=1.3$ to **+2.08%** at $\alpha=2$;
+- average utilization changes by only **−0.01 to −0.03 pp**;
+- Class 1 served rate rises another **4.4–4.7 pp**;
+- Class 2 served rate falls another **6.7–7.6 pp**.
+
+These are medians of **within-background differences**, so they directly compare the two optimization objectives in the same scenarios.
+
+## Why horizon-only changes little
+
+The median head-to-head difference for horizon-only is zero at all three weights. Revenue weighting can select a different horizon in some backgrounds, but in more than half the backgrounds the evaluated outcomes are the same or essentially equivalent.
+
+The objective switch becomes consequential when the optimizer can use **reservations**, because reservations provide a direct mechanism to redirect scarce capacity toward Class 1.
+
+# Both-flexible: side-by-side outcomes relative to baseline
+
+The next table provides context by showing what each optimizer achieves relative to the same baseline. These are separate medians across backgrounds, so the **paired differences in the preceding table are the correct measure of the objective switch**.
+
+| $\alpha$ | Optimization objective | $R_\alpha$ vs baseline | Average utilization vs baseline | Class 1 served rate vs baseline | Class 2 served rate vs baseline |
+|---:|---|---:|---:|---:|---:|
+| 1.3 | Average utilization | +2.66% | +0.36 pp | +6.49 pp | −4.54 pp |
+| 1.3 | Revenue weighted | **+4.21%** | +0.36 pp | **+17.21 pp** | **−22.23 pp** |
+| 1.6 | Average utilization | +3.76% | +0.36 pp | +6.49 pp | −4.54 pp |
+| 1.6 | Revenue weighted | **+6.83%** | +0.36 pp | **+17.33 pp** | **−22.29 pp** |
+| 2.0 | Average utilization | +5.04% | +0.36 pp | +6.49 pp | −4.54 pp |
+| 2.0 | Revenue weighted | **+10.26%** | +0.35 pp | **+17.44 pp** | **−22.29 pp** |
+
+Average-utilization optimization already creates some revenue-weighted gain because it increases completions and, in some backgrounds, changes the class mix. Revenue optimization goes substantially further by explicitly rewarding Class 1 completions.
+
+The key contrast is that **average utilization remains essentially unchanged between the two objectives**, while class-specific access changes markedly.
+
+# Access is the main margin of adjustment
+
+![Median metric change when the both-flexible optimizer switches from average utilization to revenue-weighted service.](figures/rwc_02_bothflex_metric_switch.png)
+
+The near-zero utilization bars are the central feature of the comparison. The revenue optimizer is not finding a large new source of unused capacity. Instead, it is changing which class occupies the available capacity.
+
+At $\alpha=1.6$, for example, switching objectives within the same background has median effects of:
+
+- $R_{1.6}$: **+1.41%** relative to the utilization-optimized policy;
+- average utilization: **−0.02 pp**;
+- Class 1 served rate: **+4.61 pp**;
+- Class 2 served rate: **−7.07 pp**.
+
+The weighted objective therefore behaves primarily as a **prioritization objective**, whereas average-utilization optimization behaves primarily as an **efficiency objective**.
+
+# Scenario-by-scenario access tradeoff
+
+![Each dot is one heterogeneous main-range clinic background. The coordinates compare the revenue-optimized both-flexible cell directly with the average-utilization-optimized both-flexible cell at alpha 1.6.](figures/rwc_03_access_scatter_a16.png)
+
+At $\alpha=1.6$:
+
+- **96.9%** of backgrounds have a higher Class 1 served rate under revenue optimization;
+- **96.7%** have a lower Class 2 served rate;
+- **61.3%** have slightly lower average utilization, but the typical utilization change is only **−0.02 pp**;
+- **95.0%** have a higher evaluated $R_{1.6}$.
+
+The scatter makes the mechanism visible: most scenarios move toward **higher Class 1 access and lower Class 2 access** when the objective changes.
+
+# The selected policy itself changes
+
+For the both-flexible regime:
+
+| $\alpha$ | Same exact $H,Q,W$ cell | Median $H$: utilization-opt → revenue-opt | Median $Q$/capacity: utilization-opt → revenue-opt | Median $W$: utilization-opt → revenue-opt |
+|---:|---:|---:|---:|---:|
+| 1.3 | 9.0% | 4 → 4 days | 72% → **100%** | 4 → 4 days |
+| 1.6 | 2.1% | 4 → **6 days** | 72% → **100%** | 4 → **6 days** |
+| 2.0 | 1.3% | 4 → **6 days** | 72% → **100%** | 4 → **6 days** |
+
+Thus, the two objectives almost never choose the same both-flexible policy cell once Class 1 carries meaningful extra value.
+
+The clearest policy change is the protected quantity:
+
+> Average-utilization optimization uses a median reservation quantity around **72% of daily capacity**, whereas unconstrained revenue optimization moves to **100% of daily capacity**.
+
+Same-day release prevents unused protected capacity from being permanently stranded, but the larger reservation still substantially changes who receives appointments before release.
+
+As $\alpha$ rises, the revenue optimizer also uses somewhat longer horizons and reservation windows. These settings give the optimizer more scope to preserve Class 1 access while maintaining a large protected quantity.
+
+# Class 1 population share changes the tradeoff
+
+![Median access change from switching objectives at alpha 1.6, by Class 1 share.](figures/rwc_04_share_access.png)
+
+At $\alpha=1.6$ under both-flexible optimization:
+
+| Class 1 share | Additional $R_{1.6}$ | Change in utilization | Change in Class 1 served rate | Change in Class 2 served rate |
+|---:|---:|---:|---:|---:|
+| 0.1 | +0.35% | −0.03 pp | +4.26 pp | **−0.49 pp** |
+| 0.3 | +1.29% | −0.06 pp | +5.69 pp | −2.91 pp |
+| 0.5 | +1.83% | 0.00 pp | +6.31 pp | −7.07 pp |
+| 0.7 | **+4.80%** | −0.03 pp | +7.41 pp | **−17.17 pp** |
+| 0.9 | +1.20% | −0.01 pp | +1.75 pp | **−15.60 pp** |
+
+This gives the objective comparison a useful operational interpretation:
+
+- When Class 1 is only **10%** of arrivals, revenue optimization can increase Class 1 access by about **4.3 pp** while the median additional Class 2 loss stays around **0.5 pp**.
+- At intermediate-to-high Class 1 shares, substantially more capacity must be redirected to generate additional weighted value.
+- The largest incremental revenue gain occurs around **70% Class 1 share**, but it comes with a very large additional Class 2 access loss.
+
+The economics of the objective therefore depend strongly on how large the priority population is.
+
+# How to interpret the objective choice
+
+The comparison is not “revenue optimization is better” or “utilization optimization is better.” The two objectives answer different operational questions.
+
+**Average-utilization optimization** asks:
+
+> Which policy produces the most completed visits from available capacity?
+
+Its main lever is shorter booking horizons in congested, delay-sensitive clinics.
+
+**Revenue-weighted optimization** asks:
+
+> Which policy produces the most weighted service when a Class 1 completion is worth more?
+
+Once reservations are available, the optimizer can increase that objective without materially increasing total completions by replacing some Class 2 service with Class 1 service.
+
+The clinic therefore faces a real objective tradeoff:
+
+- higher weighted service;
+- almost unchanged total utilization;
+- higher Class 1 access;
+- lower Class 2 access.
+
+# Clinic-facing conclusions
+
+- **The relevant comparison is objective-to-objective within the same scenarios.** Relative to the average-utilization-optimal both-flexible policy, revenue optimization adds a median **0.77%, 1.41%, and 2.08%** in $R_\alpha$ for $\alpha=1.3,1.6,2.0$.
+- **The additional weighted value does not come from higher utilization.** Median utilization changes by only **−0.01 to −0.03 pp** when the objective switches.
+- **The main change is access redistribution.** Revenue optimization raises Class 1 served rate by another **4.4–4.7 pp** and lowers Class 2 served rate by another **6.7–7.6 pp** under both-flexible policies.
+- **Reservation flexibility is what makes the objective switch consequential.** Horizon-only differences are typically zero; reservation-only differences are modest; both-flexible differences are much larger.
+- **Revenue optimization selects much more aggressive protection.** Median $Q$/capacity rises from about **72% to 100%**.
+- **The access cost depends strongly on Class 1 share.** When Class 1 is rare, additional Class 2 harm can remain small; at larger Class 1 shares, the redistribution becomes substantial.
+- **Average-utilization optimization is the cleaner objective when total throughput is the priority.** Revenue weighting is appropriate only if the clinic intentionally values a Class 1 completion more and accepts the corresponding distributional consequences.
+
+---
+
+Primary data input:
+
+- `full_run_summaries/h1_patient_characteristics_expanded/release/selected_policy_outcomes.csv`
+
+Supporting summary tables in this report are matched background-level comparisons of the frozen cells selected by the two objectives. Same-behavior controls are excluded from all headline results.

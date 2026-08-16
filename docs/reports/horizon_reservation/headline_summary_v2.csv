@@ -1,0 +1,4 @@
+policy,median_delta_U_pp_exact,display_delta_U_pp,median_ci_low_pp,median_ci_high_pp,headline_backgrounds
+Horizon only,0.3764383561643325,0.4,0.29,0.4,3600
+Reservation only,0.22785388127852246,0.2,0.16,0.31,3600
+Both flexible,0.36484018264840157,0.4,0.29,0.39,3600

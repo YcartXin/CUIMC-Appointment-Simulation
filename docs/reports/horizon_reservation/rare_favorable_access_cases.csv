@@ -1,0 +1,5 @@
+comparison,category,n,pct,key_context,median_dSR1_pp,median_dSR2_pp,median_dU_pp
+Reservation only vs baseline,C1 win / C2 neutral,48,1.3333333333333335,"47/48: rho=1.2, C1 share=0.1, capacity=50",4.016053,-0.074806,0.027397
+Both flexible vs baseline,Win-win; Q=0 (effectively horizon-only),12,0.33333333333333337,"rho=2.0, C1 share=0.1, capacity=30, strong/very-strong balking, H=4",1.873,0.772,1.951
+Both flexible vs baseline,Win-win with reservations,6,0.16666666666666669,"rho=2.0, C1 share=0.5, capacity=30, mild balking, H=4 Q=11 W=4",1.639,0.651,1.957
+Both flexible vs baseline,C1 win / C2 neutral,9,0.25,6 strong balking at rho=2.0/share=.5/cap=30 H4 Q11 W4; 3 strong cancellation at rho=1.4/share=.3/cap=50 H6 Q11 W5,2.494,-0.024,1.879

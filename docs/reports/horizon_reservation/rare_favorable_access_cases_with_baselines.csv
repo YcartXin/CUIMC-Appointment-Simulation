@@ -1,0 +1,6 @@
+case,n,baseline_c1_served_rate_pct,policy_c1_served_rate_pct,baseline_c2_served_rate_pct,policy_c2_served_rate_pct,median_delta_utilization_pp
+Reservation only: C1 win / C2 neutral,48,79.17,83.18,78.8,78.73,0.03
+"Both flexible: win-win, Q=0",12,45.47,47.35,46.59,47.36,1.95
+"Both flexible: win-win, Q=11",6,46.49,48.13,46.49,47.14,1.96
+"Both flexible: C1 win / C2 neutral, balking",6,45.64,48.13,47.17,47.14,1.88
+"Both flexible: C1 win / C2 neutral, cancellation",3,50.23,52.04,75.09,74.91,0.09
