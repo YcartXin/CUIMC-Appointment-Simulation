@@ -1,0 +1,372 @@
+---
+title: "Access Recovery Under Reservation and Horizon Flexibility"
+subtitle: "Final independent-evaluation findings from the 3×3 patient-behavior experiment"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+    code-fold: false
+    code-tools: false
+    df-print: paged
+    smooth-scroll: true
+jupyter: python3
+execute:
+  echo: false
+  warning: false
+  message: false
+execute-dir: file
+---
+
+```{python}
+#| label: setup
+from pathlib import Path
+import os
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+LEVEL_ORDER = ["low", "medium", "high"]
+LEVEL_LABEL = {"low": "Low", "medium": "Medium", "high": "High"}
+POLICY_LABEL = {
+    "horizon_only": "Horizon only",
+    "reservation_only": "Reservation only",
+    "both_flexible": "Both flexible",
+}
+
+# Local render setup:
+# Put these five CSVs in the SAME folder as this .qmd file.
+root = Path.cwd()
+
+required = {
+    "access_3x3": root / "access_recovery_3x3_summary.csv",
+    "favorable_bg": root / "favorable_background_validation.csv",
+    "favorable_3x3": root / "favorable_3x3_counts.csv",
+    "paired": root / "paired_deltas_background.csv",
+    "candidates": root / "access_recovery_candidates.csv",
+}
+
+missing = [str(p) for p in required.values() if not p.exists()]
+if missing:
+    raise FileNotFoundError(
+        "Missing required CSV files from the report folder:\n  - "
+        + "\n  - ".join(missing)
+        + "\n\nPut all five CSVs in the same folder as access_recovery_final_findings.qmd."
+    )
+
+access_3x3 = pd.read_csv(required["access_3x3"])
+favorable_bg = pd.read_csv(required["favorable_bg"])
+favorable_3x3 = pd.read_csv(required["favorable_3x3"])
+paired = pd.read_csv(required["paired"])
+candidates = pd.read_csv(required["candidates"])
+
+headline_access = access_3x3[
+    access_3x3["analysis_range"].eq("headline_rho_le_2_5")
+].copy()
+
+headline_fav_bg = favorable_bg[
+    favorable_bg["rho"] <= 2.5
+].copy()
+
+headline_fav_3x3 = favorable_3x3[
+    favorable_3x3["analysis_range"].eq("headline_rho_le_2_5")
+].copy()
+
+headline_paired = paired[
+    paired["rho"].le(2.5)
+].copy()
+```
+
+::: {.callout-important title="Decision summary"}
+- **Both-flexible creates the largest Class 1 access shift** while keeping utilization nearly unchanged.
+- **Reservation-only is much better at finding C1-win / C2-neutral compromises.**
+- **No-show sensitivity matters more than balking sensitivity** for how much access-recovery room remains.
+- **No independently validated win-win was found** in the headline range ($\rho \le 2.5$).
+:::
+
+## Study lens
+
+- **Primary comparison:** frozen access-recovery point vs. the **same policy's average-utilization optimum**.
+- **Favorable comparison:** frozen favorable candidate vs. the **matched no-policy baseline**.
+- **Win-win:** both classes improve by at least **0.5 percentage points**, with paired-bootstrap 95% CIs above zero.
+- **C1-win / C2-neutral:** Class 1 improves by at least **0.5 pp** with CI above zero, while the entire Class 2 CI lies within **±0.5 pp**.
+- **Inference:** 10 independent evaluation seeds (2000–2009); 2,000 paired-bootstrap resamples.
+
+## 1. Both-flexible creates the largest Class 1 access shift
+
+```{python}
+#| label: fig-c1-shift
+#| fig-cap: "Median Class 1 served-rate gain from the frozen access-recovery point relative to the same policy's average-utilization optimum. Values average the three balking-cell medians within each no-show tier."
+#| fig-width: 8
+#| fig-height: 4.8
+
+plot_df = (
+    headline_access[
+        headline_access["policy"].isin(["reservation_only", "both_flexible"])
+    ]
+    .groupby(["policy", "noshow_level"], as_index=False)
+    ["median_delta_class_1_percent_serviced"]
+    .median()
+)
+
+x = np.arange(len(LEVEL_ORDER))
+width = 0.36
+
+fig, ax = plt.subplots(figsize=(8, 4.8))
+for offset, policy in [(-width / 2, "reservation_only"), (width / 2, "both_flexible")]:
+    vals = []
+    for ns in LEVEL_ORDER:
+        value = plot_df.loc[
+            (plot_df["policy"].eq(policy))
+            & (plot_df["noshow_level"].eq(ns)),
+            "median_delta_class_1_percent_serviced",
+        ].iloc[0]
+        vals.append(value * 100)
+
+    bars = ax.bar(
+        x + offset,
+        vals,
+        width,
+        label=POLICY_LABEL[policy],
+    )
+    for bar, value in zip(bars, vals):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            value + 0.05,
+            f"{value:.1f}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+
+ax.set_xticks(x, [LEVEL_LABEL[v] for v in LEVEL_ORDER])
+ax.set_xlabel("No-show sensitivity")
+ax.set_ylabel("Median Class 1 served-rate gain (percentage points)")
+ax.legend(frameon=False)
+ax.grid(axis="y", alpha=0.2)
+plt.tight_layout()
+plt.show()
+```
+
+- **Both-flexible:** median Class 1 gain is roughly **3.5–3.8 pp** across no-show tiers.
+- **Reservation-only:** the median gain is smaller and falls as no-show sensitivity rises.
+- Utilization remains very close to the original optimum: the median loss is only about **0.06 pp** for both-flexible and **0.04 pp** for reservation-only.
+
+::: {.callout-note title="Interpretation"}
+Both-flexible gives the optimizer the most room to move access toward Class 1 without materially changing utilization. The main question is whether that extra flexibility can do so **without harming Class 2**.
+:::
+
+## 2. Reservation-only is much better at protecting Class 2
+
+```{python}
+#| label: fig-favorable-prevalence
+#| fig-cap: "Share of headline backgrounds with at least one independently validated C1-win / C2-neutral outcome among the frozen favorable candidates."
+#| fig-width: 7.5
+#| fig-height: 4.5
+
+bg_summary = (
+    headline_fav_bg
+    .groupby("policy", as_index=False)
+    .agg(
+        backgrounds_with_frozen_candidates=("background_id", "nunique"),
+        validated_neutral=("any_final_c1_win_c2_neutral", "sum"),
+        validated_winwin=("any_final_win_win", "sum"),
+    )
+)
+
+# Denominator is all 450 headline backgrounds per policy.
+bg_summary["neutral_share_all_backgrounds"] = (
+    bg_summary["validated_neutral"] / 450 * 100
+)
+
+order = ["reservation_only", "horizon_only", "both_flexible"]
+vals = [
+    bg_summary.loc[
+        bg_summary["policy"].eq(p),
+        "neutral_share_all_backgrounds",
+    ].iloc[0]
+    for p in order
+]
+
+fig, ax = plt.subplots(figsize=(7.5, 4.5))
+bars = ax.bar([POLICY_LABEL[p] for p in order], vals)
+for bar, value in zip(bars, vals):
+    ax.text(
+        bar.get_x() + bar.get_width() / 2,
+        value + 0.3,
+        f"{value:.1f}%",
+        ha="center",
+        va="bottom",
+        fontsize=10,
+    )
+ax.set_ylabel("Validated C1-win / C2-neutral backgrounds (%)")
+ax.set_ylim(0, max(vals) * 1.18 if max(vals) > 0 else 1)
+ax.grid(axis="y", alpha=0.2)
+plt.tight_layout()
+plt.show()
+```
+
+- **Reservation-only** produces the largest set of robust C1-win / C2-neutral cases.
+- **Both-flexible** produces very few such compromises even though it creates the largest raw Class 1 shift.
+- **No policy produced an independently validated win-win.**
+
+### Where do the favorable reservation-only outcomes occur?
+
+```{python}
+#| label: fig-reservation-neutral-heatmap
+#| fig-cap: "Reservation-only: independently validated C1-win / C2-neutral prevalence in each behavior cell. Denominator = 50 headline backgrounds per cell."
+#| fig-width: 6.5
+#| fig-height: 5
+
+res = headline_fav_3x3[
+    (headline_fav_3x3["policy"].eq("reservation_only"))
+    & headline_fav_3x3["point_type"].eq("c1_win_c2_neutral_if_better")
+].copy()
+
+grid = (
+    res.pivot(
+        index="noshow_level",
+        columns="balk_level",
+        values="final_c1_win_c2_neutral",
+    )
+    .reindex(index=LEVEL_ORDER, columns=LEVEL_ORDER)
+    / 50
+    * 100
+)
+
+fig, ax = plt.subplots(figsize=(6.5, 5))
+im = ax.imshow(grid.values, aspect="auto")
+ax.set_xticks(range(3), [LEVEL_LABEL[v] for v in LEVEL_ORDER])
+ax.set_yticks(range(3), [LEVEL_LABEL[v] for v in LEVEL_ORDER])
+ax.set_xlabel("Balking sensitivity")
+ax.set_ylabel("No-show sensitivity")
+for i in range(3):
+    for j in range(3):
+        ax.text(
+            j,
+            i,
+            f"{grid.iloc[i, j]:.0f}%",
+            ha="center",
+            va="center",
+            fontsize=11,
+        )
+fig.colorbar(im, ax=ax, label="% of 50 backgrounds")
+plt.tight_layout()
+plt.show()
+```
+
+- Favorable reservation-only outcomes occur across the full 3×3 grid.
+- The pattern is **nearly flat across balking levels** within each no-show row.
+- High no-show reduces the favorable prevalence from roughly **16–18%** to about **10%**.
+
+## Why might horizon flexibility make Class 2 harder to protect?
+
+The current experiment suggests a concrete mechanism:
+
+| Reservation only | Both flexible |
+|---|---|
+| Booking horizon is fixed at **H = 100**. | Horizon is searched over **H = 2–26**. |
+| Near-term capacity can be protected for Class 1 while Class 2 can still spill into farther-future dates. | Reservation protects Class 1 **and** the horizon cap can remove some of Class 2's farther-future fallback capacity. |
+| A Class 2 patient displaced from an early slot may still remain serviceable later. | A displaced Class 2 patient has fewer dates into which demand can move. |
+| Access can improve for Class 1 without necessarily changing Class 2's eventual service probability. | The policy can generate a larger Class 1 shift, but the C2-neutral region becomes much smaller. |
+
+```{python}
+#| label: fig-horizon-distribution
+#| fig-cap: "Both-flexible uses a short booking horizon at the frozen access-recovery point; reservation-only is fixed at H = 100. The short-horizon distribution is consistent with the proposed Class 2 fallback-capacity mechanism."
+#| fig-width: 7.5
+#| fig-height: 4.5
+
+access_candidates = candidates[
+    candidates["candidate_type"].eq("access_recovery")
+    & candidates["candidate_exists"].astype(str).str.lower().eq("true")
+    & candidates["policy"].isin(["reservation_only", "both_flexible"])
+].copy()
+
+fig, ax = plt.subplots(figsize=(7.5, 4.5))
+both_h = access_candidates.loc[
+    access_candidates["policy"].eq("both_flexible"),
+    "selected_horizon_days",
+].astype(float)
+ax.hist(both_h, bins=np.arange(1.5, 27.5, 1), alpha=0.8)
+ax.axvline(100, linestyle="--", linewidth=1.2, label="Reservation-only: H = 100")
+ax.set_xlabel("Selected booking horizon H (days)")
+ax.set_ylabel("Both-flexible access-recovery backgrounds")
+ax.legend(frameon=False)
+ax.grid(axis="y", alpha=0.2)
+plt.tight_layout()
+plt.show()
+```
+
+::: {.callout-warning title="Important design caveat"}
+**Both-flexible is not a strict superset of reservation-only in this experiment.**
+
+Reservation-only uses **H = 100**, whereas both-flexible is restricted to **H = 2–26**. The observed difference is therefore **consistent with** a horizon-cap mechanism, but this experiment does not isolate its causal contribution.
+
+A clean follow-up ablation would let both-flexible include **H = 100**. If C2-neutral outcomes increase when that option is available, it would directly support the fallback-capacity explanation.
+:::
+
+## 3. No-show matters more than balking
+
+```{python}
+#| label: fig-reservation-recovery-heatmap
+#| fig-cap: "Reservation-only median Class 1 served-rate recovery versus the same policy's utilization optimum. Variation is primarily across no-show rows rather than balking columns."
+#| fig-width: 6.5
+#| fig-height: 5
+
+res_access = headline_access[
+    headline_access["policy"].eq("reservation_only")
+].copy()
+
+grid = (
+    res_access.pivot(
+        index="noshow_level",
+        columns="balk_level",
+        values="median_delta_class_1_percent_serviced",
+    )
+    .reindex(index=LEVEL_ORDER, columns=LEVEL_ORDER)
+    * 100
+)
+
+fig, ax = plt.subplots(figsize=(6.5, 5))
+im = ax.imshow(grid.values, aspect="auto")
+ax.set_xticks(range(3), [LEVEL_LABEL[v] for v in LEVEL_ORDER])
+ax.set_yticks(range(3), [LEVEL_LABEL[v] for v in LEVEL_ORDER])
+ax.set_xlabel("Balking sensitivity")
+ax.set_ylabel("No-show sensitivity")
+for i in range(3):
+    for j in range(3):
+        ax.text(
+            j,
+            i,
+            f"{grid.iloc[i, j]:.1f}",
+            ha="center",
+            va="center",
+            fontsize=11,
+        )
+fig.colorbar(im, ax=ax, label="Median C1 gain (percentage points)")
+plt.tight_layout()
+plt.show()
+```
+
+- **No-show sensitivity changes the magnitude of reservation-only's access-recovery opportunity.**
+- **Balking differences are small and non-monotonic** within the same no-show tier.
+- For both-flexible, the Class 1 recovery is even more stable across the 3×3 behavior grid.
+
+::: {.callout-tip title="How to reconcile this with the earlier utilization result"}
+Two statements can both be true:
+
+- **Higher no-show makes flexibility more valuable relative to baseline utilization**, because flexibility helps avoid capacity being wasted by no-shows.
+- **Lower no-show leaves more residual Class 1 access-recovery room after utilization has already been optimized.**
+
+They answer different questions and use different reference points.
+:::
+
+## Bottom line
+
+- **Use both-flexible when the objective is the largest possible Class 1 access shift while holding utilization nearly fixed.**
+- **Use reservation-only when the objective is a more conservative Class 1 improvement with a much better chance of leaving Class 2 neutral.**
+- **No-show sensitivity is the behavioral dimension that most consistently changes the access tradeoff.**
+- **Balking sensitivity is secondary in the final 3×3 results.**
+- **No independently validated win-win was found.**
+
