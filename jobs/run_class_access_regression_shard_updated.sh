@@ -8,7 +8,10 @@ TASK_ID="${SGE_TASK_ID:?SGE_TASK_ID must be set by the array scheduler}"
 SHARD_INDEX=$((TASK_ID - 1))
 WORKERS="${NSLOTS:-1}"
 
-python scripts/run_class_access_regression_robustness.py \
+# Explicitly use the cuimc Python 3.11 environment on the research grid.
+PYTHON="${PYTHON:-$HOME/.conda/envs/cuimc/bin/python}"
+
+"$PYTHON" scripts/run_class_access_regression_robustness.py \
   --mode run \
   --shard-count "${SHARD_COUNT}" \
   --shard-index "${SHARD_INDEX}" \
