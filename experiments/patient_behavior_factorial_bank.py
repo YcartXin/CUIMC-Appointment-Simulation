@@ -17,11 +17,11 @@ OPEN_HORIZON_DAYS = 100
 LEVEL_ORDER = {"low": 0, "medium": 1, "high": 2}
 
 # Class 1: thresholds held fixed; only post-threshold probabilities vary.
-C1_NOSHOW_THRESHOLD = 5
+C1_NOSHOW_THRESHOLD = 3
 C1_NOSHOW_PRE = 0.05
 C1_NOSHOW_POST = {"low": 0.05, "medium": 0.15, "high": 0.25}
 
-C1_BALK_THRESHOLD = 7
+C1_BALK_THRESHOLD = 5
 C1_BALK_PRE = 0.05
 C1_BALK_POST = {"low": 0.10, "medium": 0.20, "high": 0.30}
 

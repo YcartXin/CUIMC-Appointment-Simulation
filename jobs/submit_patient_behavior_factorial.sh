@@ -44,8 +44,8 @@ assert b["clinic_context_id"].nunique() == 60
 assert set(b["horizon_days"]) == {100}
 assert set(b["noshow_high_1"]) == {0.05, 0.15, 0.25}
 assert set(b["balk_high_1"]) == {0.10, 0.20, 0.30}
-assert set(b["noshow_threshold_1"]) == {5}
-assert set(b["balk_threshold_1"]) == {7}
+assert set(b["noshow_threshold_1"]) == {3}
+assert set(b["balk_threshold_1"]) == {5}
 print("Bank validation passed: 540 backgrounds, 9 behavior cells, 60 clinic contexts.")
 PY
     export STAGE=search
