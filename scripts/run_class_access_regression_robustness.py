@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Class-access regression robustness experiment for the pooled FCFS model.
 
@@ -823,7 +823,7 @@ def write_summary(
         marginal_df.to_string(index=False),
         "```",
         "",
-        "## Drop-one-family held-out R²",
+        "## Drop-one-family held-out R虏",
         "",
         "```",
         r2_summary.to_string(index=False),
