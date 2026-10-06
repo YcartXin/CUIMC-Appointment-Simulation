@@ -1,0 +1,1431 @@
+---
+title: "Pareto Served-Rate Scenarios: Summary of Current Findings"
+subtitle: "Patient Behavior Factorial Scheduling Simulation"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    embed-resources: true
+jupyter: python3
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{python}
+from pathlib import Path
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from IPython.display import display
+
+
+# ============================================================
+# 1. Locate data
+# ============================================================
+
+cwd = Path.cwd().resolve()
+
+candidate_dirs = [
+    cwd / "outputs" / "pareto_presentation",
+    cwd,
+]
+
+for parent in cwd.parents:
+    candidate_dirs.append(
+        parent / "outputs" / "pareto_presentation"
+    )
+
+DATA = next(
+    (
+        p for p in candidate_dirs
+        if (p / "validated_meaningful_pareto_cells.csv").exists()
+    ),
+    None,
+)
+
+if DATA is None:
+    raise FileNotFoundError(
+        "Could not find the Pareto presentation data folder.\n"
+        "Expected the files inside:\n"
+        "outputs/pareto_presentation/"
+    )
+
+print(f"Using data from: {DATA}")
+
+
+# ============================================================
+# 2. Determine repository root
+# ============================================================
+
+# Normal expected structure:
+#
+# REPO_ROOT/
+#   outputs/
+#     pareto_presentation/
+#
+# Therefore DATA.parent.parent is the repository root.
+
+if (
+    DATA.name == "pareto_presentation"
+    and DATA.parent.name == "outputs"
+):
+    ROOT = DATA.parent.parent
+else:
+    ROOT = cwd
+
+print(f"Repository root: {ROOT}")
+
+
+# ============================================================
+# 3. Figure output folder
+# ============================================================
+
+FIGURE_DIR = ROOT / "figures"
+FIGURE_DIR.mkdir(
+    parents=True,
+    exist_ok=True,
+)
+
+print(f"Figures will be saved to: {FIGURE_DIR}")
+
+
+# ============================================================
+# 4. Required files
+# ============================================================
+
+required_files = [
+    "patient_behavior_factorial_bank.csv",
+    "validated_meaningful_pareto_cells.csv",
+    "validation_summary.csv",
+    "policy_overlap_groups_full_universe.csv",
+    "pareto_by_clinic_context.csv",
+    "validated_background_policy_universe.csv",
+    "validated_settings_by_clinic_context.csv",
+    "reservation_increment_cells_classified.csv",
+]
+
+missing = [
+    filename
+    for filename in required_files
+    if not (DATA / filename).exists()
+]
+
+if missing:
+    raise FileNotFoundError(
+        "Missing required presentation files:\n"
+        + "\n".join(f"- {filename}" for filename in missing)
+    )
+
+
+# ============================================================
+# 5. Load data
+# ============================================================
+
+bank = pd.read_csv(
+    DATA / "patient_behavior_factorial_bank.csv"
+)
+
+pareto_cells = pd.read_csv(
+    DATA / "validated_meaningful_pareto_cells.csv"
+)
+
+validation_summary = pd.read_csv(
+    DATA / "validation_summary.csv"
+)
+
+policy_overlap = pd.read_csv(
+    DATA / "policy_overlap_groups_full_universe.csv"
+)
+
+pareto_by_clinic_context = pd.read_csv(
+    DATA / "pareto_by_clinic_context.csv"
+)
+
+validated_background_policy_universe = pd.read_csv(
+    DATA / "validated_background_policy_universe.csv"
+)
+
+validated_settings_by_clinic_context = pd.read_csv(
+    DATA / "validated_settings_by_clinic_context.csv"
+)
+
+reservation_increment = pd.read_csv(
+    DATA / "reservation_increment_cells_classified.csv"
+)
+
+
+# ============================================================
+# 6. Helper functions and labels
+# ============================================================
+
+def to_bool(series):
+    """
+    Convert common True/False representations to Boolean.
+    """
+    if series.dtype == bool:
+        return series
+
+    return (
+        series.astype(str)
+        .str.strip()
+        .str.lower()
+        .map({
+            "true": True,
+            "false": False,
+            "1": True,
+            "0": False,
+        })
+        .fillna(False)
+        .astype(bool)
+    )
+
+
+policy_labels = {
+    "horizon_only": "Horizon only",
+    "reservation_only": "Reservation only",
+    "both_flexible": "Both flexible",
+}
+
+policy_order = [
+    "horizon_only",
+    "reservation_only",
+    "both_flexible",
+]
+
+
+# ============================================================
+# 7. Clean Boolean columns
+# ============================================================
+
+pareto_bool_columns = [
+    "validated_meaningful_pareto",
+    "validated_strict_both_improve",
+    "ci_supported_nonharm_both",
+    "ci_supported_positive_gain",
+    "strongly_supported_pareto",
+]
+
+for col in pareto_bool_columns:
+    if col in pareto_cells.columns:
+        pareto_cells[col] = to_bool(
+            pareto_cells[col]
+        )
+
+
+for col in [
+    "horizon_only",
+    "reservation_only",
+    "both_flexible",
+]:
+    if col in policy_overlap.columns:
+        policy_overlap[col] = to_bool(
+            policy_overlap[col]
+        )
+
+
+if "validated_pareto_exists" in validated_background_policy_universe.columns:
+    validated_background_policy_universe[
+        "validated_pareto_exists"
+    ] = to_bool(
+        validated_background_policy_universe[
+            "validated_pareto_exists"
+        ]
+    )
+
+
+if "reservation_increment_pareto" in reservation_increment.columns:
+    reservation_increment[
+        "reservation_increment_pareto"
+    ] = to_bool(
+        reservation_increment[
+            "reservation_increment_pareto"
+        ]
+    )
+
+
+# ============================================================
+# 8. Keep independently validated meaningful-Pareto cells
+# ============================================================
+
+validated_cells = pareto_cells[
+    pareto_cells["validated_meaningful_pareto"]
+].copy()
+
+
+# ============================================================
+# 9. Build policy-level Pareto summary
+#
+# This replaces the old
+# validated_pareto_policy_settings.csv file.
+# ============================================================
+
+summary_rows = []
+
+for policy in policy_order:
+
+    g = validated_cells[
+        validated_cells["policy"] == policy
+    ].copy()
+
+    if len(g) == 0:
+
+        summary_rows.append({
+            "policy": policy,
+            "validated_cells": 0,
+            "validated_backgrounds": 0,
+            "median_H": np.nan,
+            "q25_H": np.nan,
+            "q75_H": np.nan,
+            "min_H": np.nan,
+            "max_H": np.nan,
+            "median_Q": np.nan,
+            "q25_Q": np.nan,
+            "q75_Q": np.nan,
+            "median_W": np.nan,
+            "q25_W": np.nan,
+            "q75_W": np.nan,
+            "median_delta_sr1": np.nan,
+            "median_delta_sr2": np.nan,
+            "median_delta_utilization": np.nan,
+        })
+
+    else:
+
+        summary_rows.append({
+            "policy": policy,
+
+            "validated_cells":
+                len(g),
+
+            "validated_backgrounds":
+                g["background_id"].nunique(),
+
+            "median_H":
+                g["horizon_days"].median(),
+
+            "q25_H":
+                g["horizon_days"].quantile(0.25),
+
+            "q75_H":
+                g["horizon_days"].quantile(0.75),
+
+            "min_H":
+                g["horizon_days"].min(),
+
+            "max_H":
+                g["horizon_days"].max(),
+
+            "median_Q":
+                g["Q"].median(),
+
+            "q25_Q":
+                g["Q"].quantile(0.25),
+
+            "q75_Q":
+                g["Q"].quantile(0.75),
+
+            "median_W":
+                g["window"].median(),
+
+            "q25_W":
+                g["window"].quantile(0.25),
+
+            "q75_W":
+                g["window"].quantile(0.75),
+
+            "median_delta_sr1":
+                g["eval_delta_sr1"].median(),
+
+            "median_delta_sr2":
+                g["eval_delta_sr2"].median(),
+
+            "median_delta_utilization":
+                g["eval_delta_utilization"].median(),
+        })
+
+
+settings = pd.DataFrame(
+    summary_rows
+)
+
+settings["Policy"] = (
+    settings["policy"]
+    .map(policy_labels)
+)
+
+
+# ============================================================
+# 10. Build background-level Pareto rates
+#
+# policy_overlap contains the full 450-background
+# headline universe.
+# ============================================================
+
+def pareto_rate_by(column):
+
+    rows = []
+
+    levels = (
+        policy_overlap[column]
+        .drop_duplicates()
+        .tolist()
+    )
+
+    for policy in policy_order:
+
+        for level in levels:
+
+            g = policy_overlap[
+                policy_overlap[column] == level
+            ]
+
+            n_backgrounds = len(g)
+
+            n_pareto = int(
+                g[policy].sum()
+            )
+
+            rows.append({
+                "policy": policy,
+                column: level,
+                "backgrounds": n_backgrounds,
+                "pareto_backgrounds": n_pareto,
+                "pareto_rate": (
+                    n_pareto / n_backgrounds
+                    if n_backgrounds > 0
+                    else np.nan
+                ),
+            })
+
+    return pd.DataFrame(rows)
+
+
+by_rho = pareto_rate_by(
+    "rho"
+)
+
+by_noshow = pareto_rate_by(
+    "noshow_level"
+)
+
+by_balk = pareto_rate_by(
+    "balk_level"
+)
+
+by_share = pareto_rate_by(
+    "class1_share"
+)
+
+by_capacity = pareto_rate_by(
+    "slots_per_day"
+)
+
+
+# ============================================================
+# 11. Previous utilization-optimization horizon results
+# ============================================================
+
+utilization_horizons = pd.DataFrame({
+    "Policy": [
+        "Horizon only",
+        "Both flexible",
+    ],
+    "Low no-show": [
+        3.99,
+        6.85,
+    ],
+    "Medium no-show": [
+        3.06,
+        5.95,
+    ],
+    "High no-show": [
+        2.98,
+        5.84,
+    ],
+})
+
+
+# ============================================================
+# 12. Reservation-increment quantities
+# ============================================================
+
+n_reservation_increment_cells = len(
+    reservation_increment
+)
+
+n_reservation_increment_pareto = int(
+    reservation_increment[
+        "reservation_increment_pareto"
+    ].sum()
+)
+
+
+# ============================================================
+# 13. Setup check
+# ============================================================
+
+print()
+print("Setup complete.")
+
+print(
+    f"Validated meaningful-Pareto cells: "
+    f"{len(validated_cells)}"
+)
+
+print()
+
+display(
+    settings[
+        [
+            "Policy",
+            "validated_cells",
+            "validated_backgrounds",
+        ]
+    ]
+)
+```
+
+# Executive summary
+
+- **Reservation-only:** no independently validated meaningful-Pareto scenario was found.
+
+- **Both-flexible:** 33 validated Pareto backgrounds were found.
+
+- Every validated both-flexible cell used a very short **2–4 day booking horizon**.
+
+- **Main mechanism:**
+  - short horizon creates the underlying served-rate improvement;
+  - reservation then reallocates some of that gain toward Class 1.
+
+- The strongest conditions associated with Pareto outcomes are:
+  - intermediate congestion;
+  - higher no-show sensitivity;
+  - higher capacity for reservation-involved policies.
+
+- Validated Pareto scenarios generally also improve utilization relative to baseline.
+
+- However, this is **not yet** a matched comparison against the utilization-optimal policy for the exact same background.
+
+# 1. When do reservation-involved policies produce Pareto improvements?
+
+## Independent validation results
+
+```{python}
+show = validation_summary.copy()
+
+show["Policy"] = (
+    show["policy"]
+    .map(policy_labels)
+)
+
+show = show[
+    [
+        "Policy",
+        "discovery_candidates",
+        "validated_cells",
+        "validated_backgrounds",
+    ]
+]
+
+show.columns = [
+    "Policy",
+    "Discovery candidates",
+    "Validated cells",
+    "Validated backgrounds",
+]
+
+display(show)
+```
+
+- **Reservation-only**
+  - 63 discovery candidates.
+  - **0 validated cells.**
+  - **0 validated backgrounds.**
+
+- **Both-flexible**
+  - 1,452 discovery candidates.
+  - **139 validated cells.**
+  - **33 validated backgrounds.**
+
+- **Horizon-only**
+  - 253 discovery candidates.
+  - **73 validated cells.**
+  - **43 validated backgrounds.**
+
+- Interpretation:
+  - no reservation-only candidate survived the independent validation step;
+  - this does **not** mathematically prove that a reservation-only Pareto policy can never exist;
+  - it means none was reliably detected in the current experiment.
+
+## What role does reservation play inside both-flexible?
+
+```{python}
+reservation_check = pd.DataFrame({
+    "Comparison": [
+        "Reservation increment vs same horizon"
+    ],
+    "Cells examined": [
+        n_reservation_increment_cells
+    ],
+    "Reservation increment itself Pareto": [
+        n_reservation_increment_pareto
+    ],
+})
+
+display(reservation_check)
+```
+
+- Among the validated both-flexible cells, the **reservation increment itself was never Pareto-improving** relative to the same horizon without reservation.
+
+- The observed mechanism is:
+
+$$
+\text{short horizon}
+\rightarrow
+\text{served-rate gain for both classes}
+\rightarrow
+\text{reservation shifts part of the gain toward Class 1}.
+$$
+
+- Reservation can remain part of a final Pareto policy when:
+  - the short horizon first creates a positive Class 2 buffer;
+  - reservation increases Class 1 access;
+  - Class 2 gives up part of its gain;
+  - Class 2 nevertheless remains at or above its no-policy baseline.
+
+## Example: special low-demand case
+
+```{python}
+special = reservation_increment[
+    (reservation_increment["rho"] == 1.2)
+    & (reservation_increment["class1_share"] == 0.1)
+    & (reservation_increment["slots_per_day"] == 50)
+].copy()
+
+special_summary = pd.DataFrame({
+    "Component": [
+        "Horizon vs baseline",
+        "Reservation increment",
+        "Final both-flexible vs baseline",
+    ],
+
+    "Class 1 change (pp)": [
+        100 * special[
+            "horizon_vs_baseline_sr1"
+        ].median(),
+
+        100 * special[
+            "reservation_increment_sr1"
+        ].median(),
+
+        100 * (
+            special["horizon_vs_baseline_sr1"]
+            + special["reservation_increment_sr1"]
+        ).median(),
+    ],
+
+    "Class 2 change (pp)": [
+        100 * special[
+            "horizon_vs_baseline_sr2"
+        ].median(),
+
+        100 * special[
+            "reservation_increment_sr2"
+        ].median(),
+
+        100 * (
+            special["horizon_vs_baseline_sr2"]
+            + special["reservation_increment_sr2"]
+        ).median(),
+    ],
+})
+
+display(
+    special_summary.round(3)
+)
+```
+
+- Clinic context:
+  - $\rho=1.2$
+  - Class 1 share = 10%
+  - capacity = 50 slots/day
+
+- Approximate decomposition:
+  - Horizon component:
+    - Class 1: **+0.39 pp**
+    - Class 2: **+0.32 pp**
+  - Reservation increment:
+    - Class 1: **+1.59 pp**
+    - Class 2: **−0.27 pp**
+  - Final both-flexible policy:
+    - still Pareto because Class 2 remains slightly above baseline.
+
+## Demand conditions
+
+```{python}
+plot = by_rho.copy()
+
+plot["Policy"] = (
+    plot["policy"]
+    .map(policy_labels)
+)
+
+plot["Pareto rate (%)"] = (
+    100 * plot["pareto_rate"]
+)
+
+wide = (
+    plot.pivot(
+        index="rho",
+        columns="Policy",
+        values="Pareto rate (%)",
+    )
+    .reindex(
+        columns=[
+            "Horizon only",
+            "Reservation only",
+            "Both flexible",
+        ]
+    )
+)
+
+ax = wide.plot(
+    kind="bar",
+    figsize=(8.4, 4.8),
+)
+
+ax.set_xlabel(
+    "Demand ratio (rho)"
+)
+
+ax.set_ylabel(
+    "Validated Pareto backgrounds (%)"
+)
+
+ax.set_title(
+    "Pareto opportunities are concentrated in a narrow demand range"
+)
+
+ax.legend(
+    frameon=False
+)
+
+ax.grid(
+    axis="y",
+    alpha=0.2
+)
+
+plt.xticks(
+    rotation=0
+)
+
+plt.tight_layout()
+
+fig = ax.get_figure()
+
+fig.savefig(
+    FIGURE_DIR / "pareto_by_rho.png",
+    dpi=300,
+    bbox_inches="tight",
+)
+
+plt.show()
+```
+
+- Main Pareto region:
+  - **$\rho=1.7$**
+  - **$\rho=2.0$**
+
+- Both-flexible also has a distinct cluster at:
+  - **$\rho=1.2$**
+
+- No validated Pareto backgrounds were detected at:
+  - $\rho=1.4$
+  - $\rho=2.5$
+
+# 2. How does horizon length change when optimizing for Pareto served rate?
+
+## Validated Pareto horizon settings
+
+```{python}
+show = settings[
+    settings["policy"].isin(
+        [
+            "horizon_only",
+            "both_flexible",
+        ]
+    )
+].copy()
+
+show = show[
+    [
+        "Policy",
+        "median_H",
+        "q25_H",
+        "q75_H",
+        "min_H",
+        "max_H",
+        "median_Q",
+        "median_W",
+    ]
+]
+
+show.columns = [
+    "Policy",
+    "Median H",
+    "H: 25th pct.",
+    "H: 75th pct.",
+    "Minimum H",
+    "Maximum H",
+    "Median Q",
+    "Median reservation window",
+]
+
+display(
+    show.round(2)
+)
+```
+
+- **Horizon-only Pareto**
+  - median horizon = **3 days**
+  - middle 50% = **3–4 days**
+
+- **Both-flexible Pareto**
+  - median horizon = **3 days**
+  - middle 50% = **2–4 days**
+  - full validated range = **2–4 days**
+
+- Therefore, all validated both-flexible Pareto results rely on an extremely short booking horizon.
+
+## Comparison with utilization optimization
+
+```{python}
+display(
+    utilization_horizons
+)
+```
+
+- Under the previous utilization optimization:
+
+  - **Horizon-only**
+    - low no-show: 3.99 days
+    - medium no-show: 3.06 days
+    - high no-show: 2.98 days
+
+  - **Both-flexible**
+    - low no-show: 6.85 days
+    - medium no-show: 5.95 days
+    - high no-show: 5.84 days
+
+- Main comparison:
+
+  - **Horizon-only**
+    - Pareto and utilization optimization both favor a horizon around 3–4 days.
+
+  - **Both-flexible**
+    - utilization optimization favored roughly a **6-day horizon**;
+    - validated Pareto cases use only **2–4 days**.
+
+> **Operational caveat:** a 2–4 day booking horizon may be unrealistic or undesirable in real clinic operations. This is therefore an important limitation of the current both-flexible Pareto results.
+
+# 3. Top five trends in the Pareto scenarios
+
+## Trend 1 — Pareto opportunities cluster under intermediate congestion
+
+```{python}
+rho_table = by_rho[
+    by_rho["policy"].isin(
+        [
+            "horizon_only",
+            "both_flexible",
+        ]
+    )
+].copy()
+
+rho_table["Policy"] = (
+    rho_table["policy"]
+    .map(policy_labels)
+)
+
+rho_table["Pareto rate (%)"] = (
+    100 * rho_table["pareto_rate"]
+)
+
+display(
+    rho_table[
+        [
+            "Policy",
+            "rho",
+            "pareto_backgrounds",
+            "backgrounds",
+            "Pareto rate (%)",
+        ]
+    ].round(1)
+)
+```
+
+- Horizon-only:
+  - $\rho=1.7$: **23.3%**
+  - $\rho=2.0$: **24.4%**
+
+- Both-flexible:
+  - $\rho=1.7$: **13.3%**
+  - $\rho=2.0$: **13.3%**
+
+- Interpretation:
+  - policy must matter enough to change realized service;
+  - but excessive congestion may leave too little slack for both classes to improve simultaneously.
+
+## Trend 2 — No-show sensitivity matters much more than balking sensitivity
+
+```{python}
+plot = by_noshow.copy()
+
+plot["Policy"] = (
+    plot["policy"]
+    .map(policy_labels)
+)
+
+plot["Pareto rate (%)"] = (
+    100 * plot["pareto_rate"]
+)
+
+noshow_order = [
+    "low",
+    "medium",
+    "high",
+]
+
+plot["noshow_level"] = pd.Categorical(
+    plot["noshow_level"],
+    categories=noshow_order,
+    ordered=True,
+)
+
+wide = (
+    plot.pivot(
+        index="noshow_level",
+        columns="Policy",
+        values="Pareto rate (%)",
+    )
+    .reindex(noshow_order)
+    .reindex(
+        columns=[
+            "Horizon only",
+            "Reservation only",
+            "Both flexible",
+        ]
+    )
+)
+
+ax = wide.plot(
+    kind="bar",
+    figsize=(8.4, 4.8),
+)
+
+ax.set_xlabel(
+    "Class 1 no-show severity"
+)
+
+ax.set_ylabel(
+    "Validated Pareto backgrounds (%)"
+)
+
+ax.set_title(
+    "Pareto opportunities increase with no-show severity"
+)
+
+ax.legend(
+    frameon=False
+)
+
+ax.grid(
+    axis="y",
+    alpha=0.2
+)
+
+plt.xticks(
+    rotation=0
+)
+
+plt.tight_layout()
+
+fig = ax.get_figure()
+
+fig.savefig(
+    FIGURE_DIR / "pareto_by_noshow.png",
+    dpi=300,
+    bbox_inches="tight",
+)
+
+plt.show()
+```
+
+- Horizon-only:
+  - low no-show: **0%**
+  - medium: **11.3%**
+  - high: **17.3%**
+
+- Both-flexible:
+  - low: **2.0%**
+  - medium: **8.0%**
+  - high: **12.0%**
+
+### Balking comparison
+
+```{python}
+balk_table = by_balk[
+    by_balk["policy"].isin(
+        [
+            "horizon_only",
+            "both_flexible",
+        ]
+    )
+].copy()
+
+balk_table["Policy"] = (
+    balk_table["policy"]
+    .map(policy_labels)
+)
+
+balk_table["Pareto rate (%)"] = (
+    100 * balk_table["pareto_rate"]
+)
+
+display(
+    balk_table[
+        [
+            "Policy",
+            "balk_level",
+            "Pareto rate (%)",
+        ]
+    ].round(1)
+)
+```
+
+- Balking does not show the same clear monotonic relationship.
+
+- Main conclusion:
+  - **delay-sensitive no-show risk is the stronger behavioral predictor of Pareto opportunities.**
+
+## Trend 3 — Horizon generates the underlying gain; reservation is mainly distributional
+
+- Reservation-only:
+  - **0 validated Pareto backgrounds**
+
+- Both-flexible:
+  - **33 validated Pareto backgrounds**
+
+- But:
+  - reservation itself was Pareto in **0 of 139** matched both-flexible cells.
+
+- Interpretation:
+
+$$
+\text{horizon compression}
+\rightarrow
+\text{system-level served-rate gain}
+$$
+
+followed by:
+
+$$
+\text{reservation}
+\rightarrow
+\text{more of that gain directed toward Class 1}.
+$$
+
+- This is an important distinction:
+  - the current evidence does **not** show that reservation alone creates a joint served-rate improvement.
+
+## Trend 4 — Pareto gains are asymmetric toward Class 1
+
+```{python}
+gain_table = settings[
+    settings["policy"].isin(
+        [
+            "horizon_only",
+            "both_flexible",
+        ]
+    )
+].copy()
+
+gain_table[
+    "Median Class 1 gain (pp)"
+] = (
+    100
+    * gain_table["median_delta_sr1"]
+)
+
+gain_table[
+    "Median Class 2 gain (pp)"
+] = (
+    100
+    * gain_table["median_delta_sr2"]
+)
+
+display(
+    gain_table[
+        [
+            "Policy",
+            "Median Class 1 gain (pp)",
+            "Median Class 2 gain (pp)",
+        ]
+    ].round(2)
+)
+```
+
+- Both-flexible:
+  - Class 1: **+1.08 pp**
+  - Class 2: **+0.12 pp**
+
+- Horizon-only:
+  - Class 1: **+1.54 pp**
+  - Class 2: **+0.12 pp**
+
+- Typical Pareto structure:
+
+$$
+\text{large Class 1 improvement}
++
+\text{small positive Class 2 cushion}.
+$$
+
+- These are generally **not equal gains** for both patient classes.
+
+## Trend 5 — Higher capacity is especially favorable for both-flexible Pareto outcomes
+
+```{python}
+capacity_table = by_capacity[
+    by_capacity["policy"].isin(
+        [
+            "horizon_only",
+            "both_flexible",
+        ]
+    )
+].copy()
+
+capacity_table["Policy"] = (
+    capacity_table["policy"]
+    .map(policy_labels)
+)
+
+capacity_table[
+    "Pareto rate (%)"
+] = (
+    100
+    * capacity_table["pareto_rate"]
+)
+
+display(
+    capacity_table[
+        [
+            "Policy",
+            "slots_per_day",
+            "pareto_backgrounds",
+            "backgrounds",
+            "Pareto rate (%)",
+        ]
+    ].round(1)
+)
+```
+
+- Both-flexible:
+  - 30 slots/day: **3.6%**
+  - 50 slots/day: **11.1%**
+
+- Horizon-only:
+  - 30 slots/day: **10.2%**
+  - 50 slots/day: **8.9%**
+
+- Interpretation:
+  - additional capacity appears especially useful when reservation is part of the policy;
+  - with more slots, it may be easier to protect Class 1 capacity without materially reducing Class 2 access.
+
+## Secondary pattern — Class 1 share is non-monotonic
+
+```{python}
+share_table = by_share[
+    by_share["policy"] == "both_flexible"
+].copy()
+
+share_table[
+    "Pareto rate (%)"
+] = (
+    100
+    * share_table["pareto_rate"]
+)
+
+share_table = share_table.sort_values(
+    "class1_share"
+)
+
+display(
+    share_table[
+        [
+            "class1_share",
+            "pareto_backgrounds",
+            "backgrounds",
+            "Pareto rate (%)",
+        ]
+    ]
+    .rename(
+        columns={
+            "class1_share":
+                "Class 1 share"
+        }
+    )
+    .round(1)
+)
+```
+
+- Both-flexible Pareto rate:
+  - Class 1 share 10%: **10.0%**
+  - 30%: **5.6%**
+  - 50%: **4.4%**
+  - 70%: **4.4%**
+  - 90%: **12.2%**
+
+- “Non-monotonic” means:
+  - the Pareto rate does not continuously rise as Class 1 share rises;
+  - it also does not continuously fall.
+
+- Instead, the rates are higher at both extremes and lower in the middle.
+
+- This should **not** be interpreted as:
+  - “extreme Class 1 shares are always better.”
+
+- The 10% and 90% cases occur under different clinic conditions and likely reflect different mechanisms.
+
+# 4. What happens to utilization in the Pareto scenarios?
+
+## Utilization relative to baseline
+
+```{python}
+util_plot = settings[
+    settings["policy"].isin(
+        [
+            "horizon_only",
+            "both_flexible",
+        ]
+    )
+][
+    [
+        "Policy",
+        "median_delta_utilization",
+    ]
+].copy()
+
+util_plot[
+    "Median utilization change (pp)"
+] = (
+    100
+    * util_plot["median_delta_utilization"]
+)
+
+ax = util_plot.plot(
+    kind="bar",
+    x="Policy",
+    y="Median utilization change (pp)",
+    legend=False,
+    figsize=(7.2, 4.5),
+)
+
+ax.set_xlabel("")
+
+ax.set_ylabel(
+    "Median utilization change vs baseline (pp)"
+)
+
+ax.set_title(
+    "Validated Pareto cells generally also improve utilization"
+)
+
+ax.grid(
+    axis="y",
+    alpha=0.2
+)
+
+plt.xticks(
+    rotation=0
+)
+
+plt.tight_layout()
+
+fig = ax.get_figure()
+
+fig.savefig(
+    FIGURE_DIR / "pareto_utilization.png",
+    dpi=300,
+    bbox_inches="tight",
+)
+
+plt.show()
+```
+
+- Horizon-only validated Pareto cells:
+  - median utilization change = approximately **+1.26 pp**
+
+- Both-flexible validated Pareto cells:
+  - median utilization change = approximately **+1.49 pp**
+
+- This is encouraging:
+  - the Pareto served-rate scenarios generally do **not** require sacrificing utilization relative to the no-policy baseline.
+
+## Utilization by clinic context
+
+```{python}
+context_util = (
+    validated_settings_by_clinic_context[
+        [
+            "policy",
+            "rho",
+            "class1_share",
+            "slots_per_day",
+            "validated_backgrounds",
+            "median_delta_utilization",
+        ]
+    ]
+    .copy()
+)
+
+context_util["Policy"] = (
+    context_util["policy"]
+    .map(policy_labels)
+)
+
+context_util[
+    "Median utilization change (pp)"
+] = (
+    100
+    * context_util["median_delta_utilization"]
+)
+
+display(
+    context_util[
+        [
+            "Policy",
+            "rho",
+            "class1_share",
+            "slots_per_day",
+            "validated_backgrounds",
+            "Median utilization change (pp)",
+        ]
+    ].round(2)
+)
+```
+
+- At $\rho=2.0$, several both-flexible contexts have median utilization gains of roughly:
+
+  - **+1.9 pp**
+  - up to approximately **+5.1 pp**
+
+- Important exception:
+
+  - $\rho=1.2$
+  - Class 1 share = 10%
+  - capacity = 50
+
+- In that case:
+  - the policy is Pareto in served rate;
+  - utilization is essentially unchanged.
+
+## Comparison with utilization optimization
+
+The utilization numbers above measure:
+
+$$
+U_{\text{Pareto policy}}
+-
+U_{\text{baseline}}.
+$$
+
+They do **not** measure:
+
+$$
+U_{\text{Pareto policy}}
+-
+U_{\text{utilization-optimal policy}}.
+$$
+
+Therefore:
+
+- it is correct to say:
+  - **Pareto policies generally also improve utilization relative to baseline**;
+
+- it is **not** yet correct to say:
+  - Pareto optimization produces greater utilization than utilization optimization.
+
+The matched quantity needed for that comparison is:
+
+$$
+U_{\text{utilization-optimal}}
+-
+U_{\text{Pareto policy}}.
+$$
+
+That quantity has not yet been summarized in the current presentation dataset.
+
+# Bottom line
+
+- **Reservation-only produced no independently validated meaningful-Pareto scenario.**
+
+- **Both-flexible produced validated Pareto outcomes, but all relied on very short 2–4 day horizons.**
+
+- The main mechanism appears to be:
+
+$$
+\text{short horizon creates the gain}
+\rightarrow
+\text{reservation reallocates it toward Class 1}.
+$$
+
+- The five main trends are:
+
+  1. **Intermediate congestion** is the main Pareto region.
+  2. **No-show sensitivity** matters substantially more than balking sensitivity.
+  3. Horizon shortening creates the underlying system-level gain; reservation is mainly **distributional**.
+  4. Pareto gains are strongly **asymmetric toward Class 1**.
+  5. **Higher capacity** is particularly favorable for reservation-involved Pareto outcomes.
+
+- Validated Pareto scenarios also generally have **positive utilization changes relative to baseline**.
+
+- The main practical limitation is the very short booking horizon required by the current both-flexible Pareto cases.
+
+# What does “independently validated” mean?
+
+- Candidate policies were first identified using simulation seeds:
+
+$$
+1000,\ldots,1004.
+$$
+
+- The promising policies were then rerun using fresh seeds:
+
+$$
+2000,\ldots,2019.
+$$
+
+- The clinic scenario remains fixed across those seeds:
+  - demand level $\rho$;
+  - Class 1 share;
+  - slots per day;
+  - behavior probabilities;
+  - behavior thresholds;
+  - booking horizon;
+  - reservation quantity;
+  - reservation window.
+
+- What changes across seeds is the random realization of:
+  - daily arrivals;
+  - within-day patient ordering;
+  - individual balking;
+  - cancellations;
+  - no-shows.
+
+- Independent validation therefore asks:
+
+> Does the apparent Pareto result persist when we simulate new random patient-flow histories under the exact same clinic and policy conditions?

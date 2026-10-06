@@ -1,0 +1,4 @@
+policy,discovery_candidates,validated_cells,strongly_supported_cells,validated_backgrounds
+both_flexible,1452,139,5,33
+horizon_only,253,73,3,43
+reservation_only,63,0,0,0
