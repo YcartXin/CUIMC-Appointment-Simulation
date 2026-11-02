@@ -1,0 +1,6 @@
+policy,noshow_level,backgrounds,median_horizon_days,median_reservation_pct
+both_flexible,high,18,3.0,35.0
+both_flexible,low,3,2.0,30.0
+both_flexible,medium,12,2.0,30.0
+horizon_only,high,26,4.0,0.0
+horizon_only,medium,17,3.0,0.0

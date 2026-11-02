@@ -1,0 +1,7 @@
+data_source,noshow_level,backgrounds,successful,rate
+original_experiment2,high,150,18,0.12
+original_experiment2,low,150,3,0.02
+original_experiment2,medium,150,12,0.08
+share80_followup,high,18,16,0.8888888888888888
+share80_followup,low,18,0,0.0
+share80_followup,medium,18,10,0.5555555555555556

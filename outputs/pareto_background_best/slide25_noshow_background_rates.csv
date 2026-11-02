@@ -1,0 +1,10 @@
+policy,noshow_level,size,sum,mean
+both_flexible,high,150,18,0.12
+both_flexible,low,150,3,0.02
+both_flexible,medium,150,12,0.08
+horizon_only,high,150,26,0.17333333333333334
+horizon_only,low,150,0,0.0
+horizon_only,medium,150,17,0.11333333333333333
+reservation_only,high,150,0,0.0
+reservation_only,low,150,0,0.0
+reservation_only,medium,150,0,0.0

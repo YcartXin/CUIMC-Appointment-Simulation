@@ -12,6 +12,7 @@ export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_TH
 export PYTHONUNBUFFERED=1 PYTHONHASHSEED=0
 cd "$REPO"
 args=("$STAGE" --root "$E2_ROOT" --sources "$E2_SOURCES")
+if [[ "${INCLUDE_SHARE60:-0}" == 1 ]]; then args+=(--include-share60); fi
 case "$STAGE" in
  search|evaluate)
    if [[ "${DRY_RUN:-0}" == 1 ]]; then args+=(--dry-run)

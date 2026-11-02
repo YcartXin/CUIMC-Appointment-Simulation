@@ -157,3 +157,58 @@ Postprocessing refuses incomplete selected-cell/baseline evaluation. Outputs und
 - `strict_endpoint_comparison.csv`: the new L=0 results. Join to `legacy_rule_discovery_best.csv` on background_id/policy to distinguish the old meaningful-gain screen from the new zero-loss optimizer. The old validated-cell CSVs can be joined on background_id/policy/H/Q/W to compare the same cells. If presenting retrospective old “best evaluated cell” summaries, label that evaluation-driven choice explicitly; it is not the new discovery-frozen estimator. Restrict historical comparisons to common backgrounds and grid coverage (40 slots and most share80 backgrounds have no historical comparator).
 
 Local validation uses synthetic raw outcomes only and does not run the simulation engine. It checks the 972-background design, retained IDs, grids, tie ordering, alias-based reuse, conflicting duplicate rejection, completeness gates, immutable freeze, budget feasibility, and evaluation failure without reselection. The Grid source inventory and Bash/Grid execution remain to be verified on Grid.
+
+## 6. Generate local frontier figures from the exported CSVs
+
+From the repository root, with the dependencies in `requirements.txt` installed:
+
+```bash
+python scripts/plot_experiment2_frontier.py
+```
+
+The script resolves default paths relative to its own location, so it also works
+when invoked by absolute path from another working directory. Optional
+`--input-dir PATH` and `--output-dir PATH` override the defaults. No Grid access
+or simulation rerun is required.
+
+Inputs are `outputs/experiment2_frontier/background_policy_targets.csv` and
+`outputs/experiment2_frontier/minimum_qualifying_cells.csv`. The smaller summary
+CSVs are not required, including copies previously stored in `presentation/`.
+The script validates background/policy uniqueness and matching, success flags,
+qualifying-cell coverage, minimum budgets, the gain target, and the loss ceiling
+before plotting. Source CSVs are never modified.
+
+Six figures are written as both 200-dpi PNG and editable SVG under
+`figures/experiment2_frontier/`:
+
+1. `fig1_bf_success_rate_by_share_and_rho`: both-flexible success percentage by patient share and demand/capacity ratio.
+2. `fig2_bf_min_budget_by_share_and_rho`: median minimum tested Class 2 budget among successful backgrounds; missing values indicate no successes.
+3. `fig3_bf_failure_heatmap_under_10pp_ceiling`: both-flexible failure percentage by share and demand.
+4. `fig4_background_outcomes_by_class1_share`: counts where both policies, only one policy, or neither policy succeeds. Reservation-only successes remain a supported category even when their count is zero.
+5. `fig5_required_budget_distribution_by_policy`: empirical cumulative distributions of minimum tested budget and actual evaluated Class 2 loss at that budget. Each policy uses its own successful sample, with sample sizes in the legend.
+6. `fig6_bf_only_backgrounds_breakdown`: counts of both-flexible-only successes by share and demand. The title computes the count from the inputs rather than assuming 34.
+
+Success follows the exported **at least 5pp** Class 1 gain target, with a maximum
+**10pp** Class 2 loss budget. These are outcomes among the evaluated,
+discovery-selected cells and tested budgets, not a proof that untested policies
+cannot succeed. Minimum tested budget is distinct from actual evaluated loss;
+negative actual loss represents a Class 2 gain. Every background has equal weight.
+The plots summarize means/thresholds in the exports and do not imply statistical
+significance or add confidence intervals. Rerunning replaces only these six named
+figure pairs; use a different output directory to retain an earlier rendering.
+
+### Minimum budget range bars
+
+Figure 2 now shows the median and observed minimum-to-maximum range of the
+background-specific minimum tested Class 2 budgets, separately for each share
+and rho. Only successful both-flexible backgrounds enter each group, with one
+row per background. Bar endpoints are extrema, not confidence intervals or
+standard deviations. No bar is drawn for groups without successes. A zero
+length bar means all successful backgrounds in that group have the same budget.
+Series positions are slightly staggered horizontally to make overlapping bars
+visible; they still represent the labeled patient-share groups. This figure
+has no small explanatory footnote. Regenerate it alone with:
+
+```bash
+python scripts/plot_experiment2_frontier.py --figure budget
+```

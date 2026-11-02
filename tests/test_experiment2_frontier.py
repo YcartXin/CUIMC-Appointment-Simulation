@@ -22,6 +22,16 @@ class FrontierTests(unittest.TestCase):
             self.assertEqual({h for h,q,w in g['both_flexible']},set(range(2,31)))
             self.assertTrue(all(q>0 and w>=2 for h,q,w in g['both_flexible']))
 
+    def test_share60_expansion_preserves_existing_rows(self):
+        old = f.expanded_bank()
+        new = f.expanded_bank(include_share60=True)
+        self.assertEqual(len(new), 1134)
+        self.assertEqual(set(new.class1_share), {.1,.3,.5,.6,.7,.8,.9})
+        self.assertEqual(len(new[new.class1_share == .6]), 162)
+        pd.testing.assert_frame_equal(
+            new[new.background_id.isin(old.background_id)].reset_index(drop=True), old)
+        self.assertFalse(new.duplicated(['profile_id','rho','class1_share','slots_per_day']).any())
+
     def test_ties_and_budget(self):
         g=pd.DataFrame([
             [2,10,3,.1,-.02,.8,.25], [4,5,3,.1,-.02,.8,.125],

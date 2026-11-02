@@ -1,0 +1,47 @@
+[
+  {
+    "original": "figures\\experiment2_frontier\\fig6_bf_only_backgrounds_breakdown.png",
+    "archived": "archive\\generated_figures_2026-10-27\\figures\\experiment2_frontier\\fig6_bf_only_backgrounds_breakdown.png",
+    "sha256": "e6b922ac64ff240d1d8447327873262e9aa7f91d990a58f95c10a778950bf70d"
+  },
+  {
+    "original": "figures\\pareto_background_best\\slide27_utilization_background_best.png",
+    "archived": "archive\\generated_figures_2026-10-27\\figures\\pareto_background_best\\slide27_utilization_background_best.png",
+    "sha256": "c4dc170ef90dbc49db3e86afafa862646212b6968375460630b535165b8db534"
+  },
+  {
+    "original": "figures\\pareto_background_best\\slide27_utilization_background_best.svg",
+    "archived": "archive\\generated_figures_2026-10-27\\figures\\pareto_background_best\\slide27_utilization_background_best.svg",
+    "sha256": "5dbad3c63d60e25edb4d317293dd6051d54dd5d255a7fa94380f1c9a835b6710"
+  },
+  {
+    "original": "figures\\pareto_background_best\\slide29_horizon_background_best.png",
+    "archived": "archive\\generated_figures_2026-10-27\\figures\\pareto_background_best\\slide29_horizon_background_best.png",
+    "sha256": "d2682c89be3c8b6c51b916f65c1ac41407ea9c5c122837297e4651e226fc40b8"
+  },
+  {
+    "original": "figures\\pareto_background_best\\slide29_horizon_background_best.svg",
+    "archived": "archive\\generated_figures_2026-10-27\\figures\\pareto_background_best\\slide29_horizon_background_best.svg",
+    "sha256": "beb6338d5b2799a1e44a2cb4fd36046ec7a35dc287a23f2a29f3a3b2aba7b713"
+  },
+  {
+    "original": "figures\\pareto_background_best\\slide30_reservation_background_best.png",
+    "archived": "archive\\generated_figures_2026-10-27\\figures\\pareto_background_best\\slide30_reservation_background_best.png",
+    "sha256": "af1d82f64e70d44546e7c5b765a90f055892fd8479b280c30cdda1767ab8d40b"
+  },
+  {
+    "original": "figures\\pareto_background_best\\slide30_reservation_background_best.svg",
+    "archived": "archive\\generated_figures_2026-10-27\\figures\\pareto_background_best\\slide30_reservation_background_best.svg",
+    "sha256": "fab676d03927c2c5995dddebe3531cbe0a37200724c2d4d5fe9d7ad5d6cd31dd"
+  },
+  {
+    "original": "figures\\slides25_26_revision\\slide26_frontier_allowed_loss_scale.png",
+    "archived": "archive\\generated_figures_2026-10-27\\figures\\slides25_26_revision\\slide26_frontier_allowed_loss_scale.png",
+    "sha256": "34916fd3ac7cfb64e8dfc08dd304c116d4fb3b644b558ec1e3e5297f82901b4b"
+  },
+  {
+    "original": "figures\\slides25_26_revision\\slide26_frontier_allowed_loss_scale.svg",
+    "archived": "archive\\generated_figures_2026-10-27\\figures\\slides25_26_revision\\slide26_frontier_allowed_loss_scale.svg",
+    "sha256": "d1a575e3f34b786319d238711d98f62548566911c802c0bc7dfcbf09c211dff1"
+  }
+]

@@ -33,12 +33,13 @@ def signature(row):
     d = _row_config_kwargs(row)
     return tuple((k, round(float(v), 12)) for k, v in sorted(d.items()))
 
-def expanded_bank():
+def expanded_bank(include_share60=False):
     old = pd.concat([generate_bank(), followup_bank()], ignore_index=True)
     lookup = {signature(r): r.to_dict() for _, r in old.iterrows()}
+    shares = (.1,.3,.5,.6,.7,.8,.9) if include_share60 else (.1,.3,.5,.7,.8,.9)
     rows = []
     for p, rho, share, cap in product(_profiles(), (1.2,1.4,1.7,2.,2.5,3.),
-                                      (.1,.3,.5,.7,.8,.9), (30,40,50)):
+                                      shares, (30,40,50)):
         context = f'E2X_R{rho:g}_S{round(share*100)}_C{cap}'
         r = dict(**p, background_id=f"PBF_{p['profile_id']}_{context}",
                  clinic_context_id=context, horizon_days=100, rho=rho,
@@ -49,7 +50,8 @@ def expanded_bank():
                  class2_reference='fixed_late_thresholds')
         rows.append(lookup.get(signature(pd.Series(r)), r))
     bank = pd.DataFrame(rows).sort_values('background_id').reset_index(drop=True)
-    assert len(bank) == 972 and bank.background_id.nunique() == 972
+    expected_count = 1134 if include_share60 else 972
+    assert len(bank) == expected_count and bank.background_id.nunique() == expected_count
     return bank
 
 def cells(row):
@@ -129,12 +131,12 @@ def write_csv(x, path):
     tmp.replace(path)
 
 def bank_stage(a):
-    bank = expanded_bank()
+    bank = expanded_bank(getattr(a, 'include_share60', False))
     if (a.root/'freeze.json').exists(): raise ValueError('Frozen root: do not rewrite bank')
     write_csv(bank, a.root/'bank.csv')
     old = set(pd.concat([generate_bank(),followup_bank()]).background_id)
     write_csv(bank[~bank.background_id.isin(old)], a.root/'new_bank_entries.csv')
-    print('972 backgrounds; 594 existing bank identities; 378 new entries (raw coverage is separate)')
+    print(f'{len(bank)} backgrounds; {len(old)} existing bank identities; {sum(~bank.background_id.isin(old))} new entries (raw coverage is separate)')
 
 def plans(a, bank, sources, stage, selection=None):
     report = []
@@ -292,13 +294,15 @@ def main():
     p.add_argument('stage',choices=['bank','inventory','search','select','evaluate','postprocess'])
     p.add_argument('--root',type=Path,required=True)
     p.add_argument('--sources',type=Path,required=True)
-    p.add_argument('--shard',type=int,help='Stable one-based background index, 1..972')
+    p.add_argument('--shard',type=int,help='Stable one-based background index in this output root')
+    p.add_argument('--include-share60',action='store_true',help='Use the 1,134-background expanded design in a new output root')
     p.add_argument('--dry-run',action='store_true')
     a=p.parse_args()
-    if a.shard is not None and not 1<=a.shard<=972: p.error('shard must be 1..972')
+    expected_bank = expanded_bank(a.include_share60)
+    if a.shard is not None and not 1<=a.shard<=len(expected_bank): p.error(f'shard must be 1..{len(expected_bank)}')
     if a.stage=='bank': bank_stage(a); return
     bank=pd.read_csv(a.root/'bank.csv')
-    pd.testing.assert_frame_equal(bank,expanded_bank(),check_dtype=False)
+    pd.testing.assert_frame_equal(bank,expected_bank,check_dtype=False)
     sources=source_catalog(a.sources)
     if a.stage=='select': select_stage(a,bank,sources)
     elif a.stage=='postprocess': postprocess(a,bank,sources)
