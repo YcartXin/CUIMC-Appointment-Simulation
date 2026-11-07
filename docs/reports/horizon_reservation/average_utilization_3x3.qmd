@@ -170,12 +170,12 @@ def save_design_grid():
     )
 
     ax.set_xlabel(
-        "Class 1 balking severity after 5-day threshold  →",
+        "Class 1 balking post probability after 5-day threshold  →",
         labelpad=16,
         fontsize=11.5,
     )
     ax.set_ylabel(
-        "Class 1 no-show severity after 3-day threshold  ↓",
+        "Class 1 no-show post probability after 3-day threshold  ↓",
         labelpad=18,
         fontsize=11.5,
     )
@@ -189,7 +189,7 @@ def save_design_grid():
     fig.text(
         0.5,
         0.035,
-        "Pre-threshold probability is 5% for both behaviors; only the post-threshold severity changes across the grid.",
+        "Pre-threshold probability is 5% for both behaviors; only the post-threshold post probability changes across the grid.",
         ha="center",
         va="bottom",
         fontsize=10,
@@ -252,7 +252,7 @@ def behavior_profile_plot(
     if metric == "delta_average_utilization":
         ax.axhline(0.5, linestyle="--", linewidth=1)
 
-    ax.set_xlabel("Balking severity")
+    ax.set_xlabel("Balking post probability")
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.legend(frameon=False)
@@ -341,7 +341,7 @@ def merged_demand_profile_plot(
     ax.legend(
         frameon=False,
         ncol=2,
-        title="Color = behavior; marker/line = severity",
+        title="Color = behavior; marker/line = post probability",
         columnspacing=1.5,
         handlelength=2.8,
     )
@@ -387,7 +387,7 @@ def selected_setting_plot(
             label=f"No-show {level_labels[ns]}",
         )
 
-    ax.set_xlabel("Balking severity")
+    ax.set_xlabel("Balking post probability")
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.legend(frameon=False)
@@ -466,7 +466,7 @@ def access_behavior_profile_plot(
 
     ax.axhline(0, linewidth=0.8)
     ax.set_xticks(x, ["Low", "Medium", "High"])
-    ax.set_xlabel("Balking severity")
+    ax.set_xlabel("Balking post probability")
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.legend(frameon=False)
@@ -735,8 +735,8 @@ for policy_name, group in win_neutral_cases.groupby("Policy", dropna=False):
         ("class1_share", "Class 1 share"),
         ("capacity", "capacity"),
         ("daily_capacity", "capacity"),
-        ("noshow_level", "no-show severity"),
-        ("balk_level", "balking severity"),
+        ("noshow_level", "no-show post probability"),
+        ("balk_level", "balking post probability"),
         ("selected_horizon_days", "selected horizon"),
         ("selected_Q", "selected Q"),
         ("selected_window", "selected window"),
@@ -766,7 +766,7 @@ for policy_name, group in win_neutral_cases.groupby("Policy", dropna=False):
 
     if n_policy == 1:
         common_pattern_lines.append(
-            f"**{policy_name}:** there is only one win/neutral background, "
+            f"**{policy_name}:** there is only one win/neutral scenario, "
             "so its characteristics are a case description rather than a recurring pattern."
         )
     elif policy_patterns:
@@ -866,7 +866,7 @@ def overall_figures():
         left += status[col].to_numpy()
 
     ax.set_ylim(0, 100)
-    ax.set_ylabel("Share of clinic backgrounds (%)")
+    ax.set_ylabel("Share of clinic scenarios (%)")
     ax.set_title("Evidence classification for utilization effects")
     ax.legend(
         frameon=False,
@@ -968,7 +968,7 @@ for comp, stem, label in [
     merged_demand_profile_plot(
         pair,
         comp,
-        f"{label}: demand profile by Class 1 behavior severity",
+        f"{label}: demand profile by Class 1 behavior post probability",
         f"pbf_avg_06_{stem}_demand_behavior.png",
     )
 
@@ -977,7 +977,7 @@ selected_setting_plot(
     sel,
     "horizon_only",
     "selected_horizon_days",
-    "Horizon only: selected booking horizon across behavior cells",
+    "Horizon only: selected booking horizon across behavior policies",
     "Mean selected horizon (days)",
     "pbf_avg_08_horizon_selected_H.png",
 )
@@ -986,7 +986,7 @@ selected_setting_plot(
     sel,
     "both_flexible",
     "selected_horizon_days",
-    "Both flexible: selected booking horizon across behavior cells",
+    "Both flexible: selected booking horizon across behavior policies",
     "Mean selected horizon (days)",
     "pbf_avg_09_both_selected_H.png",
 )

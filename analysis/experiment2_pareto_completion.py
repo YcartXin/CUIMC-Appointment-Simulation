@@ -31,7 +31,7 @@ def catalog(a,bank,sources):
     for _,row in bank.iterrows():
         raw=f.raw_for(row,'search',sources,a.frontier_root)
         for policy in f.POLICIES:
-            grid=f.cells(row)[policy]
+            grid=f.cells(row,getattr(a,'allow_horizon_only',False))[policy]
             x=f.paired(raw,grid,f.SEARCH)
             g=x.groupby(f.CELL,as_index=False)[f.DELTA].mean()
             g=g[(g.delta_sr1>=0)&(g.delta_sr2>=0)&(g[['delta_sr1','delta_sr2']].max(axis=1)>=.005)]
@@ -43,8 +43,8 @@ def catalog(a,bank,sources):
     f.write_csv(pd.DataFrame(rows,columns=COLUMNS),a.root/'selected_pareto_discovery.csv')
     meta=dict(bank_sha256=f.digest(a.root/'bank.csv'),selection_sha256=f.digest(a.root/'selected_pareto_discovery.csv'),
         source_manifest=json.loads(a.sources.read_text()),frontier_root=str(a.frontier_root.resolve()),
-        search_seeds=f.SEARCH,evaluation_seeds=f.EVAL,
-        selection='all discovery cells with dSR1>=0,dSR2>=0,max gain>=0.005; genuine Q>0,W>=2',
+        search_seeds=f.SEARCH,evaluation_seeds=f.EVAL,allow_horizon_only=getattr(a,'allow_horizon_only',False),
+        selection='all discovery cells with dSR1>=0,dSR2>=0,max gain>=0.005; reservation cells Q>0,W>=2 plus horizon-only if enabled',
         grid='same systematic grid as expanded frontier; no adaptive reselection')
     (a.root/'pareto_freeze.json').write_text(json.dumps(meta,indent=2))
     print(f'Frozen {len(rows)} Pareto candidate cells across {len(bank)} scenarios')
@@ -101,6 +101,7 @@ def main():
     p.add_argument('--frontier-root',type=Path,required=True)
     p.add_argument('--sources',type=Path,required=True)
     p.add_argument('--shard',type=int)
+    p.add_argument('--allow-horizon-only',action='store_true')
     p.add_argument('--dry-run',action='store_true')
     a=p.parse_args()
     if a.root.resolve()==a.frontier_root.resolve():p.error('Pareto and frontier output roots must differ')
@@ -114,6 +115,7 @@ def main():
     if a.stage=='catalog':catalog(a,bank,sources);return
     meta=json.loads((a.root/'pareto_freeze.json').read_text())
     if meta['source_manifest']!=json.loads(a.sources.read_text()):raise ValueError('Source manifest changed after freeze')
+    if meta.get('allow_horizon_only',False)!=a.allow_horizon_only:raise ValueError('Pareto grid differs from frozen root; use a new root')
     selected=freeze_read(a.root)
     pd.testing.assert_frame_equal(pd.read_csv(a.root/'bank.csv'),bank,check_dtype=False)
     if a.stage=='postprocess':postprocess(a,bank,sources,selected);return

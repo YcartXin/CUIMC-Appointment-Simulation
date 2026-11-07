@@ -1,7 +1,7 @@
 # Class 1 gains versus baseline, separated by rho
 
 Regenerate with `python scripts/plot_class1_gains_by_rho.py`.
-Figure PNG/SVG: `figures/policy_settings_comparison/class1_served_rate_gain_by_rho`.
+Figure PNG/SVG: `figures/Trade-off/policy_settings_comparison/class1_served_rate_gain_by_rho`.
 Data: `outputs/policy_settings_comparison/class1_gains_by_rho_summary.csv` and
 `class1_gains_selected_backgrounds.csv`.
 

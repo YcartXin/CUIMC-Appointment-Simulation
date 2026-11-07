@@ -8,7 +8,7 @@ Outputs
 -------
 results/balking_effect_verification.csv  -- scenarios A-D, per-seed rows
 results/balking_effect_sweep.csv         -- sweep over b_high, aggregated
-figures/balking_effect_verification.png  -- sweep plot
+figures/FCFS/balking_effect_verification.png  -- sweep plot
 
 Run from repo root:
     python scripts/verify_balking_effect.py
@@ -44,7 +44,7 @@ from analysis.metrics import outcome_rates_from_result, result_metrics_from_resu
 
 # ── output dirs ──────────────────────────────────────────────────────────────
 RESULTS_DIR = REPO_DIR / "results"
-FIGURES_DIR = REPO_DIR / "figures"
+FIGURES_DIR = REPO_DIR / "figures" / "FCFS"
 RESULTS_DIR.mkdir(exist_ok=True)
 FIGURES_DIR.mkdir(exist_ok=True)
 

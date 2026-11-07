@@ -83,7 +83,7 @@ print(f"Repository root: {ROOT}")
 # 3. Figure output folder
 # ============================================================
 
-FIGURE_DIR = ROOT / "figures"
+FIGURE_DIR = ROOT / "figures" / "Pareto"
 FIGURE_DIR.mkdir(
     parents=True,
     exist_ok=True,
@@ -471,7 +471,7 @@ print()
 print("Setup complete.")
 
 print(
-    f"Validated meaningful-Pareto cells: "
+    f"Validated meaningful-Pareto policies: "
     f"{len(validated_cells)}"
 )
 
@@ -533,8 +533,8 @@ show = show[
 show.columns = [
     "Policy",
     "Discovery candidates",
-    "Validated cells",
-    "Validated backgrounds",
+    "Validated policies",
+    "Validated scenarios",
 ]
 
 display(show)
@@ -702,7 +702,7 @@ ax.set_xlabel(
 )
 
 ax.set_ylabel(
-    "Validated Pareto backgrounds (%)"
+    "Validated Pareto scenarios (%)"
 )
 
 ax.set_title(
@@ -927,15 +927,15 @@ ax = wide.plot(
 )
 
 ax.set_xlabel(
-    "Class 1 no-show severity"
+    "Class 1 no-show post probability"
 )
 
 ax.set_ylabel(
-    "Validated Pareto backgrounds (%)"
+    "Validated Pareto scenarios (%)"
 )
 
 ax.set_title(
-    "Pareto opportunities increase with no-show severity"
+    "Pareto opportunities increase with no-show post probability"
 )
 
 ax.legend(
@@ -1241,7 +1241,7 @@ ax.set_ylabel(
 )
 
 ax.set_title(
-    "Validated Pareto cells generally also improve utilization"
+    "Validated Pareto policies generally also improve utilization"
 )
 
 ax.grid(

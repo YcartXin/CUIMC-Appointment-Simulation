@@ -13,6 +13,7 @@ export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_TH
 export PYTHONUNBUFFERED=1 PYTHONHASHSEED=0
 cd "$REPO"
 args=("$STAGE" --root "$E2_PARETO_ROOT" --frontier-root "$E2_ROOT" --sources "$E2_SOURCES")
+if [[ "${ALLOW_HORIZON_ONLY:-0}" == 1 ]]; then args+=(--allow-horizon-only); fi
 if [[ "$STAGE" == evaluate ]]; then
     if [[ "${DRY_RUN:-0}" == 1 ]]; then args+=(--dry-run)
     else args+=(--shard "${SGE_TASK_ID:?Submit the missing Pareto evaluation shards}"); fi

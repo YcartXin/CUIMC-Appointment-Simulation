@@ -1,6 +1,6 @@
 """Subtle observed min-max ranges for slide 27, 29 and 30 median figures.
 Run: python scripts/plot_pareto_ranges.py
-Uses one best Class 1 Pareto case per background, both-flexible only.
+Uses one best Class 1 Pareto case per scenario, both-flexible only.
 """
 from pathlib import Path
 import matplotlib
@@ -12,7 +12,7 @@ import pandas as pd
 from plot_pareto_background_best import select_best
 
 ROOT=Path(__file__).resolve().parents[1]
-FIG=ROOT/'figures/pareto_background_best'
+FIG=ROOT/'figures/Pareto/best_cases'
 OUT=ROOT/'outputs/pareto_background_best'
 BLUE='#0072B2'
 
@@ -29,13 +29,13 @@ def plot_range(frame,title,ylabel,stem,percent=False):
     for i,v in enumerate(med):
         ax.annotate(f'{v:.1f}'+('%' if percent else ''),(i,v),xytext=(12,0),textcoords='offset points',va='center',color=BLUE,fontsize=14)
     ax.set(title=title,ylabel=ylabel,xticks=x,xticklabels=frame.index,xlim=(-.5,len(frame)-.5))
-    if len(frame)>1: ax.set_xlabel('Class 1 no-show severity')
+    if len(frame)>1: ax.set_xlabel('Class 1 no-show post probability')
     if percent: ax.yaxis.set_major_formatter(PercentFormatter(100))
     low=min(0,frame['min'].min()); high=frame['max'].max(); span=max(1,high-low)
     ax.set_ylim(low-.08*span,high+.12*span)
     ax.grid(axis='y',alpha=.15); ax.set_axisbelow(True)
     ax.spines[['top','right']].set_visible(False)
-    for ext in ['png','svg']: fig.savefig(FIG/f'{stem}.{ext}',dpi=200,facecolor='white')
+    for ext in ['png']: fig.savefig(FIG/f'{stem}.{ext}',dpi=200,facecolor='white')
     plt.close(fig)
     print('Generated',stem)
 
@@ -52,10 +52,10 @@ def main():
     util=best[best.rho<=2.5].eval_delta_utilization.mul(100).agg(['count','min','median','max']).to_frame().T
     util.index=['Both flexible']
     util.to_csv(OUT/'slide27_utilization_range.csv')
-    plot_range(util,'Utilization change at the best Class 1 Pareto case','Utilization change vs baseline (pp)','slide27_utilization_background_best')
+    plot_range(util,'Utilization change at the best Class 1 Pareto case','Utilization change vs baseline (pp)','slide27_utilization_background_best_range')
     for col,label,title,ylabel,stem in [
-        ('horizon_days','horizon','Booking horizon at the best Class 1 Pareto case','Booking horizon (days)','slide29_horizon_background_best'),
-        ('reservation_pct','reservation','Reservation at the best Class 1 Pareto case','Daily capacity reserved (%)','slide30_reservation_background_best')]:
+        ('horizon_days','horizon','Booking horizon at the best Class 1 Pareto case','Booking horizon (days)','slide29_horizon_background_best_range'),
+        ('reservation_pct','reservation','Reservation at the best Class 1 Pareto case','Daily capacity reserved (%)','slide30_reservation_background_best_range')]:
         summary=best.groupby('noshow_level')[col].agg(['count','min','median','max']).reindex(['low','medium','high'])
         summary.index=['Low','Medium','High']
         summary.to_csv(OUT/f'{stem}_range.csv')

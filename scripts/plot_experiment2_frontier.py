@@ -1,4 +1,4 @@
-"""Generate six Experiment 2 frontier figures from exported background tables.
+"""Generate six Experiment 2 frontier figures from exported scenario tables.
 
 Run from any directory: python /path/to/repo/scripts/plot_experiment2_frontier.py
 No simulation, selection, or CSV mutation is performed.
@@ -46,7 +46,7 @@ def load_data(input_dir: Path):
             raise ValueError(f"Nonfinite {col}")
     wide = targets.pivot(index="background_id", columns="policy", values="success")
     if wide.isna().any().any():
-        raise ValueError("Every background must have both policies")
+        raise ValueError("Every scenario must have both policies")
     metadata = targets.pivot(index="background_id", columns="policy", values=["rho", "class1_share"])
     for col in ["rho", "class1_share"]:
         if not metadata[col].iloc[:, 0].equals(metadata[col].iloc[:, 1]):
@@ -54,21 +54,21 @@ def load_data(input_dir: Path):
     qualifying = cells.loc[cells.target == "5pp"].copy()
     matched = targets.loc[targets.success].merge(qualifying, on=["background_id", "policy"], how="outer", validate="one_to_one", indicator=True)
     if not matched._merge.eq("both").all():
-        raise ValueError("Successful targets and qualifying cells do not match")
+        raise ValueError("Successful targets and qualifying policies do not match")
     for col in ["min_tested_c2_budget_pp", "actual_c2_loss_pp", "c1_gain_pp"]:
         if not np.isfinite(matched[col]).all():
             raise ValueError(f"Nonfinite qualifying-cell {col}")
     if not np.allclose(matched.budget_pp, matched.min_tested_c2_budget_pp):
         raise ValueError("Minimum budgets disagree between exports")
     if (matched.c1_gain_pp < 5 - 1e-8).any() or (matched.actual_c2_loss_pp > matched.budget_pp + 1e-8).any():
-        raise ValueError("Qualifying cells violate gain target or loss budget")
+        raise ValueError("Qualifying policies violate gain target or loss budget")
     return targets, qualifying, wide
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input-dir", type=Path, default=ROOT / "outputs" / "experiment2_frontier")
-    parser.add_argument("--output-dir", type=Path, default=ROOT / "figures" / "experiment2_frontier")
+    parser.add_argument("--output-dir", type=Path, default=ROOT / "figures" / "Trade-off" / "experiment2_frontier")
     parser.add_argument("--figure", choices=["all", "budget"], default="all", help="Generate all figures or only the median budget figure")
     args = parser.parse_args()
     targets, cells, wide = load_data(args.input_dir)
@@ -83,13 +83,13 @@ def main():
     budget_stats = bf.loc[bf.success].groupby(["class1_share", "rho"]).budget_pp.agg(["count", "min", "median", "max"])
     budget_stats = budget_stats.reindex(pd.MultiIndex.from_product([shares, rhos], names=["class1_share", "rho"]))
     budget_stats["count"] = budget_stats["count"].fillna(0).astype(int)
-    note = "Target: Class 1 gain >=5pp; Class 2 loss ceiling: 10pp. Each background has equal weight."
+    note = "Target: Class 1 gain >=5pp; Class 2 loss ceiling: 10pp. Each scenario has equal weight."
 
     def save(fig, stem, caption=note):
         if caption:
             fig.text(.5, .015, caption, ha="center", fontsize=9)
         fig.tight_layout(rect=(0, .055 if caption else 0, 1, 1))
-        for ext in ("png", "svg"):
+        for ext in ("png",):
             path = args.output_dir / f"{stem}.{ext}"
             fig.savefig(path, dpi=200, bbox_inches="tight", facecolor="white")
         plt.close(fig)
@@ -108,7 +108,7 @@ def main():
             ax.yaxis.set_major_formatter(PercentFormatter(100))
         else:
             ax.set_ylim(0, 10.5)
-        save(fig, stem, note if percent else note + "\nMedians among successful backgrounds only; gaps mean no successes.")
+        save(fig, stem, note if percent else note + "\nMedians among successful scenarios only; gaps mean no successes.")
 
     def budget_ranges():
         fig, ax = plt.subplots(figsize=(12.8, 7.2))
@@ -144,7 +144,7 @@ def main():
     budget_ranges()
     if args.figure == "budget":
         return
-    lines(rates, "Both-flexible success by patient mix and demand", "Successful backgrounds (%)", "fig1_bf_success_rate_by_share_and_rho", True)
+    lines(rates, "Both-flexible success by patient mix and demand", "Successful scenarios (%)", "fig1_bf_success_rate_by_share_and_rho", True)
 
     def heatmap(table, title, label, stem, percent=False):
         fig, ax = plt.subplots(figsize=(10.5, 6))
@@ -159,7 +159,7 @@ def main():
         fig.colorbar(im, ax=ax, label=label)
         save(fig, stem)
 
-    heatmap(100 - rates, "Both-flexible failure under the 10pp ceiling", "Failed backgrounds (%)", "fig3_bf_failure_heatmap_under_10pp_ceiling", True)
+    heatmap(100 - rates, "Both-flexible failure under the 10pp ceiling", "Failed scenarios (%)", "fig3_bf_failure_heatmap_under_10pp_ceiling", True)
     outcomes = wide.join(bf.set_index("background_id")[["class1_share", "rho"]])
     conditions = [wide.both_flexible & wide.reservation_only, wide.both_flexible & ~wide.reservation_only, ~wide.both_flexible & wide.reservation_only]
     outcomes["outcome"] = np.select(conditions, ["Both policies work", "Both flexible only", "Reservation only works"], default="Neither works")
@@ -168,9 +168,9 @@ def main():
     counts = counts.reindex(columns=order, fill_value=0)
     fig, ax = plt.subplots(figsize=(10.5, 6))
     counts.plot.bar(stacked=True, ax=ax, color=[COLORS[0], COLORS[1], COLORS[3], "#bdbdbd"], rot=0)
-    ax.set(title="Policy success across background environments", xlabel="Class 1 patient share", ylabel="Number of backgrounds", xticklabels=[f"{s:.0%}" for s in shares])
+    ax.set(title="Policy success across scenarios", xlabel="Class 1 patient share", ylabel="Number of scenarios", xticklabels=[f"{s:.0%}" for s in shares])
     ax.legend(fontsize=9)
-    save(fig, "fig4_background_outcomes_by_class1_share")
+    plt.close(fig)  # Replaced by slide32_success_by_class2_loss.png
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 6))
     for ax, col, title in zip(axes, ["min_tested_c2_budget_pp", "actual_c2_loss_pp"], ["Minimum tested budget", "Actual evaluated loss at that budget"]):
@@ -178,15 +178,15 @@ def main():
             values = np.sort(cells.loc[cells.policy == policy, col].to_numpy())
             if len(values):
                 ax.step(values, np.arange(1, len(values) + 1) / len(values), where="post", color=COLORS[i], label=f"{label} (n={len(values)})")
-        ax.set(title=title, xlabel="Class 2 loss / budget (pp)", ylabel="Cumulative share of successful backgrounds", ylim=(0, 1.02))
+        ax.set(title=title, xlabel="Class 2 loss / budget (pp)", ylabel="Cumulative share of successful scenarios", ylim=(0, 1.02))
         ax.yaxis.set_major_formatter(PercentFormatter(1))
         ax.grid(alpha=.25)
         ax.legend(fontsize=9, loc="lower right")
-    save(fig, "fig5_required_budget_distribution_by_policy", note + "\nConditional distributions: each policy's successful backgrounds; samples may differ. Negative actual loss means a Class 2 gain.")
+    save(fig, "fig5_required_budget_distribution_by_policy", note + "\nConditional distributions: each policy's successful scenarios; samples may differ. Negative actual loss means a Class 2 gain.")
     only = outcomes.loc[outcomes.outcome == "Both flexible only"]
     breakdown = pd.crosstab(only.class1_share, only.rho).reindex(index=shares, columns=rhos, fill_value=0)
-    heatmap(breakdown, f"Both-flexible-only success: {len(only)} backgrounds", "Number of backgrounds", "fig6_bf_only_backgrounds_breakdown")
-    print(f"Validated {len(wide)} backgrounds; outcome counts: {outcomes.outcome.value_counts().to_dict()}")
+    heatmap(breakdown, f"Both-flexible-only success: {len(only)} scenarios", "Number of scenarios", "fig6_bf_only_backgrounds_breakdown")
+    print(f"Validated {len(wide)} scenarios; outcome counts: {outcomes.outcome.value_counts().to_dict()}")
 
 
 if __name__ == "__main__":

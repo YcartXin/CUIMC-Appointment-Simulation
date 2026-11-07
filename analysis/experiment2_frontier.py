@@ -54,13 +54,16 @@ def expanded_bank(include_share60=False):
     assert len(bank) == expected_count and bank.background_id.nunique() == expected_count
     return bank
 
-def cells(row):
+def cells(row, allow_horizon_only=False):
     q = q_coarse_grid(int(row.slots_per_day))
     # Historical genuine-reservation catalog excludes W=1 in both families.
-    return {'baseline': [(100,0,-1)],
+    grid = {'baseline': [(100,0,-1)],
             'reservation_only': [(100,x,w) for x in q for w in window_coarse_grid(100) if w>=2],
             'both_flexible': [(h,x,w) for h in range(2,31) for x in q
                               for w in window_coarse_grid(h) if w>=2]}
+    if allow_horizon_only:
+        grid['both_flexible'] += [(h,0,-1) for h in range(2,31)]
+    return grid
 
 def source_catalog(path):
     specs = json.loads(path.read_text())
@@ -143,7 +146,7 @@ def plans(a, bank, sources, stage, selection=None):
     missing_dir = a.root/'inventory'/f'{stage}_missing'
     if a.stage=='inventory': missing_dir.mkdir(parents=True, exist_ok=True)
     for idx, row in bank.iterrows():
-        if stage=='search': grid = cells(row)
+        if stage=='search': grid = cells(row, getattr(a, 'allow_horizon_only', False))
         else:
             chosen = selection[(selection.background_id==row.background_id) & selection.discovery_feasible]
             cs = sorted(set(chosen[CELL].itertuples(index=False, name=None)))
@@ -191,13 +194,35 @@ def choose(g, budget):
     return z.sort_values(['delta_sr1','delta_sr2','average_utilization','q_fraction','horizon_days','window'],
                          ascending=[False,False,False,True,False,True],kind='stable').head(1)
 
+def choose_loss_per_gain(g, budget):
+    """Minimize signed C2 loss / C1 gain; require at least 5pp C1 gain."""
+    z = g[(g.delta_sr1 >= .05) & (g.delta_sr2 >= -budget-EPS)].copy()
+    if z.empty: return z
+    z['discovery_loss_per_gain'] = -z.delta_sr2 / z.delta_sr1
+    # Zero loss scores zero; C2 improvement scores negative. Exact ties favor
+    # larger C1 gain, then C2 gain, utilization and the existing setting ties.
+    return z.sort_values(['discovery_loss_per_gain','delta_sr1','delta_sr2',
+        'average_utilization','q_fraction','horizon_days','window'],
+        ascending=[True,False,False,False,True,False,True],kind='stable').head(1)
+
+
+def check_frozen_options(a):
+    path = a.root/'freeze.json'
+    if not path.exists(): return
+    meta = json.loads(path.read_text())
+    if meta.get('selection_rule','max_gain') != getattr(a,'selection_rule','max_gain'):
+        raise ValueError('Selection rule differs from frozen root; use a new output root')
+    if meta.get('allow_horizon_only',False) != getattr(a,'allow_horizon_only',False):
+        raise ValueError('Policy grid differs from frozen root; use a new output root')
+
+
 def select_stage(a, bank, sources):
     if (a.root/'selected_discovery.csv').exists() or (a.root/'freeze.json').exists():
         raise ValueError('Selection is immutable; choose a new root to select again')
     selected, all_frontier, old = [], [], []
     for _, row in bank.iterrows():
         raw = raw_for(row,'search',sources,a.root)
-        grid = cells(row)
+        grid = cells(row, getattr(a, 'allow_horizon_only', False))
         for policy in POLICIES:
             x = paired(raw,grid[policy],SEARCH)
             g = x.groupby(CELL,as_index=False)[METRICS+DELTA].mean()
@@ -210,7 +235,7 @@ def select_stage(a, bank, sources):
                     all_frontier.append(dict(background_id=row.background_id,policy=policy,**c.to_dict()))
                     best = c.delta_sr1
             for loss in BUDGETS:
-                z = choose(g,loss)
+                z = choose_loss_per_gain(g,loss) if getattr(a,'selection_rule','max_gain') == 'min_loss_per_gain' else choose(g,loss)
                 d = dict(background_id=row.background_id,policy=policy,loss_budget=loss,discovery_feasible=not z.empty)
                 d.update(z.iloc[0].to_dict() if not z.empty else {c:np.nan for c in CELL+METRICS+DELTA+['q_fraction']})
                 selected.append(d)
@@ -224,8 +249,13 @@ def select_stage(a, bank, sources):
     (a.root/'freeze.json').write_text(json.dumps(dict(selection_sha256=digest(a.root/'selected_discovery.csv'),
         bank_sha256=digest(a.root/'bank.csv'), search_seeds=SEARCH,evaluation_seeds=EVAL,
         source_manifest=json.loads(a.sources.read_text()),
-        budgets=BUDGETS,selection='max dSR1; dSR2; utilization; lower Q/slots; longer H; lower W',
-        grid='systematic coarse; H=100 reservation; H=2..30 both; Q step5; W historical >=2'),indent=2))
+        budgets=BUDGETS,selection_rule=getattr(a,'selection_rule','max_gain'),
+        allow_horizon_only=getattr(a,'allow_horizon_only',False),
+        minimum_c1_gain=.05 if getattr(a,'selection_rule','max_gain')=='min_loss_per_gain' else None,
+        ratio_definition='-discovery_delta_sr2/discovery_delta_sr1; minimize; signed C2 loss',
+        selection=('min signed C2 loss / C1 gain with gain>=0.05; ties: C1 gain, C2 gain, utilization, lower Q fraction, longer H, lower W'
+                   if getattr(a,'selection_rule','max_gain')=='min_loss_per_gain' else 'max dSR1; dSR2; utilization; lower Q/slots; longer H; lower W'),
+        grid='systematic coarse; H=100 reservation; H=2..30 both; Q step5; W historical >=2; horizon-only H=2..30 Q=0 W=-1 when allow_horizon_only=true'),indent=2))
 
 def postprocess(a,bank,sources):
     sel = frozen(a.root,bank)
@@ -245,6 +275,9 @@ def postprocess(a,bank,sources):
             if c.discovery_feasible:
                 z = x[(x.horizon_days==c.horizon_days)&(x.Q==c.Q)&(x.window==c.window)]
                 r.update(z[DELTA].mean().to_dict())
+                if getattr(a,'selection_rule','max_gain') == 'min_loss_per_gain':
+                    r['evaluated_loss_per_gain'] = -r['delta_sr2']/r['delta_sr1'] if r['delta_sr1']>0 else np.nan
+                    r['evaluated_c1_target_met'] = r['delta_sr1']>=.05
                 r.update(z[METRICS].mean().to_dict())
                 r['evaluation_complete']=len(z)==20
                 r['evaluation_feasible']=r['delta_sr2']>=-c.loss_budget-EPS
@@ -296,6 +329,8 @@ def main():
     p.add_argument('--sources',type=Path,required=True)
     p.add_argument('--shard',type=int,help='Stable one-based background index in this output root')
     p.add_argument('--include-share60',action='store_true',help='Use the 1,134-background expanded design in a new output root')
+    p.add_argument('--allow-horizon-only',action='store_true')
+    p.add_argument('--selection-rule',choices=['max_gain','min_loss_per_gain'],default='max_gain')
     p.add_argument('--dry-run',action='store_true')
     a=p.parse_args()
     expected_bank = expanded_bank(a.include_share60)
@@ -303,6 +338,7 @@ def main():
     if a.stage=='bank': bank_stage(a); return
     bank=pd.read_csv(a.root/'bank.csv')
     pd.testing.assert_frame_equal(bank,expected_bank,check_dtype=False)
+    check_frozen_options(a)
     sources=source_catalog(a.sources)
     if a.stage=='select': select_stage(a,bank,sources)
     elif a.stage=='postprocess': postprocess(a,bank,sources)

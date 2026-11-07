@@ -146,8 +146,8 @@ def save_design_grid():
         [0.5, 1.5, 2.5],
         ["Low (5%)", "Medium (15%)", "High (25%)"],
     )
-    ax.set_xlabel("Class 1 balking severity after 5-day threshold")
-    ax.set_ylabel("Class 1 no-show severity after 3-day threshold")
+    ax.set_xlabel("Class 1 balking post probability after 5-day threshold")
+    ax.set_ylabel("Class 1 no-show post probability after 3-day threshold")
     ax.set_title("3×3 Class 1 behavior factorial")
     for spine in ax.spines.values():
         spine.set_visible(False)
@@ -187,9 +187,9 @@ def no_show_policy_value_figure():
         )
 
     ax.axhline(0, linewidth=0.8)
-    ax.set_xlabel("Class 1 no-show severity")
+    ax.set_xlabel("Class 1 no-show post probability")
     ax.set_ylabel("Median utilization gain vs matched baseline (pp)")
-    ax.set_title("Policy value rises sharply with no-show severity")
+    ax.set_title("Policy value rises sharply with no-show post probability")
     ax.legend(frameon=False)
     ax.grid(axis="y", alpha=0.2)
     fig.tight_layout()
@@ -480,7 +480,7 @@ else:
         n_policy = len(group)
 
         trend_lines.append(
-            f"- **{policy_name}:** {n_policy} C1-win / C2-neutral background"
+            f"- **{policy_name}:** {n_policy} C1-win / C2-neutral scenario"
             + ("." if n_policy == 1 else "s.")
         )
 
@@ -489,8 +489,8 @@ else:
             ("class1_share", "Class 1 share"),
             ("capacity", "capacity"),
             ("daily_capacity", "capacity"),
-            ("noshow_level", "no-show severity"),
-            ("balk_level", "balking severity"),
+            ("noshow_level", "no-show post probability"),
+            ("balk_level", "balking post probability"),
             ("selected_horizon_days", "selected horizon"),
             ("selected_Q", "selected Q"),
             ("selected_window", "selected window"),
@@ -534,7 +534,7 @@ else:
 
         if n_policy == 1:
             trend_lines.append(
-                "  - Only one favorable background is present, so its characteristics "
+                "  - Only one favorable scenario is present, so its characteristics "
                 "should be treated as a case description rather than a recurring pattern."
             )
         elif recurring:

@@ -30,7 +30,7 @@ def flag(series):
 
 def select_best(cells, bank):
     if bank.background_id.duplicated().any():
-        raise ValueError('Duplicate background IDs in bank')
+        raise ValueError('Duplicate scenario IDs in bank')
     if cells.duplicated(KEYS + ['horizon_days', 'Q', 'window']).any():
         raise ValueError('Duplicate candidate settings')
     candidates = cells.loc[flag(cells.validated_meaningful_pareto)].copy()
@@ -43,7 +43,7 @@ def select_best(cells, bank):
     design = bank[['background_id', 'noshow_level', 'balk_level', 'rho', 'class1_share', 'slots_per_day']]
     best = best.merge(design, on='background_id', how='left', validate='many_to_one', indicator=True)
     if not best._merge.eq('both').all():
-        raise ValueError('Selected cases missing background metadata')
+        raise ValueError('Selected cases missing scenario metadata')
     best = best.drop(columns='_merge')
     maxima = candidates.groupby(KEYS).eval_delta_sr1.max().sort_index()
     pd.testing.assert_series_equal(best.set_index(KEYS).eval_delta_sr1.sort_index(), maxima)
@@ -68,7 +68,7 @@ def build(input_dir, combined_dir, output_dir, summary_dir):
     selected_keys = pd.MultiIndex.from_frame(best[KEYS])
     universe['selected_case_exists'] = pd.MultiIndex.from_frame(universe[KEYS]).isin(selected_keys)
     if not universe.selected_case_exists.equals(universe.validated_pareto_exists):
-        raise ValueError('Candidate qualification disagrees with background universe')
+        raise ValueError('Candidate qualification disagrees with scenario universe')
     original = combined.loc[combined.data_source == 'original_experiment2']
     check = original.merge(universe, on=KEYS, validate='one_to_one', suffixes=('_combined', '_original'), indicator=True)
     if len(check) != len(universe) or not check._merge.eq('both').all() or not check.validated_pareto_exists_combined.equals(check.validated_pareto_exists_original):
@@ -102,14 +102,14 @@ def build(input_dir, combined_dir, output_dir, summary_dir):
     headline = universe.loc[universe.rho <= 2.5]
     rates = headline.groupby(['policy', 'noshow_level']).selected_case_exists.agg(['size', 'sum', 'mean']).reset_index()
     rates.to_csv(summary_dir / 'slide25_noshow_background_rates.csv', index=False)
-    fig, ax = canvas('Pareto opportunities by no-show severity', 'Each background counts once for each policy, whether it has one qualifying case or many')
+    fig, ax = canvas('Pareto opportunities by no-show post probability', 'Each scenario counts once for each policy, whether it has one qualifying case or many')
     x = np.arange(3)
     for i, policy in enumerate(POLICIES):
         g = rates[rates.policy == policy].set_index('noshow_level').reindex(LEVELS)
         bars = ax.bar(x + (i - 1)*.24, g['mean']*100, .23, color=COLORS[policy], label=LABELS[policy])
         for bar, (_, row) in zip(bars, g.iterrows()):
             ax.text(bar.get_x()+bar.get_width()/2, bar.get_height()+.45, f"{int(row['sum'])}/{int(row['size'])}", ha='center', fontsize=12)
-    ax.set(xticks=x, xticklabels=['Low','Medium','High'], ylabel='Backgrounds with a qualifying Pareto case (%)', xlabel='Class 1 no-show severity', ylim=(0, 22))
+    ax.set(xticks=x, xticklabels=['Low','Medium','High'], ylabel='Scenarios with a qualifying Pareto case (%)', xlabel='Class 1 no-show post probability', ylim=(0, 22))
     ax.yaxis.set_major_formatter(PercentFormatter(100))
     ax.legend(loc='upper left', frameon=False)
     save(fig, 'slide25_noshow_background_best', ['Original Experiment 2, demand / capacity <=2.5. Numerator / denominator shown above bars.', 'Qualification uses independently evaluated means. It does not require confidence-interval-supported nonharm.'])
@@ -117,55 +117,55 @@ def build(input_dir, combined_dir, output_dir, summary_dir):
     scale = combined.loc[(combined.policy == 'both_flexible') & combined.rho.isin([1.7, 2.0])]
     scale = scale.groupby(['class1_share', 'slots_per_day']).validated_pareto_exists.agg(['size','sum','mean']).reset_index()
     scale.to_csv(summary_dir / 'slide26_share_scale_background_rates.csv', index=False)
-    fig, ax = canvas('Favorable system scale shifts as Class 1 share rises', 'Both flexible, demand / capacity = 1.7 or 2.0. Each point counts backgrounds once')
+    fig, ax = canvas('Favorable system scale shifts as Class 1 share rises', 'Both flexible, demand / capacity = 1.7 or 2.0. Each point counts scenarios once')
     for slots, color, marker in [(30,'#6545a8','o'),(50,'#687c88','s'),(40,'#d27c25','D')]:
         g = scale[scale.slots_per_day == slots].sort_values('class1_share')
         ax.plot(g.class1_share, g['mean']*100, color=color, marker=marker, lw=3, markersize=9, linestyle='-' if len(g)>1 else 'None', label=f'{slots} slots/day' + (' (80% follow-up)' if slots==40 else ''))
-    ax.set(xlabel='Class 1 share of arrivals', ylabel='Backgrounds with a qualifying Pareto case (%)', xticks=sorted(scale.class1_share.unique()), ylim=(-3, 65))
+    ax.set(xlabel='Class 1 share of arrivals', ylabel='Scenarios with a qualifying Pareto case (%)', xticks=sorted(scale.class1_share.unique()), ylim=(-3, 65))
     ax.xaxis.set_major_formatter(PercentFormatter(1))
     ax.yaxis.set_major_formatter(PercentFormatter(100))
     ax.legend(loc='upper left', frameon=False)
-    save(fig, 'slide26_scale_background_best', ['Each share and scale point uses 18 backgrounds. The 80% follow-up has success status only.', 'Case results for the follow-up are unavailable. These rates were already based on backgrounds and remain unchanged.'])
+    save(fig, 'slide26_scale_background_best', ['Each share and scale point uses 18 scenarios. The 80% follow-up has success status only.', 'Case results for the follow-up are unavailable. These rates were already based on scenarios and remain unchanged.'])
 
     h = best.loc[best.rho <= 2.5]
     util = h.groupby('policy').eval_delta_utilization.agg(['size','median','min','max']).reset_index()
     util['median_pp'] = util['median']*100
     util.to_csv(summary_dir / 'slide27_utilization_best_case.csv', index=False)
-    fig, ax = canvas('Utilization change at each background\'s best Pareto case', 'Choose the largest Class 1 served-rate gain within each background and policy')
+    fig, ax = canvas('Utilization change at each scenario\'s best Pareto case', 'Choose the largest Class 1 served-rate gain within each scenario and policy')
     shown = ['horizon_only','both_flexible']
     for i, policy in enumerate(shown):
         g = util.set_index('policy').loc[policy]
         value = g.median_pp
         ax.bar(i, value, width=.5, color=COLORS[policy])
-        ax.text(i, value+.045, f"{value:.2f}pp\n(n={int(g['size'])} backgrounds)", ha='center', fontsize=15)
+        ax.text(i, value+.045, f"{value:.2f}pp\n(n={int(g['size'])} scenarios)", ha='center', fontsize=15)
     ax.set(xticks=[0,1], xticklabels=[LABELS[p] for p in shown], ylabel='Median utilization change vs baseline (pp)', ylim=(0, 1.9))
-    save(fig, 'slide27_utilization_background_best', ['Original Experiment 2, demand / capacity <=2.5. One selected case per qualifying background and policy.', 'Reservation only has no qualifying backgrounds. The median includes every selected case, including negative utilization changes.'])
+    save(fig, 'slide27_utilization_background_best', ['Original Experiment 2, demand / capacity <=2.5. One selected case per qualifying scenario and policy.', 'Reservation only has no qualifying scenarios. The median includes every selected case, including negative utilization changes.'])
 
     horizon = best.groupby(['policy','noshow_level']).agg(backgrounds=('background_id','size'), median_horizon_days=('horizon_days','median'), median_reservation_pct=('reservation_pct','median')).reset_index()
     horizon.to_csv(summary_dir / 'slides29_30_best_case_settings.csv', index=False)
-    fig, ax = canvas('Horizon at each background\'s best Pareto case', 'Median of selected horizons, with one best case per background and policy')
+    fig, ax = canvas('Horizon at each scenario\'s best Pareto case', 'Median of selected horizons, with one best case per scenario and policy')
     for i, policy in enumerate(shown):
         g = horizon[horizon.policy == policy].set_index('noshow_level').reindex(LEVELS)
         offsets = x + (i-.5)*.22
         ax.scatter(offsets, g.median_horizon_days, color=COLORS[policy], marker='o' if i==0 else 'D', s=115, label=LABELS[policy])
         for j, (_, row) in enumerate(g.iterrows()):
             if pd.isna(row.backgrounds):
-                ax.text(offsets[j], 1.35, 'No qualifying\nbackgrounds', ha='center', fontsize=11, color=COLORS[policy])
+                ax.text(offsets[j], 1.35, 'No qualifying\nscenarios', ha='center', fontsize=11, color=COLORS[policy])
             else:
                 ax.text(offsets[j], row.median_horizon_days+.2, f"{row.median_horizon_days:g} days\n(n={int(row.backgrounds)})", ha='center', fontsize=13, color=COLORS[policy])
-    ax.set(xticks=x, xticklabels=['Low','Medium','High'], xlabel='Class 1 no-show severity', ylabel='Median selected booking horizon (days)', ylim=(1,5), xlim=(-.5,2.5))
+    ax.set(xticks=x, xticklabels=['Low','Medium','High'], xlabel='Class 1 no-show post probability', ylabel='Median selected booking horizon (days)', ylim=(1,5), xlim=(-.5,2.5))
     ax.legend(loc='upper left', frameon=False)
-    save(fig, 'slide29_horizon_background_best', ['Original Experiment 2, all original demand, share and capacity levels pooled. n = qualifying backgrounds.', 'Each horizon belongs to the selected case with the largest Class 1 gain. The 80% follow-up lacks case-level results.'])
+    save(fig, 'slide29_horizon_background_best', ['Original Experiment 2, all original demand, share and capacity levels pooled. n = qualifying scenarios.', 'Each horizon belongs to the selected case with the largest Class 1 gain. The 80% follow-up lacks case-level results.'])
 
-    fig, ax = canvas('Reservation at each background\'s best Pareto case', 'Both flexible. Median of selected reservation percentages across qualifying backgrounds')
+    fig, ax = canvas('Reservation at each scenario\'s best Pareto case', 'Both flexible. Median of selected reservation percentages across qualifying scenarios')
     g = horizon[horizon.policy == 'both_flexible'].set_index('noshow_level').reindex(LEVELS)
     ax.scatter(x, g.median_reservation_pct, color=COLORS['both_flexible'], marker='D', s=130)
     for j, (_, row) in enumerate(g.iterrows()):
         if pd.notna(row.backgrounds):
             ax.text(j, row.median_reservation_pct+3, f"{row.median_reservation_pct:.1f}%\n(n={int(row.backgrounds)})", ha='center', fontsize=15, color=COLORS['both_flexible'])
-    ax.set(xticks=x, xticklabels=['Low','Medium','High'], xlabel='Class 1 no-show severity', ylabel='Median daily capacity reserved (%)', ylim=(0,55), xlim=(-.5,2.5))
+    ax.set(xticks=x, xticklabels=['Low','Medium','High'], xlabel='Class 1 no-show post probability', ylabel='Median daily capacity reserved (%)', ylim=(0,55), xlim=(-.5,2.5))
     ax.yaxis.set_major_formatter(PercentFormatter(100))
-    save(fig, 'slide30_reservation_background_best', ['Reservation percentage = selected reserved slots / daily capacity x 100. Every background has equal weight.', 'Original Experiment 2, all original demand, share and capacity levels pooled. The 80% follow-up lacks case-level results.'])
+    save(fig, 'slide30_reservation_background_best', ['Reservation percentage = selected reserved slots / daily capacity x 100. Every scenario has equal weight.', 'Original Experiment 2, all original demand, share and capacity levels pooled. The 80% follow-up lacks case-level results.'])
     print(f'Selected {len(best)} cases from {len(cells.loc[flag(cells.validated_meaningful_pareto)])} qualifying cases.')
     return best
 
@@ -174,7 +174,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--input-dir', type=Path, default=ROOT/'outputs/pareto_presentation')
     parser.add_argument('--combined-dir', type=Path, default=ROOT/'outputs/pareto_combined')
-    parser.add_argument('--output-dir', type=Path, default=ROOT/'figures/pareto_background_best')
+    parser.add_argument('--output-dir', type=Path, default=ROOT/'figures/Pareto/best_cases')
     parser.add_argument('--summary-dir', type=Path, default=ROOT/'outputs/pareto_background_best')
     a = parser.parse_args()
     build(a.input_dir, a.combined_dir, a.output_dir, a.summary_dir)

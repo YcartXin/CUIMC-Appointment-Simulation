@@ -1,0 +1,6 @@
+noshow_level,policy,median_horizon_days,backgrounds
+high,both_flexible,3.0,18
+high,horizon_only,3.0,26
+low,both_flexible,2.0,3
+medium,both_flexible,2.0,12
+medium,horizon_only,3.0,17

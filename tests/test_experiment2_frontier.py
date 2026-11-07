@@ -32,6 +32,31 @@ class FrontierTests(unittest.TestCase):
             new[new.background_id.isin(old.background_id)].reset_index(drop=True), old)
         self.assertFalse(new.duplicated(['profile_id','rho','class1_share','slots_per_day']).any())
 
+    def test_horizon_only_grid_and_ratio_selection(self):
+        row=f.expanded_bank(True).iloc[0]
+        old=f.cells(row)['both_flexible']
+        new=f.cells(row,allow_horizon_only=True)['both_flexible']
+        self.assertEqual(set(new)-set(old), {(h,0,-1) for h in range(2,31)})
+        self.assertEqual(len(new),len(set(new)))
+        g=pd.DataFrame([
+            [2,5,2,.06,-.02,.8,.1],
+            [3,5,2,.10,-.05,.8,.1],
+            [4,5,2,.001,-.00001,.8,.1],
+            [5,0,-1,.07,0.,.8,0.],
+            [6,0,-1,.06,.01,.8,0.]],
+            columns=f.CELL+['delta_sr1','delta_sr2','average_utilization','q_fraction'])
+        self.assertEqual(f.choose_loss_per_gain(g.iloc[:3],.1).iloc[0].horizon_days,2)
+        self.assertEqual(f.choose_loss_per_gain(g.iloc[:4],.1).iloc[0].horizon_days,5)
+        z=f.choose_loss_per_gain(g,.1).iloc[0]
+        self.assertEqual(z.horizon_days,6)
+        self.assertLess(z.discovery_loss_per_gain,0)
+        self.assertTrue(f.choose_loss_per_gain(g.iloc[:3],.01).empty)
+        # Reject new rule/grid options against the old immutable selection.
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);(root/'freeze.json').write_text('{}')
+            args=SimpleNamespace(root=root,selection_rule='min_loss_per_gain',allow_horizon_only=True)
+            with self.assertRaises(ValueError):f.check_frozen_options(args)
+
     def test_ties_and_budget(self):
         g=pd.DataFrame([
             [2,10,3,.1,-.02,.8,.25], [4,5,3,.1,-.02,.8,.125],

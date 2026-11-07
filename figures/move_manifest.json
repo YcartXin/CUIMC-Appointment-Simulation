@@ -1,0 +1,158 @@
+[
+  {
+    "from": "figures\\balking_effect_verification.png",
+    "to": "figures\\FCFS\\balking_effect_verification.png"
+  },
+  {
+    "from": "figures\\Comparing Reference to Class 1 Outcomes.png",
+    "to": "figures\\Policy\\Comparing Reference to Class 1 Outcomes.png"
+  },
+  {
+    "from": "figures\\experiment2_frontier",
+    "to": "figures\\Trade-off\\experiment2_frontier"
+  },
+  {
+    "from": "figures\\pareto_by_noshow.png",
+    "to": "figures\\Pareto\\pareto_by_noshow.png"
+  },
+  {
+    "from": "figures\\pareto_by_rho.png",
+    "to": "figures\\Pareto\\pareto_by_rho.png"
+  },
+  {
+    "from": "figures\\pareto_median_horizon_by_noshow_severity.png",
+    "to": "figures\\Pareto\\pareto_median_horizon_by_noshow_severity.png"
+  },
+  {
+    "from": "figures\\pareto_median_horizon_by_noshow_severity.svg",
+    "to": "figures\\Pareto\\pareto_median_horizon_by_noshow_severity.svg"
+  },
+  {
+    "from": "figures\\pareto_median_reservation_percentage_by_noshow_severity.png",
+    "to": "figures\\Pareto\\pareto_median_reservation_percentage_by_noshow_severity.png"
+  },
+  {
+    "from": "figures\\pareto_median_reservation_percentage_by_noshow_severity.svg",
+    "to": "figures\\Pareto\\pareto_median_reservation_percentage_by_noshow_severity.svg"
+  },
+  {
+    "from": "figures\\pareto_scale_by_class1_share.png",
+    "to": "figures\\Pareto\\pareto_scale_by_class1_share.png"
+  },
+  {
+    "from": "figures\\pareto_scale_by_class1_share.svg",
+    "to": "figures\\Pareto\\pareto_scale_by_class1_share.svg"
+  },
+  {
+    "from": "figures\\pareto_utilization.png",
+    "to": "figures\\Pareto\\pareto_utilization.png"
+  },
+  {
+    "from": "figures\\policy_settings_comparison",
+    "to": "figures\\Trade-off\\policy_settings_comparison"
+  },
+  {
+    "from": "figures\\representative_win_neutral_mechanism.png",
+    "to": "figures\\Policy\\representative_win_neutral_mechanism.png"
+  },
+  {
+    "from": "figures\\slide15_behavior_design_figure.png",
+    "to": "figures\\Policy\\slide15_behavior_design_figure.png"
+  },
+  {
+    "from": "figures\\slide17_design_parameters.png",
+    "to": "figures\\Policy\\slide17_design_parameters.png"
+  },
+  {
+    "from": "figures\\slides25_26_revision",
+    "to": "figures\\Pareto\\slides25_26_revision"
+  },
+  {
+    "from": "figures\\slide_05_balking_demand_served_rate_ci.png",
+    "to": "figures\\FCFS\\slide_05_balking_demand_served_rate_ci.png"
+  },
+  {
+    "from": "figures\\slide_05_noshow_demand_served_rate_ci.png",
+    "to": "figures\\FCFS\\slide_05_noshow_demand_served_rate_ci.png"
+  },
+  {
+    "from": "figures\\slide_05_threshold_magnitude_definition.png",
+    "to": "figures\\FCFS\\slide_05_threshold_magnitude_definition.png"
+  },
+  {
+    "from": "figures\\slide_07_balking_served_rate_ci.png",
+    "to": "figures\\FCFS\\slide_07_balking_served_rate_ci.png"
+  },
+  {
+    "from": "figures\\slide_07_balking_utilization_slot_share_ci.png",
+    "to": "figures\\FCFS\\slide_07_balking_utilization_slot_share_ci.png"
+  },
+  {
+    "from": "figures\\slide_08_noshow_magnitude_slot_share_ci.png",
+    "to": "figures\\FCFS\\slide_08_noshow_magnitude_slot_share_ci.png"
+  },
+  {
+    "from": "figures\\slide_08_noshow_threshold_slot_share_ci.png",
+    "to": "figures\\FCFS\\slide_08_noshow_threshold_slot_share_ci.png"
+  },
+  {
+    "from": "figures\\slide_09_class_access_gap_revised_yaxis.png",
+    "to": "figures\\FCFS\\slide_09_class_access_gap_revised_yaxis.png"
+  },
+  {
+    "from": "figures\\slide_09_noshow_common_post_served_rate_change_ci.png",
+    "to": "figures\\FCFS\\slide_09_noshow_common_post_served_rate_change_ci.png"
+  },
+  {
+    "from": "figures\\slide_09_noshow_post_gap_served_rate_change_ci.png",
+    "to": "figures\\FCFS\\slide_09_noshow_post_gap_served_rate_change_ci.png"
+  },
+  {
+    "from": "figures\\slide_09_noshow_pre_gap_served_rate_change_ci.png",
+    "to": "figures\\FCFS\\slide_09_noshow_pre_gap_served_rate_change_ci.png"
+  },
+  {
+    "from": "figures\\slide_09_noshow_three_panel_served_rate_change_ci.png",
+    "to": "figures\\FCFS\\slide_09_noshow_three_panel_served_rate_change_ci.png"
+  },
+  {
+    "from": "figures\\slide_09_probability_change_design.png",
+    "to": "figures\\FCFS\\slide_09_probability_change_design.png"
+  },
+  {
+    "from": "figures\\slide_10_balking_common_post_served_rate_change_ci.png",
+    "to": "figures\\FCFS\\slide_10_balking_common_post_served_rate_change_ci.png"
+  },
+  {
+    "from": "figures\\slide_10_balking_post_gap_served_rate_change_ci.png",
+    "to": "figures\\FCFS\\slide_10_balking_post_gap_served_rate_change_ci.png"
+  },
+  {
+    "from": "figures\\slide_10_balking_pre_gap_served_rate_change_ci.png",
+    "to": "figures\\FCFS\\slide_10_balking_pre_gap_served_rate_change_ci.png"
+  },
+  {
+    "from": "figures\\slide_10_balking_three_panel_served_rate_change_ci.png",
+    "to": "figures\\FCFS\\slide_10_balking_three_panel_served_rate_change_ci.png"
+  },
+  {
+    "from": "figures\\slide_11_cancellation_served_rate_ci.png",
+    "to": "figures\\FCFS\\slide_11_cancellation_served_rate_ci.png"
+  },
+  {
+    "from": "figures\\slide_11_cancellation_slot_share_ci.png",
+    "to": "figures\\FCFS\\slide_11_cancellation_slot_share_ci.png"
+  },
+  {
+    "from": "figures\\slide_18_horizon_no_show_threshold.png",
+    "to": "figures\\Policy\\slide_18_horizon_no_show_threshold.png"
+  },
+  {
+    "from": "figures\\slide_18_horizon_utilization_dual_axis.png",
+    "to": "figures\\Policy\\slide_18_horizon_utilization_dual_axis.png"
+  },
+  {
+    "from": "figures\\validated_scatter_paretos.png",
+    "to": "figures\\Pareto\\validated_scatter_paretos.png"
+  }
+]

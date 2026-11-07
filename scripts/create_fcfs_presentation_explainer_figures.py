@@ -2,8 +2,8 @@
 
 Outputs
 -------
-figures/slide_05_threshold_magnitude_definition.png
-figures/slide_05_threshold_magnitude_definition.svg
+figures/slide_05_threshold_probabilities_definition.png
+figures/slide_05_threshold_probabilities_definition.svg
 figures/slide_09_class_access_gap_revised_yaxis.png
 figures/slide_09_class_access_gap_revised_yaxis.svg
 
@@ -22,7 +22,7 @@ from matplotlib.ticker import PercentFormatter
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FIGURE_DIR = ROOT / "figures"
+FIGURE_DIR = ROOT / "figures" / "FCFS"
 
 BLUE = "#1f77b4"
 ORANGE = "#ff7f0e"
@@ -49,7 +49,6 @@ def _set_style() -> None:
 def _save(fig: plt.Figure, stem: str, *, dpi: int = 200) -> None:
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
     fig.savefig(FIGURE_DIR / f"{stem}.png", dpi=dpi, bbox_inches="tight", facecolor="white")
-    fig.savefig(FIGURE_DIR / f"{stem}.svg", bbox_inches="tight", facecolor="white")
     plt.close(fig)
 
 
@@ -84,7 +83,7 @@ def create_threshold_magnitude_definition() -> None:
         arrowprops={"arrowstyle": "-|>", "color": "#6b6b6b", "lw": 1.8},
     )
     ax.annotate(
-        "Magnitude = post-threshold probability (30%)",
+        "Post probability (30%)",
         xy=(10.4, post_probability),
         xytext=(8.2, 0.382),
         ha="center",
@@ -97,7 +96,7 @@ def create_threshold_magnitude_definition() -> None:
     ax.text(
         2.9,
         pre_probability + 0.018,
-        "Pre-threshold probability (5%)",
+        "Pre probability (5%)",
         ha="center",
         va="bottom",
         fontsize=15,
@@ -106,7 +105,7 @@ def create_threshold_magnitude_definition() -> None:
     ax.text(
         10.1,
         0.025,
-        "Appointments offered after the threshold\nuse the post-threshold probability",
+        "Appointments offered after the threshold\nuse the post probability",
         ha="center",
         va="bottom",
         fontsize=14,
@@ -122,7 +121,7 @@ def create_threshold_magnitude_definition() -> None:
         color="#666666",
     )
 
-    ax.set_title("Magnitude and delay in the threshold model", pad=17, fontsize=24, fontweight="semibold")
+    ax.set_title("Pre and post probabilities in the threshold model", pad=17, fontsize=24, fontweight="semibold")
     ax.set_xlabel("Offered booking delay (days)", labelpad=10)
     ax.set_ylabel("Probability of balking or no-show", labelpad=12, fontsize=17)
     ax.set_xlim(0, 14)
@@ -133,7 +132,7 @@ def create_threshold_magnitude_definition() -> None:
     ax.grid(axis="y", color=GRID, linewidth=1, alpha=0.75)
     ax.spines[["top", "right"]].set_visible(False)
 
-    _save(fig, "slide_05_threshold_magnitude_definition")
+    _save(fig, "slide_05_threshold_probabilities_definition")
 
 
 def create_slide_09_revised_yaxis() -> None:

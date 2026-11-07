@@ -1,7 +1,7 @@
 # Policy settings comparison for slides 33 and 34
 
 Run `python scripts/plot_policy_settings_comparison.py` from the repository root.
-PNG/SVG figures are in `figures/policy_settings_comparison/`; plotted summaries
+PNG/SVG figures are in `figures/Trade-off/policy_settings_comparison/`; plotted summaries
 and selected background records are in `outputs/policy_settings_comparison/`.
 The PowerPoint is not edited. Blue always denotes Pareto, orange always denotes
 Class 2 loss allowed. Markers show medians and faint dashed bars show the full

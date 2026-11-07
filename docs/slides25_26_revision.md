@@ -1,7 +1,7 @@
 # Revised slide 25 and 26 figures
 
 Run `python scripts/plot_slides25_26_revision.py` from the repository root.
-Figures: `figures/slides25_26_revision/` (PNG and SVG).
+Figures: `figures/Pareto/slides25_26_revision/` (PNG and SVG).
 Audit and summary data: `outputs/slides25_26_revision/`.
 No source files, previous figures, or PowerPoint slides are overwritten.
 All plots omit horizon-only and contain no explanatory footnotes or subtitles.

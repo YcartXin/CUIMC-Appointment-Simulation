@@ -436,7 +436,7 @@ def paired_summary(results: pd.DataFrame) -> pd.DataFrame:
 def _profile_for_panel(behavior: str, severity: str) -> str:
     if severity == "low":
         return "low_low"
-    return f"{'noshow' if behavior == 'no_show' else 'balking'}_{severity}"
+    return f"{'noshow' if behavior == 'no_show' else 'balking'}_{post probability}"
 
 
 def _plot_one_panel(ax: plt.Axes, summary: pd.DataFrame, behavior: str, severity: str) -> None:
@@ -467,7 +467,7 @@ def _plot_one_panel(ax: plt.Axes, summary: pd.DataFrame, behavior: str, severity
         )
     probability = int(round(100 * SEVERITY_VALUES[severity]))
     behavior_label = "No-show" if behavior == "no_show" else "Balking"
-    ax.set_title(f"{behavior_label}: {severity.capitalize()} ({probability}%)")
+    ax.set_title(f"{behavior_label}: {post probability.capitalize()} ({probability}%)")
     ax.set_xlim(min(DEMAND_VALUES) - 4, max(DEMAND_VALUES) + 4)
     ax.set_ylim(0.0, 1.02)
     ax.set_xticks(DEMAND_VALUES[::2])
@@ -477,7 +477,7 @@ def _plot_one_panel(ax: plt.Axes, summary: pd.DataFrame, behavior: str, severity
 
 
 def create_figures(summary: pd.DataFrame, output_dir: Path) -> None:
-    figure_dir = output_dir / "figures"
+    figure_dir = REPO_DIR / "figures" / "FCFS"
     figure_dir.mkdir(parents=True, exist_ok=True)
     plt.rcParams.update(
         {
@@ -511,7 +511,7 @@ def create_figures(summary: pd.DataFrame, output_dir: Path) -> None:
         handles, labels = axes[-1].get_legend_handles_labels()
         fig.legend(handles, labels, loc="lower center", ncol=2, frameon=False, bbox_to_anchor=(0.5, 0.015))
         fig.suptitle(
-            f"Class served rates across {('no-show' if behavior == 'no_show' else 'balking')} magnitude and demand",
+            f"Class served rates across {('no-show' if behavior == 'no_show' else 'balking')} post probability and demand",
             fontsize=17,
         )
         fig.subplots_adjust(left=0.06, right=0.99, bottom=0.20, top=0.82, wspace=0.05)

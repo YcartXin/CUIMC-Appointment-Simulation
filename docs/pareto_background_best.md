@@ -6,7 +6,7 @@ Recreate from the repository root:
 python scripts/plot_pareto_background_best.py
 ```
 
-The figures are in `figures/pareto_background_best/`, as PNG and SVG pairs.
+The figures are in `figures/Pareto/best_cases/`, as PNG and SVG pairs.
 The audit table and plotted summaries are in `outputs/pareto_background_best/`.
 Original images and the PowerPoint are preserved. These are replacement figures
 for slides 25, 26, 27, 29 and 30. Slide 28 contains only text.
@@ -113,7 +113,7 @@ python scripts/plot_pareto_ranges.py
 ```
 
 This command writes both-flexible-only median figures to the existing
-`figures/pareto_background_best/` paths and range summaries to
+`figures/Pareto/best_cases/` paths and range summaries to
 `outputs/pareto_background_best/`. Each background contributes its single
 largest-Class-1-gain qualifying case using the documented tie-breaking rule.
 Bars show the observed min and max across these selected cases, not confidence

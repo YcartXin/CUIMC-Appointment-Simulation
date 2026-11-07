@@ -179,7 +179,7 @@ qualifying-cell coverage, minimum budgets, the gain target, and the loss ceiling
 before plotting. Source CSVs are never modified.
 
 Six figures are written as both 200-dpi PNG and editable SVG under
-`figures/experiment2_frontier/`:
+`figures/Trade-off/experiment2_frontier/`:
 
 1. `fig1_bf_success_rate_by_share_and_rho`: both-flexible success percentage by patient share and demand/capacity ratio.
 2. `fig2_bf_min_budget_by_share_and_rho`: median minimum tested Class 2 budget among successful backgrounds; missing values indicate no successes.

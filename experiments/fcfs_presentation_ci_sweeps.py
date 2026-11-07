@@ -498,10 +498,10 @@ def create_figures(summary: pd.DataFrame, figure_dir: Path) -> None:
         "class1_noshow_magnitude",
         "average_utilization",
         "slot_utilization",
-        "Class 1 no-show high-delay probability",
+        "Class 1 no-show post probability",
         "Completed visits as share of total slots",
-        "Magnitude – post-threshold probability",
-        figure_dir / "slide_08_noshow_magnitude_slot_share_ci.png",
+        "No-show post probability",
+        figure_dir / "slide_08_noshow_post_probability_slot_share_ci.png",
     )
     plot_overall_and_classes(
         summary,
@@ -545,12 +545,12 @@ def analyze(output_dir: Path) -> None:
     paired_summary = paired_difference_summary(results)
     _atomic_csv(point_summary, summary_dir / "pointwise_95ci.csv")
     _atomic_csv(paired_summary, summary_dir / "paired_baseline_differences_95ci.csv")
-    create_figures(point_summary, output_dir / "figures")
+    create_figures(point_summary, REPO_DIR / "figures" / "FCFS")
 
     print(f"Analyzed {len(results):,} completed simulations.")
     print(f"Pointwise intervals: {summary_dir / 'pointwise_95ci.csv'}")
     print(f"Paired differences: {summary_dir / 'paired_baseline_differences_95ci.csv'}")
-    print(f"Presentation figures: {output_dir / 'figures'}")
+    print(f"Presentation figures: {REPO_DIR / 'figures' / 'FCFS'}")
 
 
 def parse_args() -> argparse.Namespace:
