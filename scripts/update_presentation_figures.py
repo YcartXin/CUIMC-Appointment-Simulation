@@ -29,6 +29,11 @@ def interval(x,stat=np.mean):
  x=np.asarray(x);return np.quantile([stat(rng.choice(x,len(x),replace=True)) for _ in range(1500)],[.025,.975])
 
 def main():
+ import sys
+ completed=ROOT/'outputs/experiment2_ratio_horizon/tradeoff/freeze.json'
+ if len(sys.argv)==1 and completed.exists():
+  from plot_completed_experiment2 import main as completed_main
+  completed_main();return
  ap=argparse.ArgumentParser(description=__doc__)
  ap.add_argument('--pareto-dir',type=Path,default=ROOT/'outputs/pareto_presentation')
  ap.add_argument('--frontier-dir',type=Path,default=ROOT/'outputs/experiment2_frontier')

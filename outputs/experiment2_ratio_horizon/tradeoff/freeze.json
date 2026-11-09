@@ -1,0 +1,100 @@
+{
+  "selection_sha256": "c8fbba031f833ed6a316f0cfe3ee80603bf0481760bd947df204e23a24c69781",
+  "bank_sha256": "b801d9c8039cade0e14b3fac5006a30e6a52d10181777dc63427d64968b93f4f",
+  "search_seeds": [
+    1000,
+    1001,
+    1002,
+    1003,
+    1004
+  ],
+  "evaluation_seeds": [
+    2000,
+    2001,
+    2002,
+    2003,
+    2004,
+    2005,
+    2006,
+    2007,
+    2008,
+    2009,
+    2010,
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019
+  ],
+  "source_manifest": [
+    {
+      "bank": "/scratch/yy3694/experiment2_frontier/source_banks/original_540.csv",
+      "search": [
+        "/scratch/yy3694/patient_behavior_factorial_3_5/search/raw"
+      ],
+      "evaluation": [
+        "/scratch/yy3694/patient_behavior_factorial_3_5/evaluation/raw"
+      ],
+      "simulation_convention_verified": true
+    },
+    {
+      "bank": "/scratch/yy3694/experiment2_frontier/source_banks/original_540.csv",
+      "search": [
+        "/scratch/yy3694/patient_behavior_factorial_served_rate_pareto/search/raw"
+      ],
+      "evaluation": [
+        "/scratch/yy3694/patient_behavior_factorial_served_rate_pareto/served_rate_pareto/pareto_catalog_5seed/independent_evaluation/raw"
+      ],
+      "simulation_convention_verified": true
+    },
+    {
+      "bank": "/scratch/yy3694/experiment2_frontier/source_banks/share80_54.csv",
+      "search": [
+        "/scratch/yy3694/patient_behavior_factorial_share80/search/raw"
+      ],
+      "evaluation": [
+        "/scratch/yy3694/patient_behavior_factorial_share80/served_rate_pareto/pareto_catalog_5seed/independent_evaluation/raw"
+      ],
+      "simulation_convention_verified": true
+    },
+    {
+      "bank": "/scratch/yy3694/experiment2_frontier/bank.csv",
+      "search": [
+        "/scratch/yy3694/experiment2_frontier/search/raw"
+      ],
+      "evaluation": [
+        "/scratch/yy3694/experiment2_frontier/evaluation/raw"
+      ],
+      "simulation_convention_verified": true
+    },
+    {
+      "bank": "/scratch/yy3694/experiment2_completion_20261102/frontier/bank.csv",
+      "search": [
+        "/scratch/yy3694/experiment2_completion_20261102/frontier/search/raw"
+      ],
+      "evaluation": [],
+      "simulation_convention_verified": true
+    }
+  ],
+  "budgets": [
+    0.0,
+    0.005,
+    0.01,
+    0.02,
+    0.03,
+    0.04,
+    0.05,
+    0.075,
+    0.1
+  ],
+  "selection_rule": "min_loss_per_gain",
+  "allow_horizon_only": true,
+  "minimum_c1_gain": 0.05,
+  "ratio_definition": "-discovery_delta_sr2/discovery_delta_sr1; minimize; signed C2 loss",
+  "selection": "min signed C2 loss / C1 gain with gain>=0.05; ties: C1 gain, C2 gain, utilization, lower Q fraction, longer H, lower W",
+  "grid": "systematic coarse; H=100 reservation; H=2..30 both; Q step5; W historical >=2; horizon-only H=2..30 Q=0 W=-1 when allow_horizon_only=true"
+}

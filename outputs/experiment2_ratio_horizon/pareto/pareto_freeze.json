@@ -1,0 +1,87 @@
+{
+  "bank_sha256": "c0f309dcf927f1c154d567d686835123682b37972e87200fc0be23c4193a8342",
+  "selection_sha256": "79bc6d49f1e85175e2c1329db8b012d328f98b7a46d7972c06b737334d279fba",
+  "source_manifest": [
+    {
+      "bank": "/scratch/yy3694/experiment2_frontier/source_banks/original_540.csv",
+      "search": [
+        "/scratch/yy3694/patient_behavior_factorial_3_5/search/raw"
+      ],
+      "evaluation": [
+        "/scratch/yy3694/patient_behavior_factorial_3_5/evaluation/raw"
+      ],
+      "simulation_convention_verified": true
+    },
+    {
+      "bank": "/scratch/yy3694/experiment2_frontier/source_banks/original_540.csv",
+      "search": [
+        "/scratch/yy3694/patient_behavior_factorial_served_rate_pareto/search/raw"
+      ],
+      "evaluation": [
+        "/scratch/yy3694/patient_behavior_factorial_served_rate_pareto/served_rate_pareto/pareto_catalog_5seed/independent_evaluation/raw"
+      ],
+      "simulation_convention_verified": true
+    },
+    {
+      "bank": "/scratch/yy3694/experiment2_frontier/source_banks/share80_54.csv",
+      "search": [
+        "/scratch/yy3694/patient_behavior_factorial_share80/search/raw"
+      ],
+      "evaluation": [
+        "/scratch/yy3694/patient_behavior_factorial_share80/served_rate_pareto/pareto_catalog_5seed/independent_evaluation/raw"
+      ],
+      "simulation_convention_verified": true
+    },
+    {
+      "bank": "/scratch/yy3694/experiment2_frontier/bank.csv",
+      "search": [
+        "/scratch/yy3694/experiment2_frontier/search/raw"
+      ],
+      "evaluation": [
+        "/scratch/yy3694/experiment2_frontier/evaluation/raw"
+      ],
+      "simulation_convention_verified": true
+    },
+    {
+      "bank": "/scratch/yy3694/experiment2_completion_20261102/frontier/bank.csv",
+      "search": [
+        "/scratch/yy3694/experiment2_completion_20261102/frontier/search/raw"
+      ],
+      "evaluation": [],
+      "simulation_convention_verified": true
+    }
+  ],
+  "frontier_root": "/scratch/yy3694/experiment2_ratio_horizon/frontier",
+  "search_seeds": [
+    1000,
+    1001,
+    1002,
+    1003,
+    1004
+  ],
+  "evaluation_seeds": [
+    2000,
+    2001,
+    2002,
+    2003,
+    2004,
+    2005,
+    2006,
+    2007,
+    2008,
+    2009,
+    2010,
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019
+  ],
+  "allow_horizon_only": true,
+  "selection": "all discovery cells with dSR1>=0,dSR2>=0,max gain>=0.005; reservation cells Q>0,W>=2 plus horizon-only if enabled",
+  "grid": "same systematic grid as expanded frontier; no adaptive reselection"
+}

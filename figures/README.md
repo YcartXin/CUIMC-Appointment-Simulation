@@ -1,42 +1,46 @@
 # Current presentation figures
 
-PNG figures live under FCFS, Policy, Pareto, and Trade-off. Replaced figures have been removed; SVG copies are not kept.
+PNG figures live under FCFS, Policy, Pareto, and Trade-off. PowerPoint is not edited by the figure scripts.
+
+## Completed Experiment 2 (November 9, 2026)
 
 Run from the repository root:
 
-    python scripts/update_presentation_figures.py
+```bash
+python scripts/plot_completed_experiment2.py
+```
 
-Use completed replacement data without merging with older tables:
+With the completed data present, the ordinary `python scripts/update_presentation_figures.py` command also runs this generator. Its explicit input-directory flags retain the older workflow; do not use that older workflow for the new ratio-selection results.
 
-    python scripts/update_presentation_figures.py --pareto-dir PATH_TO_NEW_PARETO --frontier-dir PATH_TO_NEW_FRONTIER --policy-release PATH_TO_NEW_POLICY_RELEASE
+Inputs are the extracted archive under `outputs/experiment2_ratio_horizon/{tradeoff,pareto}/`. The generator checks frozen hashes, matching scenario banks, complete coverage, selected settings, and independent evaluation seed results before plotting. It writes audit tables under `outputs/experiment2_ratio_horizon/summaries/`. Previous figures are preserved under `archive/pre_completed_ratio_figures_20261109/` before replacement. FCFS figures and slides 19/20 are unchanged.
 
-The Pareto folder must contain validated_meaningful_pareto_cells.csv, patient_behavior_factorial_bank.csv, and validated_background_policy_universe.csv. The frontier folder must contain evaluated_selected_cells.csv and background_policy_targets.csv. The policy release must contain paired seed deltas and selected policy outcomes, in the existing release schema.
+All new comparisons use **both flexible**, including eligible zero-reservation settings. Blue is Pareto; orange is Class 2 loss allowed. Policy-setting and gain summaries use one policy per qualifying scenario. Markers show medians and faint dashed lines show observed minima and maxima, not confidence intervals.
 
-| Slide | Current figure |
+| Figure | File under figures/ |
 |---|---|
-| 17 | Policy/slide17_design_parameters.png |
-| 19 | Policy/slide19_demand_activation.png |
-| 20 | Policy/slide20_horizon_utilization.png |
-| 24 | Pareto/validated_scatter_paretos.png |
-| 25 | Pareto/slide25_pareto_success.png |
-| 30 | Trade-off/slide30_class1_gain_boxplots.png |
-| 32 | Trade-off/slide32_success_by_class2_loss.png |
-| 34 | Trade-off/policy_settings_comparison/slide33_horizon_pareto_vs_allowed_loss.png |
-| 35 | Trade-off/policy_settings_comparison/slide34_reservation_pareto_vs_allowed_loss.png |
-| New companion to 35 | Trade-off/slide35_reservation_periods.png |
+| Design parameters: 1,134 scenarios | Policy/slide17_design_parameters.png |
+| Selected Pareto served-rate gains | Pareto/validated_scatter_paretos.png |
+| Pareto success by no-show post probability | Pareto/slide25_pareto_success.png |
+| Pareto system-size comparison | Pareto/slide26_pareto_scale.png |
+| Trade-off system-size comparison | Trade-off/scale/slide26_frontier_allowed_loss_scale.png |
+| Selected Pareto utilization | Pareto/best_cases/slide27_utilization_background_best.png |
+| Class 1 gain distributions by rho | Trade-off/slide30_class1_gain_boxplots.png |
+| Minimum observed loss among successful tested choices | Trade-off/slide32_success_by_class2_loss.png |
+| Booking horizons | Trade-off/policy_settings_comparison/slide33_horizon_pareto_vs_allowed_loss.png |
+| Reservation percentages | Trade-off/policy_settings_comparison/slide34_reservation_pareto_vs_allowed_loss.png |
+| Reservation periods | Trade-off/slide35_reservation_periods.png |
+| Class 1 median/min/max gain by rho | Trade-off/policy_settings_comparison/class1_served_rate_gain_by_rho.png |
+| Success by tested loss budget | Trade-off/success_rate_by_tested_budget.png |
+| Share/rho success, first successful tested budget, failure, budget/loss distributions | Trade-off/experiment2_frontier/fig1*, fig2*, fig3*, fig5* |
+
+The slide numbers in filenames are historical; the deck may now use different page numbers. The two older Pareto scale paths are retained as identical aliases. The obsolete policy-exclusive fig6 is archived because the requested plots use both flexible only.
+
+See `docs/experiment2_completed_results.md` for selection rules, denominators, and interpretation. In particular, first-successful-budget summaries are descriptive across frozen budget choices; they do not replace the fixed 10pp-budget selection in the principal comparisons.
+
+## Unchanged earlier figures
 
 Slide 19 intervals: 1,000 paired-seed bootstrap samples, retaining dependence across scenarios and policies. The statistic is the high-minus-low difference of median utilization gains across balking and clinic scenarios. These intervals condition on the fixed scenario design and selected settings.
 
 Slide 20 intervals: 1,500 clinic-context bootstrap samples, preserving the three balking levels within each context. These show uncertainty when treating clinic contexts as a sampled population; they are not simulation-replication intervals or optimizer-selection intervals. Reservation-only's fixed 100-day horizon is omitted from the horizon panel; its utilization is shown.
 
-Slide 24 uses all validated policy settings in the supplied dataset. Added 60%/80%/40-slot policy-level results are not present locally yet, so no new points were invented. Current Pareto coverage is 540 original scenarios. The partial 80% follow-up supplies status only, so it cannot provide new scatter points.
-
-Slide 25 uses the common original scenario universe for all policies (rho <= 2.5), rather than mixing the partial both-flexible-only 80% follow-up into one bar series. This changes the both-flexible percentages from the earlier mixed-coverage figure. New complete input tables will replace this universe directly.
-
-Slide 30 uses one selected both-flexible policy per scenario, separately for Pareto and Class 2 loss allowed. Boxes show quartiles and median; whiskers extend to 1.5 IQR, with outliers shown. These samples have different qualification criteria and scenario coverage.
-
-Slide 32 counts each successful scenario once for each policy, in the bin of the minimum observed actual Class 2 loss among validated tested policies reaching at least 5pp Class 1 gain within the 10pp budget. Bins are 0, >0–1, >1–2, >2–5, >5–10 pp. Zero includes Class 2 gains. Counts are not shares and the two policy series can include the same scenarios.
-
-The reservation-period figure uses the same retrospective best-Class-1-gain settings as the horizon and reservation-percentage comparisons. Existing periods range from 2 to 26 days. All three figures use consistent blue/orange result-group colors.
-
-Displayed cells are called policies, and severity is called post probability. Internal CSV fields and existing source filenames are retained for compatibility. PowerPoint and speaker notes are not edited. Slide 8 remains deferred until its original CI source data is located.
+Displayed scenarios correspond to the internal `background_id` field. Slide 8 remains deferred until its original CI source data is located.

@@ -1,0 +1,19 @@
+noshow_level,count,min,median,max,metric,group
+low,3,2.0,2.0,2.0,horizon_days,Pareto
+medium,45,2.0,3.0,4.0,horizon_days,Pareto
+high,69,2.0,3.0,4.0,horizon_days,Pareto
+low,182,2.0,7.0,30.0,horizon_days,Class 2 loss allowed
+medium,188,2.0,4.0,30.0,horizon_days,Class 2 loss allowed
+high,211,2.0,4.0,30.0,horizon_days,Class 2 loss allowed
+low,3,30.0,30.0,30.0,reservation_pct,Pareto
+medium,45,0.0,12.5,62.5,reservation_pct,Pareto
+high,69,0.0,30.0,75.0,reservation_pct,Pareto
+low,182,10.0,62.5,100.0,reservation_pct,Class 2 loss allowed
+medium,188,10.0,62.5,100.0,reservation_pct,Class 2 loss allowed
+high,211,0.0,50.0,100.0,reservation_pct,Class 2 loss allowed
+low,3,2.0,2.0,2.0,reservation_days,Pareto
+medium,45,0.0,2.0,4.0,reservation_days,Pareto
+high,69,0.0,2.0,4.0,reservation_days,Pareto
+low,182,2.0,5.0,25.0,reservation_days,Class 2 loss allowed
+medium,188,2.0,3.0,25.0,reservation_days,Class 2 loss allowed
+high,211,0.0,3.0,25.0,reservation_days,Class 2 loss allowed

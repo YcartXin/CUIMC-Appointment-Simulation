@@ -1,0 +1,9 @@
+{
+  "scenarios": 1134,
+  "pareto_successful_scenarios": 117,
+  "pareto_selected_horizon_only": 36,
+  "tradeoff_10pp_successful_scenarios": 581,
+  "tradeoff_10pp_discovery_feasible": 659,
+  "tradeoff_10pp_selected_horizon_only": 3,
+  "first_successful_budget_scenarios": 591
+}
